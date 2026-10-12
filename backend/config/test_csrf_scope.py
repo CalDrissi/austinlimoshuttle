@@ -15,6 +15,7 @@ from django.test import Client
 from django.urls import reverse
 
 from config.session import (
+    DRIVER_CSRF_COOKIE_NAME,
     STOREFRONT_CSRF_COOKIE_NAME,
     csrf_cookie_name_for,
 )
@@ -27,7 +28,7 @@ class _Req:
 
 def test_cookie_name_is_scoped_by_path():
     assert csrf_cookie_name_for(_Req("/api/auth/csrf/")) == STOREFRONT_CSRF_COOKIE_NAME
-    assert csrf_cookie_name_for(_Req("/driver/login/")) == "csrftoken"
+    assert csrf_cookie_name_for(_Req("/driver/login/")) == DRIVER_CSRF_COOKIE_NAME
     assert csrf_cookie_name_for(_Req("/dashboard/")) == "csrftoken"
 
 
@@ -39,10 +40,38 @@ def test_api_csrf_endpoint_sets_only_the_storefront_cookie():
 
 
 @pytest.mark.django_db
-def test_driver_login_page_sets_the_default_cookie():
+def test_driver_login_page_sets_its_own_cookie():
     resp = Client().get(reverse("driver:login"))
-    assert "csrftoken" in resp.cookies
+    assert DRIVER_CSRF_COOKIE_NAME in resp.cookies
+    assert "csrftoken" not in resp.cookies
     assert STOREFRONT_CSRF_COOKIE_NAME not in resp.cookies
+
+
+@pytest.mark.django_db
+def test_dashboard_login_does_not_clobber_the_driver_csrf_token():
+    """The reported regression: logging into the dashboard rotates `csrftoken`,
+    which must NOT invalidate an open /driver/login/ form (its own cookie)."""
+    User = get_user_model()
+    staff = User.objects.create_user(email="staff@example.com", password="StaffPass!2026")
+    staff.is_staff = True
+    staff.save()
+    client = Client(enforce_csrf_checks=True)
+
+    # Driver login page issues its own CSRF cookie.
+    client.get(reverse("driver:login"))
+    driver_token = client.cookies[DRIVER_CSRF_COOKIE_NAME].value
+
+    # Dashboard login rotates the DEFAULT csrftoken on success.
+    client.get(reverse("dashboard:login"))
+    dash_token = client.cookies["csrftoken"].value
+    client.post(
+        reverse("dashboard:login"),
+        data={"username": "staff@example.com", "password": "StaffPass!2026",
+              "csrfmiddlewaretoken": dash_token},
+    )
+
+    # The driver cookie is untouched by the dashboard login.
+    assert client.cookies[DRIVER_CSRF_COOKIE_NAME].value == driver_token
 
 
 @pytest.mark.django_db
@@ -53,8 +82,8 @@ def test_storefront_login_does_not_clobber_the_staff_csrf_token():
     User.objects.create_user(email="rider@example.com", password="RiderPass!2026")
     client = Client(enforce_csrf_checks=True)
 
-    # A dashboard/driver page issues the default csrftoken cookie.
-    client.get(reverse("driver:login"))
+    # The dashboard page issues the default csrftoken cookie.
+    client.get(reverse("dashboard:login"))
     staff_token = client.cookies["csrftoken"].value
 
     # Prime + log in on the storefront, which rotates the CSRF token on login().

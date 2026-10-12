@@ -123,11 +123,20 @@ from django.middleware.csrf import (  # noqa: E402
 from django.utils.decorators import decorator_from_middleware  # noqa: E402
 
 STOREFRONT_CSRF_COOKIE_NAME = "mm_store_csrftoken"
+# The driver portal is a third surface. It shares the session cookie with the
+# dashboard (staff/driver are one Django session), but its CSRF cookie must be
+# its own: Django's login() rotates the CSRF token, so a dashboard login would
+# otherwise invalidate an open /driver/login/ form (and vice versa) because they
+# shared the one `csrftoken`. Give /driver/ its own cookie to stop that clobber.
+DRIVER_PATH_PREFIX = "/driver/"
+DRIVER_CSRF_COOKIE_NAME = "mm_driver_csrftoken"
 
 
 def csrf_cookie_name_for(request) -> str:
     if request.path.startswith(STOREFRONT_PATH_PREFIX):
         return STOREFRONT_CSRF_COOKIE_NAME
+    if request.path.startswith(DRIVER_PATH_PREFIX):
+        return DRIVER_CSRF_COOKIE_NAME
     return settings.CSRF_COOKIE_NAME
 
 
