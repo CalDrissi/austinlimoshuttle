@@ -94,6 +94,7 @@ def runs(request):
     prev_date = selected - timedelta(days=1)
     return render(request, "driver/runs.html", {
         "driver": profile,
+        "view": "day",
         "bookings": bookings,
         "selected": selected,
         "today": today,
@@ -102,6 +103,44 @@ def runs(request):
         "is_tomorrow": selected == today + timedelta(days=1),
         "prev_date": prev_date if prev_date >= today - timedelta(days=PAST_DAYS_LIMIT) else None,
         "next_date": selected + timedelta(days=1),
+    })
+
+
+@driver_required
+def upcoming(request):
+    """Every upcoming run in one scroll, grouped by day -- the list view, for a
+    driver who wants to see further ahead than Today/Tomorrow."""
+    profile = driver_for(request.user)
+    today = timezone.localdate()
+    tomorrow = today + timedelta(days=1)
+    start, _ = _day_bounds(today)
+
+    bookings = (
+        profile.bookings
+        .select_related("vehicle")
+        .filter(pickup_at__gte=start)
+        .exclude(status=Booking.Status.CANCELLED)
+        .order_by("pickup_at")
+    )
+
+    # Group by the LOCAL calendar day (pickup_at is stored tz-aware).
+    groups = []
+    for b in bookings:
+        day = timezone.localtime(b.pickup_at).date()
+        if not groups or groups[-1]["date"] != day:
+            groups.append({
+                "date": day,
+                "is_today": day == today,
+                "is_tomorrow": day == tomorrow,
+                "items": [],
+            })
+        groups[-1]["items"].append(b)
+
+    return render(request, "driver/upcoming.html", {
+        "driver": profile,
+        "view": "upcoming",
+        "groups": groups,
+        "total": len(bookings),
     })
 
 

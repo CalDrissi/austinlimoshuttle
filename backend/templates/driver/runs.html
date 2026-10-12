@@ -3,6 +3,11 @@
 {% block title %}My runs{% endblock %}
 {% block content %}
 
+<div class="viewtabs">
+  <a href="{% url 'driver:runs' %}" class="on">By day</a>
+  <a href="{% url 'driver:upcoming' %}">All upcoming</a>
+</div>
+
 <div class="quickdays">
   <a href="{% url 'driver:runs' %}" class="{% if is_today %}on{% endif %}">Today</a>
   <a href="?date={{ tomorrow|date:'Y-m-d' }}" class="{% if is_tomorrow %}on{% endif %}">Tomorrow</a>
@@ -25,21 +30,7 @@
 </div>
 
 {% for b in bookings %}
-  <a class="drv-card" href="{% url 'driver:trip_detail' b.reference %}">
-    <div class="d-flex justify-content-between align-items-start">
-      <span class="drv-time">{{ b.pickup_at|time:"g:i A" }}</span>
-      {% include "dashboard/_status.html" with status=b.status label=b.get_status_display %}
-    </div>
-    <div class="drv-route"><i class="bi bi-geo-alt-fill"></i>{{ b.pickup_address|truncatechars:42 }}</div>
-    {% if b.dropoff_address %}
-      <div class="drv-route"><i class="bi bi-flag-fill"></i>{{ b.dropoff_address|truncatechars:42 }}</div>
-    {% endif %}
-    <div class="drv-meta">
-      {{ b.pickup_sign|default:b.customer_name }}
-      <span class="dot">•</span>{{ b.vehicle_name_snapshot|default:b.vehicle.name }}
-      {% if b.flight_number %}<span class="dot">•</span><i class="bi bi-airplane"></i> {{ b.flight_number }}{% endif %}
-    </div>
-  </a>
+  {% include "driver/_run_card.html" %}
 {% empty %}
   <div class="empty">
     <i class="bi bi-calendar-check"></i>

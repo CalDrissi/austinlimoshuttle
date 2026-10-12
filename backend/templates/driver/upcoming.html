@@ -1,0 +1,29 @@
+{% extends "driver/base.html" %}
+{% load tz %}
+{% block title %}Upcoming runs{% endblock %}
+{% block content %}
+
+<div class="viewtabs">
+  <a href="{% url 'driver:runs' %}">By day</a>
+  <a href="{% url 'driver:upcoming' %}" class="on">All upcoming</a>
+</div>
+
+{% for g in groups %}
+  <div class="dayhead">
+    <span class="d">
+      {% if g.is_today %}Today{% elif g.is_tomorrow %}Tomorrow{% else %}{{ g.date|date:"l" }}{% endif %}
+      <span class="sub">{{ g.date|date:"j M" }}</span>
+    </span>
+    <span class="n">{{ g.items|length }} run{{ g.items|length|pluralize }}</span>
+  </div>
+  {% for b in g.items %}
+    {% include "driver/_run_card.html" %}
+  {% endfor %}
+{% empty %}
+  <div class="empty">
+    <i class="bi bi-calendar-check"></i>
+    No upcoming runs scheduled.
+  </div>
+{% endfor %}
+
+{% endblock %}
