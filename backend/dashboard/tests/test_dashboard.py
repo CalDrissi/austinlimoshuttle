@@ -1061,3 +1061,46 @@ class TestTripEvents:
         assert "tile.openstreetmap.org" in source
         for cdn in ("unpkg.com", "cdnjs", "jsdelivr"):
             assert cdn not in source
+
+    def test_leaflet_survives_manifest_collectstatic(self, tmp_path):
+        """
+        Regression guard for the prod boot crash: under
+        CompressedManifestStaticFilesStorage (prod), collectstatic post-processes
+        leaflet.js/.css and resolves every reference they contain -- url(images/..)
+        in the CSS and the //# sourceMappingURL=leaflet.js.map comment in the JS.
+        A referenced-but-unvendored asset raises MissingFileError and crash-loops
+        the backend. We reproduce that exact code path with Django's own
+        ManifestStaticFilesStorage (whitenoise's prod storage subclasses it) over
+        just the vendored Leaflet tree, so if anyone drops leaflet.js.map or an
+        images/*.png again this fails here instead of at deploy.
+        """
+        import shutil
+        from pathlib import Path
+
+        from django.contrib.staticfiles import finders
+        from django.contrib.staticfiles.storage import ManifestStaticFilesStorage
+
+        leaflet_js = finders.find("vendor/leaflet/leaflet.js")
+        assert leaflet_js, "vendored leaflet.js is missing"
+        vendor_src = Path(leaflet_js).parent
+
+        # Mirror the vendored tree into a throwaway STATIC_ROOT, exactly as
+        # collectstatic's copy step would, then run manifest post-processing.
+        static_root = tmp_path / "static"
+        dest = static_root / "vendor" / "leaflet"
+        shutil.copytree(vendor_src, dest)
+
+        storage = ManifestStaticFilesStorage(location=str(static_root))
+        collected = {}
+        for path in static_root.rglob("*"):
+            if path.is_file():
+                name = str(path.relative_to(static_root))
+                collected[name] = (storage, name)
+
+        # post_process yields (name, hashed_name, processed); ManifestStaticFilesStorage
+        # raises MissingFileError here if any referenced asset is absent.
+        results = list(storage.post_process(collected))
+        for name, hashed_name, processed in results:
+            assert not isinstance(processed, Exception), \
+                f"post_process failed for {name}: {processed!r}"
+        assert hashed_name  # at least one file was hashed
