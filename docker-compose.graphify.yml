@@ -1,0 +1,38 @@
+# Dedicated graphify knowledge-graph MCP server.
+# Independent of the main app stack (docker-compose.yml) — start/stop/restart freely:
+#   docker compose -f docker-compose.graphify.yml up -d --build
+#   docker compose -f docker-compose.graphify.yml restart   # after a graph rebuild
+#
+# The graph itself is built on the host (graphify CLI) into ./graphify-out and
+# mounted read-only here. The server snapshots graph.json at startup, so restart
+# this service after rebuilding the graph to pick up changes.
+#
+# Own project name so it never collides with the app stack (docker-compose.yml),
+# which otherwise treats this as an orphan container.
+name: austinlimoshuttle-graphify
+services:
+  graphify-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.graphify
+    image: austinlimoshuttle-graphify-mcp
+    container_name: austinlimoshuttle-graphify-mcp
+    restart: unless-stopped
+    environment:
+      # Required on the HTTP transport; set in .env (gitignored).
+      GRAPHIFY_API_KEY: ${GRAPHIFY_API_KEY:?set GRAPHIFY_API_KEY in .env}
+    command:
+      - /graph/graph.json
+      - --transport
+      - http
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --path
+      - /mcp
+    ports:
+      # Localhost only — never exposed to the network.
+      - "127.0.0.1:8808:8080"
+    volumes:
+      - ./graphify-out:/graph:ro

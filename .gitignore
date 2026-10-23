@@ -48,3 +48,6 @@ luxride-nextjs.vercel.appx/
 
 # --- OS ---
 .DS_Store
+
+# graphify knowledge graph (generated, rebuildable)
+graphify-out/
