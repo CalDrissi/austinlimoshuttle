@@ -142,6 +142,7 @@ class EmailLog(models.Model):
         DRIVER_ASSIGNED = "driver_assigned", "Driver assigned"
         OPS_NEW_BOOKING = "ops_new_booking", "Operations: new booking"
         PICKUP_REMINDER = "pickup_reminder", "Pickup reminder"
+        TRIP_STATUS = "trip_status", "Trip status update"
         TEST = "test", "Test message"
         OTHER = "other", "Other"
 

@@ -1,0 +1,7 @@
+{% autoescape off %}Passenger on board
+
+The passenger is now in the vehicle and the trip is under way.
+
+{% include "notifications/email/_trip_details.txt" %}
+Austin Limo Shuttle — operations notice
+{% endautoescape %}

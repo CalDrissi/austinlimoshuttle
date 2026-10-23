@@ -1,0 +1,7 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Your driver has arrived</h1>
+<p style="margin:0 0 20px;color:#5b636d">{% if driver_name %}{{ driver_name }} is{% else %}Your driver is{% endif %} at the pickup point and ready when you are.</p>
+
+{% include "notifications/email/_trip_details.html" %}
+{% endblock %}

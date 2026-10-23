@@ -1,0 +1,7 @@
+{% autoescape off %}Reference : {{ booking.reference }}
+{% if driver_name %}Driver    : {{ driver_name }}
+{% endif %}Status    : {{ status_label }}
+Time      : {{ event.created_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_address }}
+{% if has_location %}Location  : https://www.google.com/maps?q={{ event.latitude }},{{ event.longitude }}{% if event.location_accuracy %} (accuracy ±{{ event.location_accuracy }} m){% endif %}
+{% endif %}{% endautoescape %}

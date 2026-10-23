@@ -1,0 +1,7 @@
+{% autoescape off %}Your driver is on the way
+
+{% if driver_name %}{{ driver_name }} is heading to your pickup now.{% else %}Your driver is heading to your pickup now.{% endif %}
+
+{% include "notifications/email/_trip_details.txt" %}
+Austin Limo Shuttle
+{% endautoescape %}

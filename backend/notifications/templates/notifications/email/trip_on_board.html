@@ -1,0 +1,7 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Passenger on board</h1>
+<p style="margin:0 0 20px;color:#5b636d">The passenger is now in the vehicle and the trip is under way.</p>
+
+{% include "notifications/email/_trip_details.html" %}
+{% endblock %}

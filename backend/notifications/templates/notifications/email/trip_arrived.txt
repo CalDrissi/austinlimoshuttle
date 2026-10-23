@@ -1,0 +1,7 @@
+{% autoescape off %}Your driver has arrived
+
+{% if driver_name %}{{ driver_name }} is{% else %}Your driver is{% endif %} at the pickup point and ready when you are.
+
+{% include "notifications/email/_trip_details.txt" %}
+Austin Limo Shuttle
+{% endautoescape %}

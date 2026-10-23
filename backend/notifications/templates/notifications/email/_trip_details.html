@@ -1,0 +1,14 @@
+{% autoescape off %}<div style="background:#e8f4ef;border-radius:8px;padding:16px;margin:0 0 20px">
+  <table style="width:100%;border-collapse:collapse;font-size:14.5px;color:#15181c">
+    <tr><td style="color:#5b636d;padding:2px 0">Reference</td><td style="text-align:right;font-weight:600">{{ booking.reference }}</td></tr>
+    {% if driver_name %}<tr><td style="color:#5b636d;padding:2px 0">Driver</td><td style="text-align:right">{{ driver_name }}</td></tr>{% endif %}
+    <tr><td style="color:#5b636d;padding:2px 0">Status</td><td style="text-align:right">{{ status_label }}</td></tr>
+    <tr><td style="color:#5b636d;padding:2px 0">Time</td><td style="text-align:right">{{ event.created_at|date:"l j F Y, H:i" }}</td></tr>
+    <tr><td style="color:#5b636d;padding:2px 0">Pickup</td><td style="text-align:right">{{ booking.pickup_address }}</td></tr>
+  </table>
+</div>
+{% if has_location %}<p style="margin:0 0 20px;font-size:14.5px">
+  Driver location:
+  <a href="https://www.google.com/maps?q={{ event.latitude }},{{ event.longitude }}" style="color:#0f6b4f">
+    {{ event.latitude }}, {{ event.longitude }}</a>{% if event.location_accuracy %} (±{{ event.location_accuracy }} m){% endif %}
+</p>{% endif %}{% endautoescape %}
