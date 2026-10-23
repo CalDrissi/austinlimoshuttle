@@ -10,6 +10,7 @@ A driver only ever sees bookings assigned to their own Driver record.
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+from decimal import Decimal, InvalidOperation
 from functools import wraps
 
 from django.contrib import messages
@@ -21,7 +22,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
-from bookings.models import Booking, BookingStatusChange
+from bookings.models import Booking, BookingStatusChange, DriverTripEvent
 
 # The driver can see runs this far back when paging through days -- enough to
 # fix up yesterday's status, not so much it becomes a history browser (v2).
@@ -152,6 +153,20 @@ def _own_booking(request, reference):
     )
 
 
+# The live status buttons, in the order a trip actually happens. Each `value`
+# is a DriverTripEvent.EventType the trip_action endpoint accepts.
+TRIP_EVENT_BUTTONS = [
+    {"value": DriverTripEvent.EventType.ON_WAY, "label": "On My Way",
+     "icon": "bi-arrow-right-circle", "css": "btn-brand-drv"},
+    {"value": DriverTripEvent.EventType.ARRIVED, "label": "Arrived",
+     "icon": "bi-geo-alt-fill", "css": "btn-brand-drv"},
+    {"value": DriverTripEvent.EventType.ON_BOARD, "label": "Client On Board",
+     "icon": "bi-person-check-fill", "css": "btn-call"},
+    {"value": DriverTripEvent.EventType.COMPLETED, "label": "Completed",
+     "icon": "bi-check2-all", "css": "btn-ok"},
+]
+
+
 @driver_required
 def trip_detail(request, reference):
     """Everything the driver needs on the road for one trip."""
@@ -159,6 +174,7 @@ def trip_detail(request, reference):
     return render(request, "driver/trip_detail.html", {
         "booking": booking,
         "driver": driver_for(request.user),
+        "trip_events": TRIP_EVENT_BUTTONS,
     })
 
 
@@ -168,12 +184,59 @@ DRIVER_ACTIONS = {
     "no_show": (Booking.Status.NO_SHOW, "Driver marked the passenger a no-show"),
 }
 
+# Live trip-status pings the driver can send from the road. Each maps straight
+# onto a DriverTripEvent.EventType value and is logged via record() -- which owns
+# any status side effect and fires the signal the notifications lane listens on.
+TRIP_EVENT_TYPES = {choice.value for choice in DriverTripEvent.EventType}
+
+
+def _coord(raw):
+    """A POSTed GPS field as a Decimal, or None when absent/blank/garbage.
+
+    The device may have no fix or no permission, in which case the driver app
+    POSTs the event with no coordinates at all -- the ping must still record.
+    """
+    if raw in (None, ""):
+        return None
+    try:
+        return Decimal(str(raw))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+
+
+def _record_trip_event(request, booking, event_type):
+    """Log one live status ping for an active trip and return to the trip page."""
+    if event_type not in TRIP_EVENT_TYPES:
+        messages.error(request, "Unknown action.")
+        return redirect("driver:trip_detail", reference=booking.reference)
+
+    DriverTripEvent.record(
+        booking,
+        event_type,
+        lat=_coord(request.POST.get("latitude")),
+        lng=_coord(request.POST.get("longitude")),
+        accuracy=_coord(request.POST.get("accuracy")),
+        driver=driver_for(request.user),
+    )
+    messages.success(
+        request,
+        f"{DriverTripEvent.EventType(event_type).label} — dispatch has been updated.",
+    )
+    return redirect("driver:trip_detail", reference=booking.reference)
+
 
 @driver_required
 @require_POST
 def trip_action(request, reference):
-    """Report the outcome of a trip: completed or no-show."""
+    """Report trip progress: a live status ping, or the final completed/no-show."""
     booking = _own_booking(request, reference)
+
+    # A live status ping carries `event_type`; the legacy outcome form carries
+    # `action`. Route pings to record() and leave the outcome path untouched.
+    event_type = request.POST.get("event_type", "")
+    if event_type:
+        return _record_trip_event(request, booking, event_type)
+
     action = request.POST.get("action", "")
 
     if action not in DRIVER_ACTIONS:

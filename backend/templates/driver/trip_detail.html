@@ -1,4 +1,5 @@
 {% extends "driver/base.html" %}
+{% load static %}
 {% block title %}{{ booking.pickup_at|time:"g:i A" }} run{% endblock %}
 {% block content %}
 
@@ -50,6 +51,27 @@
   {% endif %}
 </div>
 
+{% if booking.status != 'cancelled' %}
+  <div class="drv-card">
+    <div class="label" style="margin-bottom:10px;">Trip status</div>
+    {% for ev in trip_events %}
+      <form method="post" action="{% url 'driver:trip_action' booking.reference %}" class="js-trip-event">
+        {% csrf_token %}
+        <input type="hidden" name="event_type" value="{{ ev.value }}">
+        <input type="hidden" name="latitude">
+        <input type="hidden" name="longitude">
+        <input type="hidden" name="accuracy">
+        <button type="submit" class="drv-btn {{ ev.css }}"{% if forloop.last %} style="margin-bottom:0;"{% endif %}>
+          <i class="bi {{ ev.icon }}"></i> {{ ev.label }}
+        </button>
+      </form>
+    {% endfor %}
+    <div style="margin-top:4px;font-size:12px;color:#8a9099;text-align:center;">
+      Shares your location with dispatch when available.
+    </div>
+  </div>
+{% endif %}
+
 {% if booking.status == 'completed' %}
   <div class="drv-card" style="text-align:center;color:#1a7f43;font-weight:600;"><i class="bi bi-check-circle-fill"></i> Trip completed</div>
 {% elif booking.status == 'no_show' %}
@@ -71,5 +93,7 @@
     </form>
   </div>
 {% endif %}
+
+<script src="{% static 'driver/trip_events.js' %}"></script>
 
 {% endblock %}
