@@ -654,7 +654,26 @@ class TestManagedRecords:
         assert driver.phone == "5125550199"
         assert driver.is_active is False  # checkbox omitted means unchecked
 
-    def test_dispatcher_cannot_reach_the_rate_card(self, client, roles):
+    def test_rate_card_has_no_stray_delete_header(self, client, roles, vehicle):
+        """
+        The inline formset's DELETE field belongs under the "Remove" column,
+        not as its own header. A regression once printed an extra empty
+        "Delete" column header misaligned from its checkboxes.
+        """
+        self._manager(client, roles)
+        response = client.get(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk])
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+
+        thead = html[html.index("<thead>"):html.index("</thead>")]
+        # No DELETE field leaking into the header row -- only the real field
+        # columns plus the single custom "Remove" column.
+        assert "Delete" not in thead
+        assert thead.count("Remove") == 1
+        # ...but the delete checkbox itself still renders (under "Remove").
+        assert "-DELETE" in html
         """A rate card edit reprices every future quote. Managers only."""
         staff_in(DISPATCHER, roles)
         client.login(username="dispatcher@example.com", password="DashLocal!2026")

@@ -75,7 +75,7 @@
             <thead>
               <tr>
                 {% for field in formset.empty_form %}
-                  {% if not field.is_hidden %}<th class="small">{{ field.label }}</th>{% endif %}
+                  {% if not field.is_hidden and field.name != 'DELETE' %}<th class="small">{{ field.label }}</th>{% endif %}
                 {% endfor %}
                 <th class="small text-end">Remove</th>
               </tr>
