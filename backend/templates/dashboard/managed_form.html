@@ -60,6 +60,15 @@
   </div>
 
   {% if formset %}
+    {# CSP forbids scripts, so the delete toggle is pure CSS: a hidden native #}
+    {# checkbox wrapped in a label that looks and behaves like a trash button. #}
+    <style>
+      .remove-row-btn { cursor: pointer; margin: 0; }
+      .remove-row-btn input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
+      .remove-row-btn:has(input:checked) { background: #dc3545; border-color: #dc3545; color: #fff; }
+      .remove-row-btn:focus-within { box-shadow: 0 0 0 .25rem rgba(220,53,69,.35); outline: none; }
+      tr:has(.remove-row-btn input:checked) td { opacity: .45; text-decoration: line-through; }
+    </style>
     <div class="card mb-3">
       <div class="card-header"><i class="bi bi-rulers me-2"></i>{{ entry.inline_label }}</div>
       <div class="card-body">
@@ -75,7 +84,7 @@
             <thead>
               <tr>
                 {% for field in formset.empty_form %}
-                  {% if not field.is_hidden %}<th class="small">{{ field.label }}</th>{% endif %}
+                  {% if not field.is_hidden and field.name != 'DELETE' %}<th class="small">{{ field.label }}</th>{% endif %}
                 {% endfor %}
                 <th class="small text-end">Remove</th>
               </tr>
@@ -96,7 +105,13 @@
                   {% endfor %}
                   <td class="text-end">
                     {% for field in inline.visible_fields %}
-                      {% if field.name == 'DELETE' %}{{ field }}{% endif %}
+                      {% if field.name == 'DELETE' %}
+                        <label class="remove-row-btn btn btn-sm btn-outline-danger" title="Remove this row">
+                          {{ field }}
+                          <i class="bi bi-trash" aria-hidden="true"></i>
+                          <span class="visually-hidden">Remove this row</span>
+                        </label>
+                      {% endif %}
                     {% endfor %}
                   </td>
                 </tr>
