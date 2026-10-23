@@ -1,0 +1,16 @@
+{% comment %}Render one bound form field. Pass `field`; optional `col` overrides the column class.{% endcomment %}
+<div class="{% if col %}{{ col }}{% elif field.field.widget.input_type == 'checkbox' %}col-12{% elif field.name == 'notes' or field.name == 'pickup_address' or field.name == 'dropoff_address' %}col-12{% else %}col-md-6{% endif %}">
+  {% if field.field.widget.input_type == 'checkbox' %}
+    <div class="form-check">
+      {{ field }}
+      <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    </div>
+  {% else %}
+    <label class="form-label small fw-semibold mb-1" for="{{ field.id_for_label }}">
+      {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+    </label>
+    {{ field }}
+  {% endif %}
+  {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
+  {% for error in field.errors %}<div class="small text-danger mt-1">{{ error }}</div>{% endfor %}
+</div>

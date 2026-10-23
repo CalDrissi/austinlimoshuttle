@@ -837,3 +837,107 @@ class TestSingletonSettingsScreens:
         staff_in(DISPATCHER, roles)
         client.login(username="dispatcher@example.com", password="DashLocal!2026")
         assert client.get(reverse("dashboard:pricing_settings")).status_code == 403
+
+
+@pytest.mark.django_db
+class TestManualBooking:
+    """The rebuilt New Booking page: engine pricing, 3 trip types, customer, cash."""
+
+    def _login(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+    def _payload(self, vehicle, **over):
+        data = dict(
+            pickup_sign="Jane Doe", guest_phone="+15125550100", guest_email="",
+            vehicle=str(vehicle.pk), pickup_at="2026-12-01T14:00",
+            pickup_address="Austin", dropoff_address="", hours="",
+            passenger_count="1", luggage_count="0", flight_number="",
+            status=Booking.Status.CONFIRMED, notes="",
+            trip_mode="hourly", city_route="", override_total="",
+            customer_id="", driver="", payment_method="cash",
+        )
+        data.update(over)
+        return data
+
+    def test_hourly_is_priced_by_the_engine(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="hourly", hours="3"))
+        assert r.status_code == 302
+        b = Booking.objects.get()
+        assert b.trip_type == Booking.TripType.HOURLY
+        assert b.total == Decimal("255.00")  # 3h x $85
+
+    def test_override_sets_total_and_records_it(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="hourly", hours="3", override_total="200"))
+        assert r.status_code == 302
+        b = Booking.objects.get()
+        assert b.total == Decimal("200.00")
+        assert "agreed by staff" in b.price_lines.get().label
+
+    def test_hourly_requires_hours(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="hourly", hours=""))
+        assert r.status_code == 200
+        assert not Booking.objects.exists()
+
+    def test_transfer_requires_a_dropoff(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="transfer", dropoff_address=""))
+        assert r.status_code == 200
+        assert not Booking.objects.exists()
+
+    def test_city_uses_the_flat_route_price(self, client, roles, vehicle):
+        from pricing.models import CityRoute, CityRoutePrice
+        route = CityRoute.objects.create(origin="Austin", destination="Houston")
+        CityRoutePrice.objects.create(route=route, vehicle=vehicle, price=Decimal("395"))
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="city", city_route=str(route.pk)))
+        assert r.status_code == 302
+        b = Booking.objects.get()
+        assert b.total == Decimal("395.00")
+        assert b.city_route_id == route.pk
+
+    def test_new_customer_created_from_email(self, client, roles, vehicle):
+        self._login(client, roles)
+        client.post(reverse("dashboard:booking_create"),
+                    self._payload(vehicle, hours="2", guest_email="fresh@example.com"))
+        b = Booking.objects.get()
+        assert b.customer and b.customer.email == "fresh@example.com"
+
+    def test_no_email_is_a_guest(self, client, roles, vehicle):
+        self._login(client, roles)
+        client.post(reverse("dashboard:booking_create"),
+                    self._payload(vehicle, hours="2", guest_email=""))
+        assert Booking.objects.get().customer is None
+
+    def test_cash_records_awaiting_collection(self, client, roles, vehicle):
+        from payments.models import Payment
+        self._login(client, roles)
+        client.post(reverse("dashboard:booking_create"),
+                    self._payload(vehicle, hours="2", payment_method="cash"))
+        p = Booking.objects.get().payments.get()
+        assert p.provider == Payment.Provider.CASH
+        assert p.status == Payment.Status.PROCESSING
+
+    def test_mark_cash_collected(self, client, roles, vehicle):
+        from payments.models import Payment
+        self._login(client, roles)
+        client.post(reverse("dashboard:booking_create"), self._payload(vehicle, hours="2"))
+        b = Booking.objects.get()
+        client.post(reverse("dashboard:booking_mark_cash_collected", args=[b.reference]))
+        assert b.payments.get().status == Payment.Status.SUCCEEDED
+
+    def test_card_requires_a_customer(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, hours="2", payment_method="card",
+                                      stripe_payment_method_id="pm_x", guest_email=""))
+        assert r.status_code == 200
+        assert not Booking.objects.exists()  # card needs a customer -> rejected

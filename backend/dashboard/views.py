@@ -18,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.contrib.auth import REDIRECT_FIELD_NAME
+from django.contrib.auth import REDIRECT_FIELD_NAME, get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
@@ -34,7 +34,13 @@ from django.views.decorators.http import require_POST
 
 from bookings.models import Booking, BookingPriceLine, BookingStatusChange, Driver
 from django.conf import settings
+from django.http import JsonResponse
+from django.utils.dateparse import parse_datetime
 from content.models import SiteSettings
+from fleet.models import Vehicle
+from pricing.distance import DistanceLookupError
+from pricing.distance import lookup as measure_journey
+from pricing.engine import QuoteError, quote
 from enquiries.models import ContactMessage
 from notifications import mailer, sms
 from notifications.models import EmailLog, EmailSettings, SmsLog, SmsSettings
@@ -313,130 +319,329 @@ def booking_detail(request, reference):
     return render(request, "dashboard/booking_detail.html", context)
 
 
+def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,
+                  hours, city_route, meet_and_greet):
+    """
+    Price a manual booking with the SAME engine as the website.
+
+    `mode` is "transfer" | "hourly" | "city". Returns (quote, distance_miles,
+    route); raises ValueError with a staff-facing message on any problem, so the
+    caller can surface it in the form or as JSON.
+    """
+    if vehicle is None:
+        raise ValueError("Choose a vehicle first.")
+    if pickup_at is None:
+        raise ValueError("Set the pickup date & time first.")
+
+    distance = None
+    route = None
+    if mode == "city":
+        route = city_route
+        if route is None:
+            raise ValueError("Choose a city-to-city route.")
+    elif mode == "hourly":
+        if not hours or hours <= 0:
+            raise ValueError("Enter how many hours for the hourly hire.")
+    else:  # transfer
+        if not (dropoff_address or "").strip():
+            raise ValueError("Enter a drop-off address for the transfer.")
+        try:
+            journey = measure_journey(pickup_address, dropoff_address)
+        except DistanceLookupError as exc:
+            raise ValueError(str(exc)) from exc
+        distance = journey.distance_miles
+
+    try:
+        q = quote(
+            vehicle,
+            pickup_at=pickup_at,
+            distance_miles=distance,
+            hours=hours if mode == "hourly" else None,
+            meet_and_greet=meet_and_greet,
+            route=route,
+        )
+    except QuoteError as exc:
+        raise ValueError(str(exc)) from exc
+    return q, distance, route
+
+
+def _resolve_customer(cd):
+    """
+    Attach a customer to a manual booking:
+      - an explicitly-picked existing account (customer_id from the search), or
+      - find-or-create by the entered email (accounts are email-based), or
+      - None (guest booking) when no email is given.
+    Returns (user_or_None, created_new).
+    """
+    User = get_user_model()
+    cid = cd.get("customer_id")
+    if cid:
+        user = User.objects.filter(pk=cid, is_staff=False).first()
+        if user:
+            return user, False
+    email = (cd.get("guest_email") or "").strip().lower()
+    if not email:
+        return None, False
+    user = User.objects.filter(email__iexact=email).first()
+    if user:
+        return user, False
+    first, _, last = (cd.get("pickup_sign") or "").strip().partition(" ")
+    user = User.objects.create_user(
+        email=email, password=None,
+        first_name=first, last_name=last, phone=(cd.get("guest_phone") or ""),
+    )
+    return user, True
+
+
+@login_required(login_url="dashboard:login")
+@permission_required("bookings.add_booking", raise_exception=True)
+def booking_customer_lookup(request):
+    """Find existing customers by phone/email/name for the New Booking search."""
+    q = (request.GET.get("q") or "").strip()
+    results = []
+    if len(q) >= 3:
+        User = get_user_model()
+        matches = (
+            User.objects.filter(is_staff=False)
+            .filter(Q(email__icontains=q) | Q(phone__icontains=q)
+                    | Q(first_name__icontains=q) | Q(last_name__icontains=q))
+            .order_by("last_name", "first_name")[:8]
+        )
+        for u in matches:
+            cards = [
+                {"id": c.id, "brand": c.brand, "last4": c.last4}
+                for c in SavedCard.objects.filter(customer=u)
+            ]
+            results.append({
+                "id": u.id,
+                "name": u.get_full_name() or u.email,
+                "email": u.email,
+                "phone": u.phone,
+                "has_card": bool(cards),
+                "cards": cards,
+            })
+    return JsonResponse({"results": results})
+
+
+@login_required(login_url="dashboard:login")
+@permission_required("bookings.change_booking", raise_exception=True)
+@require_POST
+def booking_mark_cash_collected(request, reference):
+    """Mark a cash booking's awaiting-collection payment as collected."""
+    booking = get_object_or_404(Booking, reference=reference)
+    payment = booking.payments.filter(
+        provider=Payment.Provider.CASH,
+    ).exclude(status=Payment.Status.SUCCEEDED).first()
+    if payment is None:
+        messages.info(request, "No cash payment is awaiting collection.")
+    else:
+        payment.status = Payment.Status.SUCCEEDED
+        payment.save(update_fields=["status"])
+        BookingStatusChange.objects.create(
+            booking=booking, from_status=booking.status, to_status=booking.status,
+            changed_by=request.user, note=f"Cash collected (${payment.amount:.2f}).",
+        )
+        messages.success(request, f"Cash of ${payment.amount:.2f} marked collected.")
+    return redirect("dashboard:booking_detail", reference=reference)
+
+
+@login_required(login_url="dashboard:login")
+@permission_required("bookings.add_booking", raise_exception=True)
+@require_POST
+def booking_quote(request):
+    """Live fare preview for the New Booking form -- same engine as the website."""
+    post = request.POST
+    vehicle = Vehicle.objects.filter(pk=post.get("vehicle") or 0, is_active=True).first()
+    route = CityRoute.objects.filter(pk=post.get("city_route") or 0, is_active=True).first()
+    pickup_at = parse_datetime(post.get("pickup_at") or "")
+    if pickup_at and timezone.is_naive(pickup_at):
+        pickup_at = timezone.make_aware(pickup_at)
+    try:
+        hours = Decimal(post["hours"]) if post.get("hours") else None
+    except (InvalidOperation, KeyError):
+        hours = None
+    try:
+        q, distance, _ = _quote_manual(
+            post.get("trip_mode", "transfer"), vehicle,
+            pickup_at=pickup_at or timezone.now(),
+            pickup_address=post.get("pickup_address", ""),
+            dropoff_address=post.get("dropoff_address", ""),
+            hours=hours, city_route=route,
+            meet_and_greet=post.get("meet_and_greet") in ("on", "true", "True", "1"),
+        )
+    except ValueError as exc:
+        return JsonResponse({"ok": False, "error": str(exc)})
+    return JsonResponse({
+        "ok": True,
+        "total": f"{q.total:.2f}",
+        "currency": q.currency,
+        "distance_miles": f"{distance:.1f}" if distance is not None else None,
+        "lines": [{"label": line.label, "amount": f"{line.amount:.2f}"} for line in q.lines],
+    })
+
+
 @login_required(login_url="dashboard:login")
 @permission_required("bookings.add_booking", raise_exception=True)
 def booking_create(request):
     """
     Manual booking entry for phone / walk-in customers.
 
-    Staff agree a fare on the call, so it is entered directly (no online quote):
-    recorded as the total with a single fare line and an audit row, so the detail
-    view and receipt read exactly like a web booking. The vehicle name is
-    snapshotted and the reference generated by the model.
+    The fare is computed by the pricing engine (same as the website) from the
+    trip type and its inputs; staff may override the total for a negotiated
+    price, which is recorded on the audit trail. Stored like a web booking --
+    reference, real fare breakdown, audit row -- so the detail view and receipt
+    read the same.
     """
     maps_key = SiteSettings.load().google_maps_api_key or getattr(settings, "GOOGLE_MAPS_API_KEY", "")
     stripe_pk = gateway.publishable_key()
-    city_routes = (
-        CityRoute.objects.filter(is_active=True)
-        .prefetch_related("prices")
-    )
-    pricing_mode = "custom"
 
     if request.method == "POST":
-        post = request.POST
-        pricing_mode = post.get("pricing_mode", "custom")
-        route = None
-        route_error = ""
-
-        # City-to-city: the fare is the route's flat price for the chosen vehicle,
-        # computed server-side (never the posted total) so it can't be fiddled.
-        if pricing_mode == "city_route":
-            route = city_routes.filter(pk=post.get("city_route") or 0).first()
-            rp = (
-                route.prices.filter(vehicle_id=post.get("vehicle") or 0).first()
-                if route else None
-            )
-            if route is None:
-                route_error = "Choose a city-to-city route."
-            elif rp is None:
-                route_error = (
-                    "That route has no price for the chosen vehicle. Add one under "
-                    "City routes, or use the Custom tab."
-                )
-            else:
-                post = post.copy()
-                post["total"] = f"{rp.price}"
-
-        form = ManualBookingForm(post)
-        if route_error:
-            messages.error(request, route_error)
-        if form.is_valid() and not route_error:
-            pay_method = request.POST.get("payment_method", "cash")
-            pm_id = (request.POST.get("stripe_payment_method_id") or "").strip()
-            charged = False
+        form = ManualBookingForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            mode = cd["trip_mode"]
+            override = cd.get("override_total")
             try:
-                with transaction.atomic():
-                    booking = form.save(commit=False)
-                    booking.trip_type = Booking.TripType.TRANSFER
-                    booking.currency = "USD"
-                    if route is not None:
-                        booking.city_route = route
-                    booking.subtotal = booking.total
-                    booking.surcharge_total = Decimal("0.00")
-                    booking.tax = Decimal("0.00")
-                    booking.save()
-                    BookingPriceLine.objects.create(
-                        booking=booking,
-                        kind=BookingPriceLine.Kind.BASE,
-                        label=f"City-to-city: {route.label}" if route else "Fare (manual booking)",
-                        amount=booking.total,
-                        ordering=0,
-                    )
-                    BookingStatusChange.objects.create(
-                        booking=booking,
-                        from_status="",
-                        to_status=booking.status,
-                        changed_by=request.user,
-                        note="Created manually in the back office",
-                    )
-                    if pay_method == "card":
-                        if not pm_id:
-                            raise gateway.PaymentGatewayError("No card was entered.")
-                        payment, pstatus = gateway.charge_booking_with_payment_method(booking, pm_id)
-                        if pstatus == "succeeded":
-                            BookingStatusChange.objects.create(
-                                booking=booking, from_status=booking.status,
-                                to_status=Booking.Status.CONFIRMED, changed_by=request.user,
-                                note=f"Card charged ${booking.total:.2f} ({payment.masked_card})",
-                            )
-                            booking.status = Booking.Status.CONFIRMED
-                            booking.save(update_fields=["status", "updated_at"])
-                            charged = True
-                        else:
-                            # Don't leave a half-paid booking -- roll it all back.
-                            raise gateway.PaymentGatewayError(
-                                f"the card needs extra authentication ({pstatus}); "
-                                "use a different card or take cash"
-                            )
-            except (gateway.PaymentConfigurationError, gateway.PaymentGatewayError) as exc:
-                messages.error(request, f"Card payment failed: {exc}. The booking was not created.")
+                priced, distance, route = _quote_manual(
+                    mode, cd["vehicle"],
+                    pickup_at=cd["pickup_at"],
+                    pickup_address=cd.get("pickup_address", ""),
+                    dropoff_address=cd.get("dropoff_address", ""),
+                    hours=cd.get("hours"),
+                    city_route=cd.get("city_route"),
+                    meet_and_greet=cd.get("meet_and_greet", False),
+                )
+            except ValueError as exc:
+                form.add_error(None, str(exc))
             else:
-                # Email + SMS the customer their confirmation (each no-ops if its
-                # channel is off). notify_ops=False: staff just made this booking.
-                if booking.status == Booking.Status.CONFIRMED:
-                    from notifications.events import booking_confirmed
-                    booking_confirmed(booking, notify_ops=False)
-                if charged:
-                    messages.success(
-                        request,
-                        f"Booking {booking.reference} created and card charged ${booking.total:.2f}.",
-                    )
+                pay_method = request.POST.get("payment_method", "cash")
+                pm_id = (request.POST.get("stripe_payment_method_id") or "").strip()
+                charged = False
+                new_customer = False
+                try:
+                    with transaction.atomic():
+                        booking = form.save(commit=False)
+                        # Attach the customer: an existing account (picked in the
+                        # search or matched by email) or a new one created here.
+                        customer, new_customer = _resolve_customer(cd)
+                        booking.customer = customer
+                        booking.trip_type = (
+                            Booking.TripType.HOURLY if mode == "hourly"
+                            else Booking.TripType.TRANSFER
+                        )
+                        booking.city_route = route
+                        booking.distance_miles = distance
+                        booking.hours = cd.get("hours") if mode == "hourly" else None
+                        booking.currency = priced.currency
+                        if override is not None:
+                            booking.subtotal = override
+                            booking.surcharge_total = Decimal("0.00")
+                            booking.tax = Decimal("0.00")
+                            booking.total = override
+                        else:
+                            booking.subtotal = priced.subtotal
+                            booking.surcharge_total = priced.surcharge_total
+                            booking.tax = priced.tax
+                            booking.total = priced.total
+                        booking.save()
+
+                        if override is not None:
+                            BookingPriceLine.objects.create(
+                                booking=booking, kind=BookingPriceLine.Kind.BASE,
+                                label="Fare (agreed by staff)", amount=override, ordering=0,
+                            )
+                        else:
+                            for line in priced.as_price_lines(booking):
+                                line.save()
+
+                        note = "Created manually in the back office"
+                        if override is not None:
+                            note += f" (fare set to ${override:.2f})"
+                        BookingStatusChange.objects.create(
+                            booking=booking, from_status="", to_status=booking.status,
+                            changed_by=request.user, note=note,
+                        )
+                        if pay_method == "card":
+                            if booking.customer is None:
+                                raise gateway.PaymentGatewayError(
+                                    "Charging a card needs a customer — search for one "
+                                    "above, or add an email so the card can be saved."
+                                )
+                            if not pm_id:
+                                raise gateway.PaymentGatewayError("No card was entered.")
+                            payment, pstatus = gateway.charge_booking_with_payment_method(
+                                booking, pm_id, save_for=booking.customer,
+                            )
+                            if pstatus == "succeeded":
+                                BookingStatusChange.objects.create(
+                                    booking=booking, from_status=booking.status,
+                                    to_status=Booking.Status.CONFIRMED, changed_by=request.user,
+                                    note=f"Card charged ${booking.total:.2f} ({payment.masked_card}) — saved on file",
+                                )
+                                booking.status = Booking.Status.CONFIRMED
+                                booking.save(update_fields=["status", "updated_at"])
+                                charged = True
+                            else:
+                                raise gateway.PaymentGatewayError(
+                                    f"the card needs extra authentication ({pstatus}); "
+                                    "use a different card or take cash"
+                                )
+                        elif pay_method == "saved":
+                            if booking.customer is None:
+                                raise gateway.PaymentGatewayError("A saved card belongs to a customer — link one first.")
+                            card = SavedCard.objects.filter(
+                                customer=booking.customer, pk=request.POST.get("saved_card_id") or 0
+                            ).first()
+                            if card is None:
+                                raise gateway.PaymentGatewayError("Choose a saved card to charge.")
+                            payment = gateway.charge_saved_card(
+                                card, booking.total, f"Booking {booking.reference} (counter)", booking=booking,
+                            )
+                            if payment.status == Payment.Status.SUCCEEDED:
+                                BookingStatusChange.objects.create(
+                                    booking=booking, from_status=booking.status,
+                                    to_status=Booking.Status.CONFIRMED, changed_by=request.user,
+                                    note=f"Charged saved card {card.brand} ••{card.last4} ${booking.total:.2f}",
+                                )
+                                booking.status = Booking.Status.CONFIRMED
+                                booking.save(update_fields=["status", "updated_at"])
+                                charged = True
+                            else:
+                                raise gateway.PaymentGatewayError(
+                                    f"the saved card charge did not complete ({payment.status})."
+                                )
+                        else:  # cash -- record an awaiting-collection payment so it reconciles
+                            Payment.objects.create(
+                                booking=booking,
+                                provider=Payment.Provider.CASH,
+                                amount=booking.total,
+                                currency=booking.currency,
+                                status=Payment.Status.PROCESSING,
+                            )
+                except (gateway.PaymentConfigurationError, gateway.PaymentGatewayError) as exc:
+                    messages.error(request, f"Card payment failed: {exc}. The booking was not created.")
                 else:
-                    messages.success(request, f"Booking {booking.reference} created.")
-                return redirect("dashboard:booking_detail", reference=booking.reference)
+                    if booking.status == Booking.Status.CONFIRMED:
+                        from notifications.events import booking_confirmed
+                        booking_confirmed(booking, notify_ops=False)
+                    if charged:
+                        messages.success(
+                            request,
+                            f"Booking {booking.reference} created and card charged ${booking.total:.2f}.",
+                        )
+                    else:
+                        messages.success(request, f"Booking {booking.reference} created.")
+                    if new_customer:
+                        messages.info(
+                            request,
+                            f"New customer account created for {booking.customer.email}.",
+                        )
+                    return redirect("dashboard:booking_detail", reference=booking.reference)
     else:
         form = ManualBookingForm()
 
-    # {route_id: {vehicle_id: "price"}} -- the JS auto-fills the fare from this.
-    route_prices = {
-        str(r.pk): {str(p.vehicle_id): f"{p.price}" for p in r.prices.all()}
-        for r in city_routes
-    }
     return render(request, "dashboard/booking_form.html", {
         "form": form, "maps_key": maps_key, "stripe_pk": stripe_pk,
-        "city_routes": city_routes,
-        "route_prices_json": json.dumps(route_prices),
-        "pricing_mode": pricing_mode,
     })
 
 

@@ -40,37 +40,73 @@ class BootstrapFormMixin:
             widget.attrs["class"] = f"{existing} {css}".strip()
 
 
+TRIP_MODE_CHOICES = [
+    ("transfer", "Transfer"),
+    ("hourly", "By the hour"),
+    ("city", "City to City"),
+]
+
+
+def _apply_capacity_errors(form, cleaned):
+    """Reject passenger/luggage counts above the vehicle's limits (0 = no limit)."""
+    vehicle = cleaned.get("vehicle")
+    if not vehicle:
+        return
+    pax = cleaned.get("passenger_count")
+    lug = cleaned.get("luggage_count")
+    if vehicle.passenger_capacity and pax is not None and pax > vehicle.passenger_capacity:
+        form.add_error("passenger_count", f"{vehicle.name} seats up to {vehicle.passenger_capacity}.")
+    if vehicle.luggage_capacity and lug is not None and lug > vehicle.luggage_capacity:
+        form.add_error("luggage_count", f"{vehicle.name} holds up to {vehicle.luggage_capacity} bags.")
+
+
 class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
     """
     Staff-entered booking for phone and walk-in customers.
 
-    The fare is entered directly rather than quoted -- a dispatcher taking a call
-    has already agreed a price. It's recorded as the booking total with a single
-    fare line and an audit row, so the detail view and receipt read the same as a
-    web booking. Stored as a guest booking: the name goes on the pickup sign, the
-    phone and (optional) email as the guest contact.
+    The fare is computed by the same pricing engine as the website, from the
+    trip type and its inputs (distance for a transfer, hours for hourly, or a
+    flat city-to-city route). Staff may override the total for a negotiated or
+    corporate price; the override is recorded on the audit trail. The view does
+    the pricing -- this form only collects the inputs.
     """
+
+    trip_mode = forms.ChoiceField(
+        choices=TRIP_MODE_CHOICES, initial="transfer",
+        widget=forms.RadioSelect, label="Trip type",
+    )
+    city_route = forms.ModelChoiceField(
+        queryset=CityRoute.objects.filter(is_active=True),
+        required=False, empty_label="— choose a route —", label="Route",
+    )
+    override_total = forms.DecimalField(
+        required=False, min_value=Decimal("0"), max_digits=10, decimal_places=2,
+        label="Override total ($)",
+        help_text="Leave blank to use the system price.",
+    )
+    # Set by the "Find customer" search when staff pick an existing account.
+    customer_id = forms.IntegerField(required=False, widget=forms.HiddenInput)
 
     class Meta:
         model = Booking
         fields = [
             "pickup_sign", "guest_phone", "guest_email",
             "vehicle", "pickup_at", "pickup_address", "dropoff_address",
-            "passenger_count", "luggage_count", "flight_number",
-            "meet_and_greet", "total", "status", "notes",
+            "hours", "passenger_count", "luggage_count", "flight_number",
+            "meet_and_greet", "driver", "status", "notes",
         ]
         labels = {
             "pickup_sign": "Customer name",
             "guest_phone": "Customer phone",
             "guest_email": "Customer email",
             "pickup_at": "Pickup date & time",
-            "total": "Total fare ($)",
+            "driver": "Assign driver (optional)",
             "notes": "Notes for the driver",
         }
         help_texts = {
             "pickup_sign": "Who the ride is for -- shown to the driver.",
-            "dropoff_address": "Leave blank for an hourly hire.",
-            "total": "The agreed fare for this booking.",
+            "dropoff_address": "Transfer: the drop-off. City-to-city: optional.",
+            "hours": "By-the-hour only.",
             "guest_email": "Optional -- the receipt is emailed here if given.",
         }
         widgets = {
@@ -88,7 +124,10 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["pickup_at"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
         self.fields["pickup_sign"].required = True
         self.fields["guest_phone"].required = True
-        self.fields["total"].required = True
+        self.fields["hours"].required = False
+        self.fields["dropoff_address"].required = False
+        self.fields["driver"].required = False
+        self.fields["driver"].queryset = Driver.objects.filter(is_active=True).order_by("full_name")
         # A manual booking is one staff just took; only these statuses make sense.
         self.fields["status"].choices = [
             (Booking.Status.CONFIRMED, Booking.Status.CONFIRMED.label),
@@ -96,6 +135,64 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         ]
         self.initial.setdefault("status", Booking.Status.CONFIRMED)
         self.initial.setdefault("passenger_count", 1)
+
+    def clean(self):
+        cleaned = super().clean()
+        mode = cleaned.get("trip_mode")
+        if mode == "transfer":
+            if not (cleaned.get("dropoff_address") or "").strip():
+                self.add_error("dropoff_address",
+                               "A drop-off address is required for a transfer.")
+        elif mode == "hourly":
+            if not cleaned.get("hours") or cleaned["hours"] <= 0:
+                self.add_error("hours", "Enter how many hours for an hourly hire.")
+        elif mode == "city":
+            if not cleaned.get("city_route"):
+                self.add_error("city_route", "Choose a city-to-city route.")
+        _apply_capacity_errors(self, cleaned)
+        return cleaned
+
+
+class BookingEditForm(BootstrapFormMixin, forms.ModelForm):
+    """
+    Edit an existing booking's trip details, contact and fare.
+
+    Independent of the create form: here the total is edited directly (changing
+    it replaces the stored breakdown with a single adjusted line, in the view).
+    Status/driver stay with the dedicated control on the detail page.
+    """
+
+    class Meta:
+        model = Booking
+        fields = [
+            "pickup_sign", "guest_phone", "guest_email",
+            "vehicle", "pickup_at", "pickup_address", "dropoff_address",
+            "passenger_count", "luggage_count", "flight_number",
+            "meet_and_greet", "total", "notes",
+        ]
+        labels = {
+            "pickup_sign": "Customer name",
+            "guest_phone": "Customer phone",
+            "guest_email": "Customer email",
+            "pickup_at": "Pickup date & time",
+            "total": "Total fare ($)",
+            "notes": "Notes for the driver",
+        }
+        widgets = {
+            "pickup_at": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M",
+            ),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["vehicle"].queryset = (
+            Vehicle.objects.filter(is_active=True).order_by("display_order", "name")
+        )
+        self.fields["pickup_at"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
+        self.fields["pickup_sign"].required = False
+        self.fields["guest_phone"].required = False
 
     def clean_total(self):
         total = self.cleaned_data.get("total")
@@ -105,35 +202,8 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        vehicle = cleaned.get("vehicle")
-        if vehicle:
-            pax = cleaned.get("passenger_count")
-            lug = cleaned.get("luggage_count")
-            # Capacity of 0 means "not configured" -> no limit (see api.views).
-            if vehicle.passenger_capacity and pax is not None and pax > vehicle.passenger_capacity:
-                self.add_error("passenger_count",
-                               f"{vehicle.name} seats up to {vehicle.passenger_capacity}.")
-            if vehicle.luggage_capacity and lug is not None and lug > vehicle.luggage_capacity:
-                self.add_error("luggage_count",
-                               f"{vehicle.name} holds up to {vehicle.luggage_capacity} bags.")
+        _apply_capacity_errors(self, cleaned)
         return cleaned
-
-
-class BookingEditForm(ManualBookingForm):
-    """
-    Edit an existing booking's details.
-
-    Same fields as manual entry, with two differences: the guest-contact fields
-    aren't forced (the booking may belong to an account, where the contact lives
-    on the user), and status is left to the dedicated status/driver control on
-    the detail page -- which records a proper transition with a note.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["pickup_sign"].required = False
-        self.fields["guest_phone"].required = False
-        self.fields.pop("status", None)
 
 
 class PaymentSettingsForm(BootstrapFormMixin, forms.ModelForm):

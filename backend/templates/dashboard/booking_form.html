@@ -6,12 +6,10 @@
   <p class="lede">
     {% if booking %}
       <a href="{% url 'dashboard:booking_detail' booking.reference %}" class="text-decoration-none">
-        <i class="bi bi-arrow-left"></i> Back to {{ booking.reference }}
-      </a>
+        <i class="bi bi-arrow-left"></i> Back to {{ booking.reference }}</a>
     {% else %}
       <a href="{% url 'dashboard:bookings' %}" class="text-decoration-none">
-        <i class="bi bi-arrow-left"></i> Bookings
-      </a>
+        <i class="bi bi-arrow-left"></i> Bookings</a>
     {% endif %}
   </p>
 {% endblock %}
@@ -25,102 +23,124 @@
 {% else %}
   <div class="alert alert-info d-flex gap-2">
     <i class="bi bi-telephone"></i>
-    <div>For phone or walk-in bookings. Enter the <strong>agreed fare</strong> directly — no online quote is taken.</div>
+    <div>For phone or walk-in bookings. Pick the trip type, get the system price (or override it), then create.</div>
   </div>
 {% endif %}
 
-<form method="post" novalidate id="booking-form" data-stripe-pk="{{ stripe_pk }}" data-route-prices="{{ route_prices_json|default:'{}' }}">
+<form method="post" novalidate id="booking-form"
+      data-stripe-pk="{{ stripe_pk }}" data-quote-url="{% url 'dashboard:booking_quote' %}"
+      {% if not booking %}data-customer-url="{% url 'dashboard:booking_customer_lookup' %}"{% endif %}>
   {% csrf_token %}
 
   {% if form.non_field_errors %}
     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
   {% endif %}
 
+{% if booking %}
+  {# ---------- EDIT: a plain field grid (unchanged behaviour) ---------- #}
   <div class="card mb-3">
     <div class="card-header"><i class="bi bi-calendar-plus me-2"></i>Booking details</div>
     <div class="card-body">
       <div class="row g-3">
         {% for field in form %}
-          {% comment %}On a new booking the fare lives in the tabbed Fare card below.{% endcomment %}
-          {% if field.name != 'total' or booking %}
-          <div class="{% if field.field.widget.input_type == 'checkbox' %}col-12{% elif field.name == 'notes' or field.name == 'pickup_address' or field.name == 'dropoff_address' %}col-12{% else %}col-md-6{% endif %}">
-            {% if field.field.widget.input_type == 'checkbox' %}
-              <div class="form-check">
-                {{ field }}
-                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-              </div>
-            {% else %}
-              <label class="form-label small fw-semibold mb-1" for="{{ field.id_for_label }}">
-                {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
-              </label>
-              {{ field }}
-            {% endif %}
-            {% if field.help_text %}<div class="form-text small">{{ field.help_text }}</div>{% endif %}
-            {% for error in field.errors %}<div class="small text-danger mt-1">{{ error }}</div>{% endfor %}
-          </div>
-          {% endif %}
+          {% include "dashboard/_formfield.html" with field=field %}
         {% endfor %}
       </div>
     </div>
   </div>
+{% else %}
+  {# ---------- NEW BOOKING ---------- #}
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-person me-2"></i>Customer</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label small fw-semibold mb-1">Find existing customer</label>
+        <div class="input-group input-group-sm">
+          <input type="text" id="cust-search" class="form-control" autocomplete="off"
+                 placeholder="Search by phone, email or name">
+          <button type="button" id="cust-search-btn" class="btn btn-outline-secondary">Find</button>
+        </div>
+        <div id="cust-results" class="list-group mt-1"></div>
+        <div id="cust-linked" class="form-text text-success mt-1"></div>
+        <div class="form-text">Or just fill in the details below — enter an email and a new customer account is created automatically.</div>
+      </div>
+      <div class="row g-3">
+        {% include "dashboard/_formfield.html" with field=form.pickup_sign %}
+        {% include "dashboard/_formfield.html" with field=form.guest_phone %}
+        {% include "dashboard/_formfield.html" with field=form.guest_email %}
+      </div>
+      {{ form.customer_id }}
+    </div>
+  </div>
 
-  {% if not booking %}
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-geo-alt me-2"></i>Trip</div>
+    <div class="card-body">
+      <label class="form-label small fw-semibold mb-1">Trip type</label>
+      <div class="btn-group d-flex mb-3" role="group" id="trip-mode-group">
+        {% for radio in form.trip_mode %}
+          <input type="radio" class="btn-check" name="trip_mode" id="{{ radio.id_for_label }}"
+                 value="{{ radio.data.value }}" autocomplete="off" {% if radio.data.selected %}checked{% endif %}>
+          <label class="btn btn-outline-secondary btn-sm" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+        {% endfor %}
+      </div>
+      {% for error in form.trip_mode.errors %}<div class="small text-danger mb-2">{{ error }}</div>{% endfor %}
+
+      <div class="row g-3">
+        {% include "dashboard/_formfield.html" with field=form.vehicle %}
+        {% include "dashboard/_formfield.html" with field=form.pickup_at %}
+        {% include "dashboard/_formfield.html" with field=form.pickup_address col="col-12" %}
+
+        <div class="col-12 trip-field" data-modes="transfer city">
+          <div class="row g-3">{% include "dashboard/_formfield.html" with field=form.dropoff_address col="col-12" %}</div>
+        </div>
+        <div class="col-md-6 trip-field" data-modes="hourly">
+          <div class="row g-3">{% include "dashboard/_formfield.html" with field=form.hours col="col-12" %}</div>
+        </div>
+        <div class="col-md-6 trip-field" data-modes="city">
+          <div class="row g-3">{% include "dashboard/_formfield.html" with field=form.city_route col="col-12" %}</div>
+        </div>
+
+        {% include "dashboard/_formfield.html" with field=form.passenger_count %}
+        {% include "dashboard/_formfield.html" with field=form.luggage_count %}
+        {% include "dashboard/_formfield.html" with field=form.flight_number %}
+        {% include "dashboard/_formfield.html" with field=form.driver %}
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.meet_and_greet }}
+            <label class="form-check-label" for="{{ form.meet_and_greet.id_for_label }}">Meet &amp; Greet</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="card mb-3">
     <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Fare</div>
     <div class="card-body">
-      <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link {% if pricing_mode != 'city_route' %}active{% endif %}" id="tab-custom-btn"
-                  data-bs-toggle="tab" data-bs-target="#tab-custom" type="button" role="tab" data-mode="custom">
-            <i class="bi bi-pencil me-1"></i>Custom / distance
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link {% if pricing_mode == 'city_route' %}active{% endif %}" id="tab-route-btn"
-                  data-bs-toggle="tab" data-bs-target="#tab-route" type="button" role="tab" data-mode="city_route"
-                  {% if not city_routes %}disabled{% endif %}>
-            <i class="bi bi-signpost-split me-1"></i>City to City
-          </button>
-        </li>
-      </ul>
-      <div class="tab-content">
-        <div class="tab-pane fade {% if pricing_mode != 'city_route' %}show active{% endif %}" id="tab-custom" role="tabpanel">
-          <label class="form-label small fw-semibold mb-1" for="{{ form.total.id_for_label }}">
-            {{ form.total.label }} <span class="text-danger">*</span>
-          </label>
-          {{ form.total }}
-          {% if form.total.help_text %}<div class="form-text small">{{ form.total.help_text }}</div>{% endif %}
-          {% for error in form.total.errors %}<div class="small text-danger mt-1">{{ error }}</div>{% endfor %}
-        </div>
-        <div class="tab-pane fade {% if pricing_mode == 'city_route' %}show active{% endif %}" id="tab-route" role="tabpanel">
-          {% if city_routes %}
-            <label class="form-label small fw-semibold mb-1" for="city_route_select">Route</label>
-            <select name="city_route" id="city_route_select" class="form-select">
-              <option value="">— choose a route —</option>
-              {% for r in city_routes %}
-                <option value="{{ r.pk }}">{{ r.label }}</option>
-              {% endfor %}
-            </select>
-            <div id="route-fare-info" class="small fw-semibold mt-2"></div>
-            <div class="form-text">Pick the route; the <strong>flat all-in fare</strong> fills in from the vehicle selected above. Manage routes under <a href="{% url 'dashboard:managed_list' 'city-routes' %}">City routes</a>.</div>
-          {% else %}
-            <p class="text-secondary mb-0">No city routes yet. <a href="{% url 'dashboard:managed_create' 'city-routes' %}">Add one</a> to use fixed intercity pricing.</p>
-          {% endif %}
-        </div>
+      <button type="button" id="get-price-btn" class="btn btn-outline-secondary btn-sm mb-2">
+        <i class="bi bi-calculator me-1"></i>Get price
+      </button>
+      <div id="quote-box" class="mb-2"></div>
+      <div class="row g-3">
+        {% include "dashboard/_formfield.html" with field=form.override_total %}
+        {% include "dashboard/_formfield.html" with field=form.status %}
       </div>
-      <input type="hidden" name="pricing_mode" id="pricing_mode" value="{{ pricing_mode|default:'custom' }}">
     </div>
   </div>
 
   <div class="card mb-3">
     <div class="card-header"><i class="bi bi-credit-card me-2"></i>Payment</div>
     <div class="card-body">
-      <div class="btn-group mb-3" role="group" aria-label="Payment method">
+      <div class="btn-group mb-2" role="group" aria-label="Payment method">
         <input type="radio" class="btn-check" name="payment_method" id="pm-cash" value="cash" autocomplete="off" checked>
         <label class="btn btn-outline-secondary btn-sm" for="pm-cash"><i class="bi bi-cash me-1"></i>Cash / pay later</label>
         <input type="radio" class="btn-check" name="payment_method" id="pm-card" value="card" autocomplete="off" {% if not stripe_pk %}disabled{% endif %}>
-        <label class="btn btn-outline-secondary btn-sm" for="pm-card"><i class="bi bi-credit-card-2-front me-1"></i>Charge card now</label>
+        <label class="btn btn-outline-secondary btn-sm" for="pm-card"><i class="bi bi-credit-card-2-front me-1"></i>Charge new card</label>
       </div>
+      <div id="saved-cards" class="mb-2"></div>
+      <input type="hidden" name="saved_card_id" id="saved_card_id">
+      <div class="form-text mb-2">Charging a card needs a customer — the card is saved on file for next time. Cash can be a guest.</div>
       {% if not stripe_pk %}
         <div class="form-text text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Card payments aren’t enabled — add Stripe keys in Settings → Payments.</div>
       {% endif %}
@@ -133,7 +153,14 @@
       <input type="hidden" name="stripe_payment_method_id" id="stripe_payment_method_id">
     </div>
   </div>
-  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header"><i class="bi bi-chat-left-text me-2"></i>Notes</div>
+    <div class="card-body">
+      <div class="row g-3">{% include "dashboard/_formfield.html" with field=form.notes col="col-12" %}</div>
+    </div>
+  </div>
+{% endif %}
 
   <div class="d-flex gap-2">
     <button type="submit" id="submit-btn" class="btn btn-brand">

@@ -97,10 +97,11 @@
     }
   }
 
-  document.querySelectorAll('input[name="payment_method"]').forEach(function (r) {
-    r.addEventListener("change", function () {
-      showCard(this.value === "card" && this.checked);
-    });
+  // Delegated so dynamically-injected saved-card radios toggle the card field too.
+  form.addEventListener("change", function (e) {
+    if (e.target && e.target.name === "payment_method") {
+      showCard(e.target.value === "card" && e.target.checked);
+    }
   });
 
   card.on("change", function (ev) {
@@ -128,53 +129,177 @@
   });
 })();
 
-/* --- City-to-city flat-rate fare (manual booking) ---
- * Independent of Stripe. The route tab fills the fare from a prices map; the
- * server recomputes it authoritatively, so this is only live feedback.
+/* --- Trip type + live "Get price" (new-booking form) ---
+ * Shows only the inputs each trip type needs, and fetches the fare from the same
+ * engine as the website. The server re-prices authoritatively on submit, so this
+ * is a live preview only.
  */
 (function () {
   "use strict";
   var form = document.getElementById("booking-form");
   if (!form) return;
-  var routeSelect = document.getElementById("city_route_select");
-  var modeInput = document.getElementById("pricing_mode");
-  if (!routeSelect || !modeInput) return; // not the new-booking form, or no routes
+  var group = document.getElementById("trip-mode-group");
+  if (!group) return; // not the new-booking form
 
-  var prices = {};
-  try { prices = JSON.parse(form.dataset.routePrices || "{}"); } catch (e) { prices = {}; }
-  var vehicleSelect = document.getElementById("id_vehicle");
-  var totalInput = document.getElementById("id_total");
-  var info = document.getElementById("route-fare-info");
+  var quoteUrl = form.dataset.quoteUrl || "";
+  var quoteBox = document.getElementById("quote-box");
+  var getBtn = document.getElementById("get-price-btn");
 
-  function recalc() {
-    var r = routeSelect.value;
-    var v = vehicleSelect ? vehicleSelect.value : "";
-    if (!r) { if (info) { info.textContent = ""; info.className = "small fw-semibold mt-2"; } return; }
-    var price = prices[r] && prices[r][v];
-    if (price != null) {
-      if (totalInput) totalInput.value = price;
-      if (info) {
-        info.textContent = "Flat fare: $" + Number(price).toFixed(2) + " (all-in)";
-        info.className = "small fw-semibold mt-2 text-success";
-      }
-    } else if (info) {
-      info.textContent = "No price set for the selected vehicle on this route. Add one under City routes, or use Custom.";
-      info.className = "small fw-semibold mt-2 text-danger";
-    }
+  function currentMode() {
+    var checked = form.querySelector('input[name="trip_mode"]:checked');
+    return checked ? checked.value : "transfer";
   }
 
-  // Bootstrap tab change -> record which pricing mode is active.
-  document.querySelectorAll('[data-bs-toggle="tab"][data-mode]').forEach(function (btn) {
-    btn.addEventListener("shown.bs.tab", function (e) {
-      modeInput.value = e.target.getAttribute("data-mode");
-      if (modeInput.value === "city_route") recalc();
+  // Show only the fields that belong to the selected trip type.
+  function applyMode() {
+    var mode = currentMode();
+    document.querySelectorAll(".trip-field").forEach(function (el) {
+      var modes = (el.getAttribute("data-modes") || "").split(/\s+/);
+      el.style.display = modes.indexOf(mode) !== -1 ? "" : "none";
     });
+    if (quoteBox) quoteBox.innerHTML = ""; // stale once the trip changes
+  }
+
+  group.querySelectorAll('input[name="trip_mode"]').forEach(function (r) {
+    r.addEventListener("change", applyMode);
   });
-  routeSelect.addEventListener("change", recalc);
-  if (vehicleSelect) {
-    vehicleSelect.addEventListener("change", function () {
-      if (modeInput.value === "city_route") recalc();
-    });
+  applyMode();
+
+  function field(name) {
+    var el = form.querySelector('[name="' + name + '"]');
+    return el ? el.value : "";
   }
-  if (modeInput.value === "city_route") recalc(); // after an error re-render
+
+  function getPrice() {
+    if (!quoteUrl || !quoteBox) return;
+    quoteBox.innerHTML = '<span class="text-secondary small">Pricing…</span>';
+    var body = new URLSearchParams();
+    body.set("trip_mode", currentMode());
+    body.set("vehicle", field("vehicle"));
+    body.set("pickup_at", field("pickup_at"));
+    body.set("pickup_address", field("pickup_address"));
+    body.set("dropoff_address", field("dropoff_address"));
+    body.set("hours", field("hours"));
+    body.set("city_route", field("city_route"));
+    var mg = form.querySelector('[name="meet_and_greet"]');
+    body.set("meet_and_greet", mg && mg.checked ? "on" : "");
+    body.set("csrfmiddlewaretoken", field("csrfmiddlewaretoken"));
+    fetch(quoteUrl, {
+      method: "POST", credentials: "same-origin",
+      headers: { "X-Requested-With": "XMLHttpRequest" }, body: body,
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) {
+          quoteBox.innerHTML = '<div class="small text-danger">' + (d.error || "Couldn't price that.") + "</div>";
+          return;
+        }
+        var rows = (d.lines || []).map(function (l) {
+          return '<div class="d-flex justify-content-between"><span>' + l.label +
+                 '</span><span>$' + l.amount + "</span></div>";
+        }).join("");
+        var dist = d.distance_miles ? '<div class="text-secondary small mb-1">' + d.distance_miles + " miles</div>" : "";
+        quoteBox.innerHTML =
+          '<div class="border rounded p-2 bg-light">' + dist + rows +
+          '<div class="d-flex justify-content-between fw-semibold border-top mt-1 pt-1">' +
+          "<span>System price</span><span>$" + d.total + " " + d.currency + "</span></div>" +
+          '<div class="form-text mt-1">Leave Override blank to use this price.</div></div>';
+      })
+      .catch(function () {
+        quoteBox.innerHTML = '<div class="small text-danger">Couldn\'t reach the pricing service.</div>';
+      });
+  }
+
+  if (getBtn) getBtn.addEventListener("click", getPrice);
+})();
+
+/* --- Find / attach a customer (new-booking form) --- */
+(function () {
+  "use strict";
+  var form = document.getElementById("booking-form");
+  if (!form) return;
+  var url = form.dataset.customerUrl || "";
+  var input = document.getElementById("cust-search");
+  var btn = document.getElementById("cust-search-btn");
+  var results = document.getElementById("cust-results");
+  var linked = document.getElementById("cust-linked");
+  var hid = document.getElementById("id_customer_id");
+  if (!url || !input || !btn || !results || !hid) return;
+
+  var savedBox = document.getElementById("saved-cards");
+  var savedHid = document.getElementById("saved_card_id");
+
+  function renderSavedCards(cards) {
+    if (!savedBox) return;
+    if (!cards || !cards.length) { savedBox.innerHTML = ""; return; }
+    var html = '<div class="small text-secondary mb-1">Or charge a saved card:</div><div class="d-flex flex-wrap gap-2">';
+    cards.forEach(function (c) {
+      var id = "pm-saved-" + c.id;
+      html += '<input type="radio" class="btn-check" name="payment_method" id="' + id +
+        '" value="saved" data-card-id="' + c.id + '" autocomplete="off">' +
+        '<label class="btn btn-outline-secondary btn-sm" for="' + id + '">' +
+        c.brand + " ••" + c.last4 + "</label>";
+    });
+    savedBox.innerHTML = html + "</div>";
+  }
+
+  // Keep the hidden saved_card_id in sync with the chosen saved-card radio.
+  form.addEventListener("change", function (e) {
+    if (!e.target || e.target.name !== "payment_method" || !savedHid) return;
+    savedHid.value = (e.target.value === "saved" && e.target.dataset.cardId) ? e.target.dataset.cardId : "";
+  });
+
+  function setVal(name, v) {
+    var el = form.querySelector('[name="' + name + '"]');
+    if (el) el.value = v || "";
+  }
+
+  function search() {
+    var q = input.value.trim();
+    if (q.length < 3) { results.innerHTML = ""; return; }
+    results.innerHTML = '<div class="list-group-item small text-secondary">Searching…</div>';
+    fetch(url + "?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.results || !d.results.length) {
+          results.innerHTML = '<div class="list-group-item small text-secondary">No match. Fill in the details to create a new customer.</div>';
+          return;
+        }
+        results.innerHTML = "";
+        d.results.forEach(function (u) {
+          var a = document.createElement("button");
+          a.type = "button";
+          a.className = "list-group-item list-group-item-action";
+          a.innerHTML = "<strong>" + (u.name || u.email) + "</strong> " +
+            '<span class="text-secondary small">' + (u.phone || "") + " · " + u.email +
+            (u.has_card ? ' · <span class="text-success">card on file</span>' : "") + "</span>";
+          a.addEventListener("click", function () {
+            hid.value = u.id;
+            setVal("pickup_sign", u.name);
+            setVal("guest_phone", u.phone);
+            setVal("guest_email", u.email);
+            results.innerHTML = "";
+            linked.textContent = "Linked to " + (u.name || u.email) + "'s account." +
+              (u.has_card ? " Card on file available." : "");
+            renderSavedCards(u.cards || []);
+          });
+          results.appendChild(a);
+        });
+      })
+      .catch(function () {
+        results.innerHTML = '<div class="list-group-item small text-danger">Lookup failed.</div>';
+      });
+  }
+
+  btn.addEventListener("click", search);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); search(); }
+  });
+  // Editing the email after linking means they're changing the customer -> unlink.
+  var emailEl = form.querySelector('[name="guest_email"]');
+  if (emailEl) emailEl.addEventListener("input", function () {
+    hid.value = ""; linked.textContent = "";
+    if (savedBox) savedBox.innerHTML = "";
+    if (savedHid) savedHid.value = "";
+  });
 })();

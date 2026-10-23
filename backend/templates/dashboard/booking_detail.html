@@ -149,13 +149,29 @@
           {% for payment in booking.payments.all %}
             <tr>
               <td class="small">{{ payment.created_at|date:"j M Y" }}</td>
-              <td class="small">{{ payment.get_status_display }}</td>
+              <td class="small">
+                {% if payment.provider == 'cash' and payment.status != 'succeeded' %}
+                  <span class="badge bg-warning text-dark">Cash — awaiting collection</span>
+                {% elif payment.provider == 'cash' %}
+                  Cash — collected
+                {% else %}{{ payment.get_status_display }}{% endif %}
+              </td>
               <td class="small">{{ payment.masked_card|default:"—" }}</td>
               <td class="text-end small">${{ payment.amount }}</td>
             </tr>
           {% endfor %}
           </tbody>
         </table>
+        {% for payment in booking.payments.all %}
+          {% if payment.provider == 'cash' and payment.status != 'succeeded' %}
+            <div class="card-body py-2 border-top">
+              <form method="post" action="{% url 'dashboard:booking_mark_cash_collected' booking.reference %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-cash-coin me-1"></i>Mark cash collected</button>
+              </form>
+            </div>
+          {% endif %}
+        {% endfor %}
       {% else %}
         <div class="card-body small text-secondary">No payment records.</div>
       {% endif %}

@@ -320,21 +320,26 @@ def charge_saved_card(saved_card, amount: Decimal, description: str, *, booking=
     )
 
 
-def charge_booking_with_payment_method(booking, payment_method_id: str):
+def charge_booking_with_payment_method(booking, payment_method_id: str, *, save_for=None):
     """
     Charge a booking's total with a card collected at the counter (on-session).
 
     Confirms immediately with the given PaymentMethod. Returns (Payment, status).
     A plain test card (4242…) succeeds outright; a card that needs 3-D Secure
     comes back "requires_action" and the caller surfaces that.
+
+    When `save_for` is a customer user, the card is attached to their Stripe
+    Customer and saved on file (`SavedCard`) on success, so the next booking is
+    one tap -- this is why a counter card charge requires a customer.
     """
     config = _settings()
     if booking.total <= 0:
         raise PaymentGatewayError("This booking has no amount to charge.")
 
     client = _client(config)
-    try:
-        intent = client.payment_intents.create(params={
+
+    def _create():
+        params = {
             "amount": to_cents(booking.total),
             "currency": booking.currency.lower(),
             "payment_method": payment_method_id,
@@ -348,14 +353,31 @@ def charge_booking_with_payment_method(booking, payment_method_id: str):
                 "booking_id": str(booking.pk),
                 "kind": "backoffice_card",
             },
-        })
+        }
+        if save_for is not None:
+            params["customer"] = get_or_create_customer(save_for)
+            params["setup_future_usage"] = "off_session"
+        return client.payment_intents.create(params=params)
+
+    try:
+        intent = _create()
     except stripe.CardError as exc:
         raise PaymentGatewayError(
             getattr(exc, "user_message", None) or "The card was declined."
         ) from exc
     except stripe.StripeError as exc:
-        logger.error("Counter charge failed for %s: %s", booking.reference, exc)
-        raise PaymentGatewayError("The charge could not be completed.") from exc
+        # A stale cached Stripe customer id -> clear it and try once more.
+        if save_for is not None and _is_missing_customer(exc):
+            save_for.stripe_customer_id = ""
+            save_for.save(update_fields=["stripe_customer_id"])
+            try:
+                intent = _create()
+            except stripe.StripeError as exc2:
+                logger.error("Counter charge retry failed for %s: %s", booking.reference, exc2)
+                raise PaymentGatewayError("The charge could not be completed.") from exc2
+        else:
+            logger.error("Counter charge failed for %s: %s", booking.reference, exc)
+            raise PaymentGatewayError("The charge could not be completed.") from exc
 
     payment = Payment.objects.create(
         booking=booking,
@@ -373,6 +395,14 @@ def charge_booking_with_payment_method(booking, payment_method_id: str):
         payment.save(update_fields=["card_brand", "card_last4"])
     except stripe.StripeError:
         pass
+
+    # Persist the card on file for next time (PM is attached by setup_future_usage).
+    if save_for is not None and intent.status == "succeeded":
+        try:
+            save_card_for_user(save_for, payment_method_id)
+        except stripe.StripeError:
+            logger.warning("Charged but couldn't save card for %s", booking.reference)
+
     return payment, intent.status
 
 
