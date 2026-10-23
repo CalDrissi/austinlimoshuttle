@@ -55,8 +55,11 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
 
         if "Permissions-Policy" not in response:
             # Nothing here needs a camera, microphone or the payment API.
+            # Geolocation is granted to our own origin only (self): the driver
+            # app under /driver/ reads navigator.geolocation to stamp each
+            # status event with coords. Third-party frames get nothing.
             response["Permissions-Policy"] = (
-                "geolocation=(), camera=(), microphone=(), payment=()"
+                "geolocation=(self), camera=(), microphone=(), payment=()"
             )
 
         return response

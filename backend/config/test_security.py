@@ -144,6 +144,26 @@ class TestProductionHardening:
         assert "unsafe-inline" not in script_src[0]
         assert "'self' https://js.stripe.com https://maps.googleapis.com https://maps.gstatic.com" in script_src[0]
 
+    @pytest.mark.django_db
+    def test_permissions_policy_allows_same_origin_geolocation_only(self, client):
+        # The driver app (same-origin, /driver/) reads navigator.geolocation to
+        # stamp each status event with coords, so geolocation must be granted to
+        # 'self'. It must NOT be granted to any third party, and every other
+        # Permissions-Policy directive must stay locked off.
+        response = client.get(reverse("admin:login"))
+        policy = response.headers.get("Permissions-Policy", "")
+
+        directives = {d.split("=", 1)[0].strip(): d.split("=", 1)[1].strip()
+                      for d in policy.split(",") if "=" in d}
+
+        assert directives.get("geolocation") == "(self)"
+        # No wildcard / third-party origin crept in.
+        assert "*" not in directives["geolocation"]
+        # Everything else remains fully disabled, exactly as before.
+        assert directives.get("camera") == "()"
+        assert directives.get("microphone") == "()"
+        assert directives.get("payment") == "()"
+
     def test_production_settings_are_hardened(self, monkeypatch):
         import importlib
 
