@@ -5,7 +5,9 @@ from django.utils.html import format_html
 
 from payments.models import Payment
 
-from .models import Booking, BookingPriceLine, BookingStatusChange, Driver
+from .models import (
+    Booking, BookingPriceLine, BookingStatusChange, DriverTripEvent, Driver,
+)
 
 
 class BookingPriceLineInline(admin.TabularInline):
@@ -27,6 +29,20 @@ class BookingStatusChangeInline(admin.TabularInline):
     readonly_fields = fields
     can_delete = False
     ordering = ["-changed_at"]
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+class DriverTripEventInline(admin.TabularInline):
+    model = DriverTripEvent
+    extra = 0
+    fields = ["created_at", "event_type", "driver", "latitude", "longitude",
+              "location_accuracy"]
+    readonly_fields = fields
+    can_delete = False
+    ordering = ["created_at"]
+    verbose_name_plural = "Driver trip events (live status pings)"
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -61,7 +77,8 @@ class BookingAdmin(admin.ModelAdmin):
     ]
     date_hierarchy = "pickup_at"
     autocomplete_fields = ["customer", "driver", "vehicle"]
-    inlines = [BookingPriceLineInline, PaymentInline, BookingStatusChangeInline]
+    inlines = [BookingPriceLineInline, PaymentInline, BookingStatusChangeInline,
+               DriverTripEventInline]
     readonly_fields = [
         "reference", "legacy_order_id", "created_at", "updated_at",
         "vehicle_name_snapshot", "subtotal", "surcharge_total", "tax", "total",

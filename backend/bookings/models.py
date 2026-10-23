@@ -22,8 +22,10 @@ import secrets
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
+
+from .signals import driver_trip_event_recorded
 
 REFERENCE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no I/O/0/1
 REFERENCE_LENGTH = 8
@@ -307,3 +309,110 @@ class BookingStatusChange(models.Model):
 
     def __str__(self):
         return f"{self.booking.reference}: {self.from_status or '—'} → {self.to_status}"
+
+
+class DriverTripEvent(models.Model):
+    """
+    A single live status ping sent by the driver while running a trip.
+
+    The storefront/driver app reports where the chauffeur is in the journey
+    ("on my way", "arrived", "passenger on board", "completed"), optionally with
+    a GPS fix. Each ping is an immutable row so the office can reconstruct the
+    timeline and plot the route afterwards.
+
+    This model is the *source of truth* for trip progress. Other lanes build on
+    it but never write it directly -- they go through `record()`, which is the
+    single creation entry point, and react via the `driver_trip_event_recorded`
+    signal. See CONTRACTS.md → "DriverTripEvent".
+    """
+
+    class EventType(models.TextChoices):
+        ON_WAY = "on_way", "On the way"
+        ARRIVED = "arrived", "Arrived at pickup"
+        ON_BOARD = "on_board", "Passenger on board"
+        COMPLETED = "completed", "Trip completed"
+
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="trip_events",
+    )
+    event_type = models.CharField(max_length=12, choices=EventType.choices)
+
+    # GPS fix at the moment of the ping. Null when the driver's device has no
+    # location permission or no signal -- the event is still recorded, it just
+    # cannot be plotted. Same precision as the booking's own coordinates.
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True,
+    )
+    location_accuracy = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True,
+        help_text="Reported GPS accuracy radius in metres, if the device gave one.",
+    )
+
+    # Who sent the ping. SET_NULL (and nullable) so deleting a driver account
+    # never erases the trip history the booking points at -- mirrors Booking.driver.
+    driver = models.ForeignKey(
+        Driver, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="trip_events",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["booking", "created_at", "id"]
+        indexes = [
+            models.Index(fields=["booking", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.booking.reference}: {self.get_event_type_display()}"
+
+    @classmethod
+    def record(cls, booking, event_type, lat=None, lng=None, accuracy=None, driver=None):
+        """
+        The single entry point for logging a driver's trip-status ping.
+
+        Creates (and returns) one `DriverTripEvent`, then fires the
+        `driver_trip_event_recorded` signal so other lanes (e.g. notifications)
+        can react without bookings importing them. This method does NOT send
+        emails or any other side effect itself -- it only persists + announces.
+
+        A `completed` event also advances the booking to COMPLETED (see below);
+        every other event type leaves `Booking.status` untouched. The status
+        bump is guarded so it never clobbers a terminal state and is a no-op if
+        the booking is already completed, keeping repeated pings idempotent.
+        """
+        with transaction.atomic():
+            event = cls.objects.create(
+                booking=booking,
+                event_type=event_type,
+                latitude=lat,
+                longitude=lng,
+                location_accuracy=accuracy,
+                driver=driver,
+            )
+            event._advance_booking_status()
+
+        driver_trip_event_recorded.send(sender=cls, instance=event)
+        return event
+
+    def _advance_booking_status(self):
+        """
+        Minimal, backwards-compatible status progression.
+
+        Only the terminal `completed` ping moves the booking, and only out of a
+        non-terminal state (not from CANCELLED or an already-COMPLETED booking).
+        The in-progress pings (on_way / arrived / on_board) have no matching
+        `Booking.Status` value, so they deliberately leave status alone -- they
+        are live telemetry, not lifecycle transitions.
+        """
+        if self.event_type != self.EventType.COMPLETED:
+            return
+        booking = self.booking
+        terminal = {Booking.Status.CANCELLED, Booking.Status.COMPLETED}
+        if booking.status in terminal:
+            return
+        booking.status = Booking.Status.COMPLETED
+        booking.save(update_fields=["status", "updated_at"])
