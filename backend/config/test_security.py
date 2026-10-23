@@ -125,6 +125,45 @@ class TestProductionHardening:
         assert script_src and "unsafe-inline" not in script_src[0]
         assert "payment=()" in response.headers.get("Permissions-Policy", "")
 
+    @pytest.mark.django_db
+    def test_csp_allows_osm_tiles_in_img_src_without_loosening_scripts(self, client):
+        # The dashboard's self-hosted Leaflet map pulls raster tiles from
+        # OpenStreetMap, so img-src must allow that host -- but Leaflet's own
+        # JS/CSS are self-hosted, so script-src must gain no new host and must
+        # still forbid external/inline scripts.
+        response = client.get(reverse("admin:login"))
+        csp = response.headers.get("Content-Security-Policy", "")
+
+        img_src = [d for d in csp.split(";") if d.strip().startswith("img-src")]
+        assert img_src and "https://*.tile.openstreetmap.org" in img_src[0]
+
+        script_src = [d for d in csp.split(";") if d.strip().startswith("script-src")]
+        assert script_src
+        # script-src stays exactly as before: self + Stripe + Google Maps only.
+        assert "openstreetmap" not in script_src[0]
+        assert "unsafe-inline" not in script_src[0]
+        assert "'self' https://js.stripe.com https://maps.googleapis.com https://maps.gstatic.com" in script_src[0]
+
+    @pytest.mark.django_db
+    def test_permissions_policy_allows_same_origin_geolocation_only(self, client):
+        # The driver app (same-origin, /driver/) reads navigator.geolocation to
+        # stamp each status event with coords, so geolocation must be granted to
+        # 'self'. It must NOT be granted to any third party, and every other
+        # Permissions-Policy directive must stay locked off.
+        response = client.get(reverse("admin:login"))
+        policy = response.headers.get("Permissions-Policy", "")
+
+        directives = {d.split("=", 1)[0].strip(): d.split("=", 1)[1].strip()
+                      for d in policy.split(",") if "=" in d}
+
+        assert directives.get("geolocation") == "(self)"
+        # No wildcard / third-party origin crept in.
+        assert "*" not in directives["geolocation"]
+        # Everything else remains fully disabled, exactly as before.
+        assert directives.get("camera") == "()"
+        assert directives.get("microphone") == "()"
+        assert directives.get("payment") == "()"
+
     def test_production_settings_are_hardened(self, monkeypatch):
         import importlib
 

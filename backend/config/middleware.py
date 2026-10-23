@@ -23,12 +23,17 @@ from django.utils.deprecation import MiddlewareMixin
 STRIPE_JS = "https://js.stripe.com"
 STRIPE_API = "https://api.stripe.com"
 MAPS_HOSTS = "https://maps.googleapis.com https://maps.gstatic.com https://places.googleapis.com"
+# The back-office dashboard renders a self-hosted Leaflet map (JS/CSS served
+# from our own origin); only its raster tile IMAGES come from OpenStreetMap.
+# So the OSM tile host is added to img-src alone -- script-src stays locked
+# down and never gains a third-party map host for this feature.
+OSM_TILES = "https://*.tile.openstreetmap.org"
 
 CSP_DIRECTIVES = {
     "default-src": "'self'",
     "script-src": f"'self' {STRIPE_JS} https://maps.googleapis.com https://maps.gstatic.com",
     "style-src": "'self' 'unsafe-inline'",
-    "img-src": "'self' data: https://*.googleapis.com https://*.gstatic.com",
+    "img-src": f"'self' data: https://*.googleapis.com https://*.gstatic.com {OSM_TILES}",
     "font-src": "'self'",
     "connect-src": f"'self' {STRIPE_API} {MAPS_HOSTS}",
     "frame-src": STRIPE_JS,
@@ -50,8 +55,11 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
 
         if "Permissions-Policy" not in response:
             # Nothing here needs a camera, microphone or the payment API.
+            # Geolocation is granted to our own origin only (self): the driver
+            # app under /driver/ reads navigator.geolocation to stamp each
+            # status event with coords. Third-party frames get nothing.
             response["Permissions-Policy"] = (
-                "geolocation=(), camera=(), microphone=(), payment=()"
+                "geolocation=(self), camera=(), microphone=(), payment=()"
             )
 
         return response
