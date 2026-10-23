@@ -180,6 +180,10 @@
          href="{% url 'dashboard:bookings' %}">
         <i class="bi bi-journal-text"></i><span>Bookings</span>
       </a>
+      <a class="nav-link {% if request.resolver_match.url_name == 'trip_events' %}active{% endif %}"
+         href="{% url 'dashboard:trip_events' %}">
+        <i class="bi bi-geo-alt"></i><span>Trip events</span>
+      </a>
       {% if is_manager %}
       <a class="nav-link {% if request.resolver_match.url_name == 'charge_card' %}active{% endif %}"
          href="{% url 'dashboard:charge_card' %}">

@@ -1,0 +1,13 @@
+{% load static %}
+{% comment %}
+  Trip-event map panel. Include with `map_points` in context -- a list of
+  {lat, lng, label, ref, driver, time} dicts, one per event that has a GPS fix.
+  The data is passed to the browser through json_script (no inline JS, so the
+  CSP script-src 'self' is satisfied); vendor/leaflet/* is self-hosted and the
+  init script lives in js/trip-map.js. Pages that include this must also pull in
+  the Leaflet CSS (extra_head) and both scripts (extra_js) -- see _trip_map_assets.
+{% endcomment %}
+{{ map_points|json_script:"trip-map-points" }}
+<div id="trip-map"
+     data-images="{% static 'vendor/leaflet/images/' %}"
+     style="height:360px;border-radius:.5rem;z-index:0"></div>

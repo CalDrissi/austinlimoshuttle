@@ -87,6 +87,20 @@
         <div class="card-body small text-secondary">No changes recorded yet.</div>
       {% endif %}
     </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-geo-alt me-2"></i>Trip events</div>
+      {% include "dashboard/_trip_events_list.html" with show_booking=False %}
+      {% if trip_events %}
+        <div class="card-body p-2 border-top">
+          {% include "dashboard/_trip_map.html" %}
+          <p class="small text-secondary mb-0 mt-2">
+            Pins mark events with a GPS fix; events without coordinates are
+            listed as “location unknown”. Tiles &copy; OpenStreetMap contributors.
+          </p>
+        </div>
+      {% endif %}
+    </div>
   </div>
 
   <div class="col-lg-5">
@@ -213,3 +227,6 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_head %}{% if trip_events %}{% include "dashboard/_trip_map_assets.html" with asset="css" %}{% endif %}{% endblock %}
+{% block extra_js %}{% if trip_events %}{% include "dashboard/_trip_map_assets.html" with asset="js" %}{% endif %}{% endblock %}
