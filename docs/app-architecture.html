@@ -876,6 +876,23 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
+    <table>
+      <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does
+      <code>from cryptography.fernet import Fernet</code> at import time (it encrypts the stored Stripe secret key),
+      and <code>payments/models.py</code> imports <code>config.crypto</code> at module load, but
+      <code>cryptography</code> was missing from <code>backend/requirements/base.txt</code> — so the app registry raised
+      <code>ModuleNotFoundError</code> and <code>migrate</code> crash-looped. <b>Fix:</b> pinned
+      <code>cryptography>=43,&lt;46</code> in <code>base.txt</code>. It ships <code>manylinux</code> <code>abi3</code>
+      wheels (its only compiled dep, <code>cffi</code>, is wheel-only too), so the "every dep installs from a pre-built
+      wheel" constraint for the no-compiler cPanel host still holds — verified via
+      <code>pip install --only-binary=:all:</code> on <code>python:3.12-slim</code>. <b>Verified:</b>
+      <code>manage.py check</code> (0 issues) and <code>migrate</code> succeed and the
+      <code>config.crypto → payments.models</code> import chain loads with a working Fernet encrypt/decrypt roundtrip.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-09 · Vehicle photos: audit + real photos uploaded + neutral placeholder</span><span class="tbl">full-stack</span></div>
     <table>
       <tr><td><b>Audit result:</b> the photo flow (back office upload → <code>Vehicle.photo</code> in the

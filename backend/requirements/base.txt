@@ -36,3 +36,9 @@ requests>=2.32,<3.0
 # PDF: pure Python (ReportLab). WeasyPrint is rejected -- it requires cairo and
 # pango system libraries that cannot be installed on cPanel.
 xhtml2pdf>=0.2.16,<0.3
+
+# Backs the Fernet secret box in config/crypto.py, which encrypts the stored
+# Stripe secret key at rest. Hard runtime dependency: config/crypto.py imports
+# cryptography.fernet at module load and payments/models.py imports it, so
+# Django cannot start without it. Ships manylinux abi3 wheels -- no compiler.
+cryptography>=43,<46
