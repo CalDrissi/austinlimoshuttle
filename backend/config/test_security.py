@@ -125,6 +125,25 @@ class TestProductionHardening:
         assert script_src and "unsafe-inline" not in script_src[0]
         assert "payment=()" in response.headers.get("Permissions-Policy", "")
 
+    @pytest.mark.django_db
+    def test_csp_allows_osm_tiles_in_img_src_without_loosening_scripts(self, client):
+        # The dashboard's self-hosted Leaflet map pulls raster tiles from
+        # OpenStreetMap, so img-src must allow that host -- but Leaflet's own
+        # JS/CSS are self-hosted, so script-src must gain no new host and must
+        # still forbid external/inline scripts.
+        response = client.get(reverse("admin:login"))
+        csp = response.headers.get("Content-Security-Policy", "")
+
+        img_src = [d for d in csp.split(";") if d.strip().startswith("img-src")]
+        assert img_src and "https://*.tile.openstreetmap.org" in img_src[0]
+
+        script_src = [d for d in csp.split(";") if d.strip().startswith("script-src")]
+        assert script_src
+        # script-src stays exactly as before: self + Stripe + Google Maps only.
+        assert "openstreetmap" not in script_src[0]
+        assert "unsafe-inline" not in script_src[0]
+        assert "'self' https://js.stripe.com https://maps.googleapis.com https://maps.gstatic.com" in script_src[0]
+
     def test_production_settings_are_hardened(self, monkeypatch):
         import importlib
 
