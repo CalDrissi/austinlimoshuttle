@@ -1,0 +1,12 @@
+{% load static %}
+{% comment %}
+  Leaflet assets, self-hosted. Split into a CSS part (goes in extra_head) and a
+  JS part (goes in extra_js) so pages load each in the right place. Everything
+  is served from this project -- never a CDN -- to satisfy the CSP.
+{% endcomment %}
+{% if asset == "css" %}
+  <link rel="stylesheet" href="{% static 'vendor/leaflet/leaflet.css' %}">
+{% elif asset == "js" %}
+  <script src="{% static 'vendor/leaflet/leaflet.js' %}"></script>
+  <script src="{% static 'js/trip-map.js' %}"></script>
+{% endif %}

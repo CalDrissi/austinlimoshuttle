@@ -1,0 +1,45 @@
+{% comment %}
+  Driver trip-event list. Context:
+    trip_events  -- iterable of DriverTripEvent (with booking + driver selected)
+    show_booking -- include the booking-reference column (recent-events feed);
+                    omit it on a single booking's own timeline.
+  Events without a GPS fix are listed too, labelled "location unknown".
+{% endcomment %}
+{% if trip_events %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Event</th>
+          {% if show_booking %}<th>Booking</th>{% endif %}
+          <th>Driver</th>
+          <th>Location</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for event in trip_events %}
+        <tr>
+          <td class="small text-nowrap">{{ event.created_at|date:"j M Y, H:i" }}</td>
+          <td class="small"><span class="badge rounded-pill text-bg-light">{{ event.get_event_type_display }}</span></td>
+          {% if show_booking %}
+            <td class="small">
+              <a href="{% url 'dashboard:booking_detail' event.booking.reference %}">{{ event.booking.reference }}</a>
+            </td>
+          {% endif %}
+          <td class="small">{% if event.driver %}{{ event.driver.full_name }}{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+          <td class="small text-nowrap">
+            {% if event.latitude is not None and event.longitude is not None %}
+              <i class="bi bi-geo-alt text-success me-1"></i>{{ event.latitude }}, {{ event.longitude }}
+            {% else %}
+              <span class="text-secondary"><i class="bi bi-geo-alt-slash me-1"></i>location unknown</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card-body small text-secondary">No trip events recorded yet.</div>
+{% endif %}

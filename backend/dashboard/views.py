@@ -32,7 +32,13 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from bookings.models import Booking, BookingPriceLine, BookingStatusChange, Driver
+from bookings.models import (
+    Booking,
+    BookingPriceLine,
+    BookingStatusChange,
+    Driver,
+    DriverTripEvent,
+)
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils.dateparse import parse_datetime
@@ -66,6 +72,7 @@ logger = logging.getLogger(__name__)
 
 BOOKINGS_PER_PAGE = 50
 ENQUIRIES_PER_PAGE = 50
+TRIP_EVENTS_PER_PAGE = 50
 
 
 def admin_login_redirect(request):
@@ -306,17 +313,82 @@ def calendar_view(request):
 def booking_detail(request, reference):
     booking = get_object_or_404(
         Booking.objects.select_related("vehicle", "driver", "customer")
-        .prefetch_related("price_lines", "payments", "status_changes__changed_by"),
+        .prefetch_related(
+            "price_lines", "payments", "status_changes__changed_by",
+            "trip_events__driver",
+        ),
         reference=reference,
     )
+    # The booking's own driver timeline (oldest-first reads like a journey).
+    trip_events = list(booking.trip_events.all())
     context = {
         "booking": booking,
         "drivers": Driver.objects.filter(is_active=True),
         "statuses": Booking.Status.choices,
+        "trip_events": trip_events,
+        "map_points": _trip_event_map_points(trip_events),
         "roles": role_names(request.user),
         "is_manager": is_manager(request.user),
     }
     return render(request, "dashboard/booking_detail.html", context)
+
+
+def _trip_event_map_points(events):
+    """
+    Turn trip events into JSON-safe pins for the Leaflet map.
+
+    Only events that carry a GPS fix become pins; events with a null latitude
+    or longitude are skipped here (the list still shows them as "location
+    unknown"). Decimals are cast to float so the value survives json_script.
+    """
+    points = []
+    for event in events:
+        if event.latitude is None or event.longitude is None:
+            continue
+        points.append({
+            "lat": float(event.latitude),
+            "lng": float(event.longitude),
+            "label": event.get_event_type_display(),
+            "ref": event.booking.reference,
+            "driver": event.driver.full_name if event.driver else "",
+            "time": timezone.localtime(event.created_at).strftime("%-d %b %Y, %H:%M"),
+        })
+    return points
+
+
+@staff_required
+def trip_events(request):
+    """
+    Recent driver trip-events across every booking — a live feed of the status
+    pings drivers send from the road, newest first, with a map of the ones that
+    carried a GPS fix. Staff-gated like the rest of the dashboard.
+    """
+    events = (
+        DriverTripEvent.objects.select_related("booking", "driver")
+        .order_by("-created_at", "-id")
+    )
+
+    paginator = Paginator(events, TRIP_EVENTS_PER_PAGE)
+    page = paginator.get_page(request.GET.get("page"))
+    page_events = list(page.object_list)
+
+    params = request.GET.copy()
+    params.pop("page", None)
+    querystring = params.urlencode()
+
+    context = {
+        "trip_events": page_events,
+        "map_points": _trip_event_map_points(page_events),
+        "page": page,
+        "paginator": paginator,
+        "page_range": paginator.get_elided_page_range(
+            page.number, on_each_side=2, on_ends=1,
+        ),
+        "querystring": f"&{querystring}" if querystring else "",
+        "roles": role_names(request.user),
+        "is_manager": is_manager(request.user),
+    }
+    return render(request, "dashboard/trip_events.html", context)
 
 
 def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,

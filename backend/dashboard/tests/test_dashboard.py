@@ -14,7 +14,7 @@ from django.contrib.auth.models import Group
 from django.urls import reverse
 from django.utils import timezone
 
-from bookings.models import Booking, BookingStatusChange, Driver
+from bookings.models import Booking, BookingStatusChange, Driver, DriverTripEvent
 from dashboard.permissions import DISPATCHER, EDITOR, MANAGER, sync_roles
 from enquiries.models import ContactMessage
 from fleet.models import Vehicle
@@ -941,3 +941,123 @@ class TestManualBooking:
                                       stripe_payment_method_id="pm_x", guest_email=""))
         assert r.status_code == 200
         assert not Booking.objects.exists()  # card needs a customer -> rejected
+
+
+@pytest.mark.django_db
+class TestTripEvents:
+    """
+    Back-office trip-event history + map. This lane only *reads* the events that
+    @bookings-core's DriverTripEvent records; rows are created directly here to
+    keep the read tests isolated from record()'s status/signal side effects.
+    """
+
+    def _event(self, booking, event_type=DriverTripEvent.EventType.ARRIVED,
+               lat=None, lng=None, driver=None):
+        return DriverTripEvent.objects.create(
+            booking=booking, event_type=event_type,
+            latitude=lat, longitude=lng, driver=driver,
+        )
+
+    def _as_dispatcher(self, client, roles):
+        staff_in(DISPATCHER, roles)
+        client.login(username="dispatcher@example.com", password="DashLocal!2026")
+
+    # --- staff gating -----------------------------------------------------
+    def test_feed_redirects_anonymous_to_dashboard_login(self, client):
+        response = client.get(reverse("dashboard:trip_events"))
+        assert response.status_code == 302
+        assert "/dashboard/login/" in response["Location"]
+        assert "/admin/login/" not in response["Location"]
+
+    def test_feed_forbids_non_booking_staff(self, client, roles):
+        """An editor has no bookings.view_booking, so no trip history either."""
+        staff_in(EDITOR, roles)
+        client.login(username="editor@example.com", password="DashLocal!2026")
+        assert client.get(reverse("dashboard:trip_events")).status_code == 403
+
+    def test_feed_allows_dispatcher(self, client, roles):
+        self._as_dispatcher(client, roles)
+        assert client.get(reverse("dashboard:trip_events")).status_code == 200
+
+    # --- listing ----------------------------------------------------------
+    def test_feed_lists_events_with_type_booking_and_driver(self, client, roles, booking):
+        driver = Driver.objects.create(full_name="Alex Ruiz")
+        self._event(booking, DriverTripEvent.EventType.ON_WAY,
+                    lat=Decimal("30.194500"), lng=Decimal("-97.669800"), driver=driver)
+        self._as_dispatcher(client, roles)
+        html = client.get(reverse("dashboard:trip_events")).content.decode()
+        assert "On the way" in html          # event type label
+        assert booking.reference in html     # booking reference
+        assert "Alex Ruiz" in html           # driver
+        assert "30.194500" in html           # lat/lng
+
+    def test_booking_detail_lists_its_own_events(self, client, roles, booking):
+        self._event(booking, DriverTripEvent.EventType.ARRIVED,
+                    lat=Decimal("30.1"), lng=Decimal("-97.6"))
+        self._as_dispatcher(client, roles)
+        html = client.get(
+            reverse("dashboard:booking_detail", args=[booking.reference])
+        ).content.decode()
+        assert "Trip events" in html
+        assert "Arrived at pickup" in html
+
+    # --- events without coordinates --------------------------------------
+    def test_event_without_coords_shown_as_location_unknown(self, client, roles, booking):
+        self._event(booking, DriverTripEvent.EventType.ON_WAY)  # null lat/lng
+        self._as_dispatcher(client, roles)
+        html = client.get(
+            reverse("dashboard:booking_detail", args=[booking.reference])
+        ).content.decode()
+        # The per-row "location unknown" marker (its own icon) must be present.
+        assert "location unknown" in html
+        assert "bi-geo-alt-slash" in html
+
+    def test_event_with_coords_is_not_location_unknown(self, client, roles, booking):
+        self._event(booking, DriverTripEvent.EventType.ARRIVED,
+                    lat=Decimal("30.19"), lng=Decimal("-97.66"))
+        self._as_dispatcher(client, roles)
+        html = client.get(
+            reverse("dashboard:booking_detail", args=[booking.reference])
+        ).content.decode()
+        # No row carries the unknown-location marker (the caption mentioning the
+        # phrase is not a row), and the coordinates are shown instead.
+        assert "bi-geo-alt-slash" not in html
+        assert "30.19" in html
+
+    def test_only_located_events_become_map_pins(self, client, roles, booking):
+        """The json_script feeding the map carries the located event, not the null one."""
+        self._event(booking, DriverTripEvent.EventType.ON_WAY)  # no fix
+        self._event(booking, DriverTripEvent.EventType.ARRIVED,
+                    lat=Decimal("30.265000"), lng=Decimal("-97.745000"))
+        self._as_dispatcher(client, roles)
+        html = client.get(reverse("dashboard:trip_events")).content.decode()
+        assert '"lat": 30.265' in html
+        # exactly one pin: both events share the booking, so a single ref appears
+        # in the json payload per located event.
+        assert html.count('"lat":') == 1
+
+    # --- map uses the self-hosted Leaflet, never a CDN -------------------
+    def test_map_references_local_leaflet_not_a_cdn(self, client, roles, booking):
+        self._event(booking, DriverTripEvent.EventType.ARRIVED,
+                    lat=Decimal("30.19"), lng=Decimal("-97.66"))
+        self._as_dispatcher(client, roles)
+        html = client.get(reverse("dashboard:trip_events")).content.decode()
+        assert "vendor/leaflet/leaflet.js" in html
+        assert "vendor/leaflet/leaflet.css" in html
+        assert "js/trip-map.js" in html
+        for cdn in ("unpkg.com", "cdnjs", "jsdelivr", "cdn.leaflet"):
+            assert cdn not in html
+
+    def test_leaflet_is_actually_vendored_and_tiles_point_at_osm(self):
+        """The local Leaflet lib is on disk and our init script uses OSM tiles."""
+        from django.contrib.staticfiles import finders
+
+        assert finders.find("vendor/leaflet/leaflet.js")
+        assert finders.find("vendor/leaflet/leaflet.css")
+        trip_map = finders.find("js/trip-map.js")
+        assert trip_map
+        with open(trip_map, encoding="utf-8") as fh:
+            source = fh.read()
+        assert "tile.openstreetmap.org" in source
+        for cdn in ("unpkg.com", "cdnjs", "jsdelivr"):
+            assert cdn not in source

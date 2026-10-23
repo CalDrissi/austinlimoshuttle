@@ -34,6 +34,7 @@ urlpatterns = [
     path("bookings/new/", views.booking_create, name="booking_create"),
     path("bookings/quote/", views.booking_quote, name="booking_quote"),
     path("bookings/customer-lookup/", views.booking_customer_lookup, name="booking_customer_lookup"),
+    path("trip-events/", views.trip_events, name="trip_events"),
     path("bookings/<str:reference>/cash-collected/", views.booking_mark_cash_collected, name="booking_mark_cash_collected"),
     path("bookings/<str:reference>/", views.booking_detail, name="booking_detail"),
     path("bookings/<str:reference>/edit/", views.booking_edit, name="booking_edit"),

@@ -1,0 +1,36 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Trip events{% endblock %}
+{% block page_title %}Trip events{% endblock %}
+{% block lede %}
+  <p class="lede">Live status pings drivers sent from the road — most recent first.</p>
+{% endblock %}
+
+{% block extra_head %}{% include "dashboard/_trip_map_assets.html" with asset="css" %}{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-broadcast-pin me-2"></i>Recent events</div>
+      {% include "dashboard/_trip_events_list.html" with show_booking=True %}
+      {% include "dashboard/_pagination.html" %}
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-map me-2"></i>Map</div>
+      <div class="card-body p-2">
+        {% include "dashboard/_trip_map.html" %}
+        <p class="small text-secondary mb-0 mt-2">
+          Pins mark events with a GPS fix; events without coordinates are listed
+          as “location unknown”. Tiles &copy; OpenStreetMap contributors.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}{% include "dashboard/_trip_map_assets.html" with asset="js" %}{% endblock %}
