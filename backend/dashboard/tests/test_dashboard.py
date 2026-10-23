@@ -817,6 +817,73 @@ class TestRateCardValidation:
 
 
 @pytest.mark.django_db
+class TestRateCardRemoveControl:
+    """
+    The inline rate-card table renders Django's per-row DELETE field as a
+    styled "Remove" trash button (no JS -- the CSP forbids it). Two things
+    must hold: the DELETE field must NOT get its own stray column header, and
+    the checkbox must still render so a Save actually deletes the ticked rows.
+    """
+
+    def _render_vehicle_form(self, client, roles, vehicle):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+        response = client.get(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk])
+        )
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_no_stray_delete_column_header(self, client, roles, vehicle):
+        body = self._render_vehicle_form(client, roles, vehicle)
+        import re
+
+        headers = re.findall(r"<th[^>]*>(.*?)</th>", body, re.S)
+        labels = [re.sub(r"<[^>]+>", "", h).strip().upper() for h in headers]
+        # Django labels the DELETE field "Delete"; the human column is "Remove".
+        assert "DELETE" not in labels
+        assert "Remove" in [re.sub(r"<[^>]+>", "", h).strip() for h in headers]
+
+    def test_delete_checkbox_still_renders_so_deletion_works(
+        self, client, roles, vehicle,
+    ):
+        body = self._render_vehicle_form(client, roles, vehicle)
+        # The native DELETE checkbox is what Save acts on; it must survive,
+        # wrapped in the styled remove-row button.
+        assert 'name="bands-0-DELETE"' in body
+        assert "remove-row-btn" in body
+
+    def test_ticking_delete_removes_the_row_on_save(self, client, roles, vehicle):
+        """End-to-end: the hidden checkbox still drives a real deletion."""
+        from fleet.models import DistanceBand
+
+        DistanceBand.objects.create(
+            vehicle=vehicle, from_miles=0, to_miles=None, rate_per_mile="3.00",
+        )
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+        band = vehicle.bands.get()
+        data = {
+            "name": vehicle.name, "slug": vehicle.slug, "description": "",
+            "features": "", "passenger_capacity": "3", "luggage_capacity": "2",
+            "hourly_rate": "85.00", "meet_greet_fee": "0.00",
+            "minimum_fare": "45.00", "display_order": "0", "is_active": "on",
+            "bands-TOTAL_FORMS": "1", "bands-INITIAL_FORMS": "1",
+            "bands-MIN_NUM_FORMS": "0", "bands-MAX_NUM_FORMS": "1000",
+            "bands-0-id": str(band.pk),
+            "bands-0-from_miles": "0", "bands-0-to_miles": "",
+            "bands-0-rate_per_mile": "3.00",
+            "bands-0-DELETE": "on",
+        }
+        response = client.post(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk]), data,
+        )
+        assert response.status_code == 302
+        assert vehicle.bands.count() == 0
+
+
+@pytest.mark.django_db
 class TestSingletonSettingsScreens:
     def test_site_settings_saves(self, client, roles):
         staff_in(MANAGER, roles)
