@@ -1,0 +1,7 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Trip completed</h1>
+<p style="margin:0 0 20px;color:#5b636d">The trip has been marked completed by the driver.</p>
+
+{% include "notifications/email/_trip_details.html" %}
+{% endblock %}

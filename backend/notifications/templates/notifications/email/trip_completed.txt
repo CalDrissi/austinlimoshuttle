@@ -1,0 +1,7 @@
+{% autoescape off %}Trip completed
+
+The trip has been marked completed by the driver.
+
+{% include "notifications/email/_trip_details.txt" %}
+Austin Limo Shuttle — operations notice
+{% endautoescape %}

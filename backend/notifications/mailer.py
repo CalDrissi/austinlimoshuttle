@@ -171,6 +171,68 @@ def send_ops_new_booking(booking) -> bool:
     )
 
 
+# -- trip status (driver live events) ----------------------------------------
+
+# Who hears about each live trip ping. "On the way" / "Arrived" are the moments
+# a waiting rider cares about, so they reach the customer as well as the office.
+# "On board" / "Completed" are operational checkpoints -- the office tracks them,
+# but the customer is already in the car, so we don't buzz their inbox.
+_TRIP_EVENT_TO_CLIENT = {
+    "on_way": True,
+    "arrived": True,
+    "on_board": False,
+    "completed": False,
+}
+
+_TRIP_EVENT_SUBJECT = {
+    "on_way": "Your driver is on the way — {ref}",
+    "arrived": "Your driver has arrived — {ref}",
+    "on_board": "Passenger on board — {ref}",
+    "completed": "Trip completed — {ref}",
+}
+
+
+def send_trip_status_update(event) -> bool:
+    """
+    Email a driver's live trip-status ping to the office (and, for the events a
+    rider is waiting on, the customer). Driven by `driver_trip_event_recorded`.
+
+    Like every send here it never raises: a flaky mail server must not break a
+    driver's status ping. A blank recipient is dropped by `_send`, so an event
+    with no customer address still reaches the office; a ping with no GPS fix
+    sends without the map line.
+    """
+    event_type = event.event_type
+    if event_type not in _TRIP_EVENT_SUBJECT:
+        return False
+
+    booking = event.booking
+    config = EmailSettings.load()
+
+    recipients = [config.ops_notification_email]
+    if _TRIP_EVENT_TO_CLIENT.get(event_type):
+        recipients.append(_customer_email(booking))
+
+    driver = event.driver or booking.driver
+    has_location = event.latitude is not None and event.longitude is not None
+
+    return _send(
+        kind=EmailLog.Kind.TRIP_STATUS,
+        to=recipients,
+        subject=_TRIP_EVENT_SUBJECT[event_type].format(ref=booking.reference),
+        template=f"trip_{event_type}",
+        context={
+            "booking": booking,
+            "event": event,
+            "driver": driver,
+            "driver_name": driver.full_name if driver else "",
+            "status_label": event.get_event_type_display(),
+            "has_location": has_location,
+        },
+        booking=booking,
+    )
+
+
 def send_test_message(to_email: str) -> tuple[bool, str]:
     """
     Send a test message and record the outcome on the settings row.
