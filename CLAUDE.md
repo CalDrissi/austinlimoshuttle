@@ -12,10 +12,20 @@ You are **one domain agent**. Your lane (the paths you own + what you may touch)
   coordinator) and record the interface in `CONTRACTS.md`.
 - When unsure what you own or where code lives → **query the graph first** (see below).
 
+## Coordinator
+The **coordinator orchestrates only** — it dispatches work to the owning lane and relays results.
+It does NOT make code edits, run builds, run docker, deploy, SSH, or debug-by-doing itself; all
+hands-on work goes to the owning agent (or `@deploy` for ops, `@repo-manager` for releases).
+
 ## Graph-first (graphify MCP, read-only)
 Before grepping or guessing, use the `graphify` MCP tools to locate and understand code:
 `query_graph`, `get_node`, `get_neighbors`, `shortest_path`, `god_nodes`, `get_community`.
 The graph is **read-only** and is rebuilt after every merge — never assume you can write to it.
+
+This applies to the **coordinator** too, not only domain agents. Before grep/guess for "where does
+X live / how does Y connect", query the graph. Check freshness first: `graph_stats` "Built at
+commit" must match `origin/main`; if it's behind, the graph is missing recent code — repo-manager
+rebuilds it (`graphify update .` + restart `docker-compose.graphify.yml`) before it is trusted.
 
 ## Branches & worktrees (Orca-managed)
 - Each task runs in its **own git worktree + branch** (`agent/<domain>/<short-task>`), created
@@ -25,7 +35,15 @@ The graph is **read-only** and is rebuilt after every merge — never assume you
 ## The merge gate (autonomous on green)
 A branch merges to `main` **only** when BOTH verifiers pass:
 1. **code-verifier** — `backend` tests + `frontend` typecheck/build + `/code-review` clean.
+   - **Prod-parity (required):** build the production image (`Dockerfile.prod`), run
+     `manage.py collectstatic --noinput` under `config.settings.prod`
+     (`CompressedManifestStaticFilesStorage`), and boot that prod image to confirm it serves
+     without crash-looping. This catches prod-only failures that dev tests miss (e.g. WhiteNoise
+     `MissingFileError` from an unvendored static asset).
 2. **business-verifier** — the affected flow actually works (runs the app, exercises it).
+
+**No fast-pathing.** A change reaches `main` ONLY after BOTH verifiers pass — never merge on
+partial/implied verification.
 
 On both-green, **repo-manager** merges, then **rebuilds the graph** (`graphify --update` +
 `docker compose -f docker-compose.graphify.yml restart`) and **re-runs the suite on `main`**;
