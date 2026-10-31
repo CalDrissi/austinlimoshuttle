@@ -301,7 +301,7 @@ export default function BookingSearchWidget() {
           </div>
         )}
         {tripType === "hourly" && (
-          <div className="search-item search-to">
+          <div className="search-item search-to search-hours">
             <div className="search-icon"><span className="item-icon icon-time" /></div>
             <div className="search-inputs">
               <label>Hours</label>

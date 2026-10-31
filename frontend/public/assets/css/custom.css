@@ -89,14 +89,27 @@ img {
  * ===================================================================== */
 .mm-picker { position: relative; width: 100%; }
 
-/* Uppercase brand labels + clearer inputs */
+/* Uppercase brand labels — always visible ABOVE each field (never placeholder-only). */
 .box-search-ride .search-item .search-inputs label {
-  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
-  color: #9aa1ac; font-weight: 600; margin-bottom: 2px; display: block;
+  font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+  color: #9aa1ac; font-weight: 700; margin-bottom: 3px; display: block;
 }
-.box-search-ride .search-input { cursor: pointer; color: #0E0E0E; font-weight: 600; }
+/* Bigger, readable inputs. 16px stops mobile Safari zooming on focus and the
+   extra height gives comfortable touch targets; applies to the text inputs as
+   well as the date/time/city/hours triggers (all use .search-input). */
+.box-search-ride .search-input {
+  cursor: pointer; color: #0E0E0E; font-weight: 600;
+  font-size: 16px; line-height: 26px; min-height: 30px; padding: 2px 0;
+}
 .box-search-ride .search-input::placeholder { color: #b6bbc4; font-weight: 500; }
-/* subtle dividers between the input fields */
+/* Visible focus: the inputs are border-less by design, so the active field
+   highlights its whole row instead (focus would otherwise be invisible). */
+.box-search-ride .search-item { border-radius: 14px; transition: background .12s; }
+.box-search-ride .search-item:not(.search-button):focus-within { background: #f6f6f7; }
+.box-search-ride .search-input:focus,
+.box-search-ride .search-input:focus-visible { outline: none; }
+/* subtle dividers between the input fields (desktop pill only; the grid layout
+   below removes these since gaps separate the cells instead) */
 .box-search-ride .search-from,
 .box-search-ride .search-to,
 .box-search-ride .search-time { border-left: 1px solid #eceef1; }
@@ -245,4 +258,47 @@ img {
   display: inline-flex; gap: 4px; margin-bottom: 12px;
   background: #ffffff; border-radius: 10px; padding: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* ===================================================================== *
+ * Home search card — readable multi-row layout (desktop)                *
+ *                                                                       *
+ * The template shipped a single-row "pill" where the pickup/drop-off    *
+ * inputs were squeezed to ~200px, so long addresses were clipped. On    *
+ * desktop we lay the card out as a 12-col grid: date/time/hours stay     *
+ * compact while each address field takes half the row, so full          *
+ * addresses are readable. Tablet/mobile keep luxride's stacked layout   *
+ * (every field already goes full-width there).                          *
+ * ===================================================================== */
+@media (min-width: 1200px) {
+  .mm-search-dock .box-search-ride {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 10px 18px;
+    align-items: center;
+    border-radius: 28px;   /* softer card corners instead of the 100px pill */
+    padding: 20px 26px;
+  }
+  .mm-search-dock .box-search-ride .search-item {
+    width: auto; min-width: 0; padding: 6px 10px;
+  }
+  /* Compact fields */
+  .mm-search-dock .box-search-ride .search-date { grid-column: span 3; }
+  .mm-search-dock .box-search-ride .search-time { grid-column: span 3; }
+  .mm-search-dock .box-search-ride .search-item.search-hours { grid-column: span 3; }
+  /* Address fields — half the row each so long values are no longer clipped */
+  .mm-search-dock .box-search-ride .search-from { grid-column: span 6; }
+  .mm-search-dock .box-search-ride .search-to   { grid-column: span 6; }
+  /* Meet & Greet + Search */
+  .mm-search-dock .box-search-ride .search-meet { grid-column: span 3; }
+  .mm-search-dock .box-search-ride .search-button {
+    grid-column: span 3; max-width: none; min-width: 0;
+  }
+  .mm-search-dock .box-search-ride .search-button .btn-search { width: 100%; }
+  /* No stray left-dividers now that each field is its own grid cell. */
+  .mm-search-dock .box-search-ride .search-from,
+  .mm-search-dock .box-search-ride .search-to,
+  .mm-search-dock .box-search-ride .search-time { border-left: 0; }
+  /* Keep the validation toast clear of the last row. */
+  .mm-search-dock .box-search-ride .mm-search-error { bottom: -30px; left: 26px; }
 }
