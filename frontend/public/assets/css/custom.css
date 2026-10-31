@@ -311,3 +311,70 @@ img {
   /* Keep the validation toast clear of the row. */
   .mm-search-dock .box-search-ride .mm-search-error { bottom: -30px; left: 26px; }
 }
+
+/* ===================================================================== *
+ * Home search dock — overlaid ON the hero on tablet & phone too.        *
+ *                                                                       *
+ * The luxride template drops the dock into normal flow BELOW the hero   *
+ * on < 1200px (it sets .box-search-ride to position:relative inside its *
+ * max-width:1199.98px query). We re-assert the overlay so the form      *
+ * always sits over the banner image — anchored near the bottom of the   *
+ * hero, inside a legible white card, with the fields stacked            *
+ * full-width. The hero itself is already .banner-home1-relative and     *
+ * tall enough (height:calc(100vh-66px); min 520px) to hold the card, so *
+ * no change to the marketing-owned hero wrapper/height is required.     *
+ * ===================================================================== */
+@media (max-width: 1199.98px) {
+  /* Overlay the whole dock (trip tabs + card) on the hero, centred with
+     comfortable side gutters and anchored a little above the hero floor. */
+  .mm-search-dock {
+    position: absolute;
+    left: 16px; right: 16px; bottom: 22px;
+    margin: 0 auto;
+    max-width: 560px;        /* keeps the stacked card tidy on tablet/large phone */
+    z-index: 5;              /* above the banner image + overlay + title */
+  }
+  /* Card: near-solid white so every input reads clearly over the photo. */
+  .mm-search-dock .box-search-ride {
+    position: static; bottom: auto; left: auto; right: auto; margin: 0;
+    width: 100%; max-width: none;
+    flex-direction: column; align-items: stretch;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    padding: 16px 16px 18px;
+  }
+  /* Tighten the template's tall stacked fields so the card fits inside the
+     hero without overflowing on short screens; icons stay 40px (≥ comfortable
+     tap target) and the gap above replaces the template's 20px bottom margin. */
+  .mm-search-dock .box-search-ride .search-item {
+    margin-bottom: 0;
+    padding: 9px 12px;
+    background: #f6f6f7;
+    border-radius: 12px;
+  }
+  .mm-search-dock .box-search-ride .search-item .search-icon {
+    max-width: 40px; min-width: 40px; margin-right: 10px;
+  }
+  .mm-search-dock .box-search-ride .search-item .search-icon .item-icon {
+    width: 40px; height: 40px;
+  }
+  /* Meet & Greet + Search sit flush (no grey pill) — the button goes
+     full-width with a comfortable 48px touch height. */
+  .mm-search-dock .box-search-ride .search-item.search-meet {
+    background: transparent; padding: 4px 4px 2px;
+  }
+  .mm-search-dock .box-search-ride .search-item.search-button {
+    background: transparent; padding: 0;
+  }
+  .mm-search-dock .box-search-ride .search-item.search-button .btn-search {
+    width: 100%; border-radius: 12px; min-height: 48px;
+  }
+  /* The desktop toast is absolutely pinned below the row; in the stacked card
+     flow it instead reads centred under the fields. */
+  .mm-search-dock .box-search-ride .mm-search-error {
+    position: static; margin-top: 2px; text-align: center;
+    bottom: auto; left: auto; right: auto;
+  }
+}
