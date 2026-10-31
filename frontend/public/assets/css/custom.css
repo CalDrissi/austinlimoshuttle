@@ -247,7 +247,11 @@ img {
 @media (min-width: 1200px) {
   .mm-search-dock {
     position: absolute; bottom: 50px; left: 0; right: 0;
-    margin: auto; max-width: 1170px; z-index: 3;
+    /* Widened from the template's 1170px so the single-row card has room to give
+       the pickup/drop-off fields the most width possible. The dock is full-bleed
+       inside the (full-width) hero banner, so this only changes its centred width
+       — it does not require the marketing hero wrapper to change. */
+    margin: auto; max-width: 1280px; z-index: 3;
   }
   .mm-search-dock .box-search-ride {
     position: static; bottom: auto; left: auto; right: auto;
@@ -261,44 +265,49 @@ img {
 }
 
 /* ===================================================================== *
- * Home search card — readable multi-row layout (desktop)                *
+ * Home search card — single horizontal row (desktop)                    *
  *                                                                       *
- * The template shipped a single-row "pill" where the pickup/drop-off    *
- * inputs were squeezed to ~200px, so long addresses were clipped. On    *
- * desktop we lay the card out as a 12-col grid: date/time/hours stay     *
- * compact while each address field takes half the row, so full          *
- * addresses are readable. Tablet/mobile keep luxride's stacked layout   *
- * (every field already goes full-width there).                          *
+ * All fields sit on ONE line: date / time are kept narrow, Meet&Greet   *
+ * and Search stay at their natural width, and the two address fields    *
+ * flex-grow to absorb every remaining pixel — so the longest possible   *
+ * pickup/drop-off value is visible on a single line. The big icon       *
+ * circles are hidden on this layout (the always-visible labels already  *
+ * name each field) to hand that space back to the addresses.            *
+ * Tablet/mobile keep luxride's stacked, full-width layout untouched.    *
  * ===================================================================== */
 @media (min-width: 1200px) {
   .mm-search-dock .box-search-ride {
-    display: grid;
-    grid-template-columns: repeat(12, minmax(0, 1fr));
-    gap: 10px 18px;
+    display: flex;
+    flex-wrap: nowrap;          /* never spill onto a second row */
     align-items: center;
-    border-radius: 28px;   /* softer card corners instead of the 100px pill */
-    padding: 20px 26px;
+    gap: 12px;
+    border-radius: 28px;        /* softer card corners instead of the 100px pill */
+    padding: 16px 22px;
   }
+  /* Reclaim the 52px icon circles for the address fields on the one-row layout. */
+  .mm-search-dock .box-search-ride .search-item .search-icon { display: none; }
+
   .mm-search-dock .box-search-ride .search-item {
-    width: auto; min-width: 0; padding: 6px 10px;
+    width: auto; min-width: 0; max-width: none; padding: 6px 12px;
   }
-  /* Compact fields */
-  .mm-search-dock .box-search-ride .search-date { grid-column: span 3; }
-  .mm-search-dock .box-search-ride .search-time { grid-column: span 3; }
-  .mm-search-dock .box-search-ride .search-item.search-hours { grid-column: span 3; }
-  /* Address fields — half the row each so long values are no longer clipped */
-  .mm-search-dock .box-search-ride .search-from { grid-column: span 6; }
-  .mm-search-dock .box-search-ride .search-to   { grid-column: span 6; }
-  /* Meet & Greet + Search */
-  .mm-search-dock .box-search-ride .search-meet { grid-column: span 3; }
+  /* Compact fields — fixed, tidy widths (override the template's wide min-widths).
+     Date fits the "Fri, Oct 31, 2026" display; time fits "10:30 AM". */
+  .mm-search-dock .box-search-ride .search-date  { flex: 0 0 auto; width: 150px; min-width: 0; max-width: none; }
+  .mm-search-dock .box-search-ride .search-time  { flex: 0 0 auto; width: 112px; min-width: 0; max-width: none; }
+  .mm-search-dock .box-search-ride .search-item.search-hours { flex: 0 0 auto; width: 118px; min-width: 0; }
+  /* Address fields grow equally to take the most space on the row. */
+  .mm-search-dock .box-search-ride .search-from,
+  .mm-search-dock .box-search-ride .search-to   { flex: 1 1 0; min-width: 0; }
+  /* Meet & Greet + Search stay compact at their natural content width. */
+  .mm-search-dock .box-search-ride .search-meet { flex: 0 0 auto; }
   .mm-search-dock .box-search-ride .search-button {
-    grid-column: span 3; max-width: none; min-width: 0;
+    flex: 0 0 auto; min-width: 0; max-width: none;
   }
-  .mm-search-dock .box-search-ride .search-button .btn-search { width: 100%; }
-  /* No stray left-dividers now that each field is its own grid cell. */
+  .mm-search-dock .box-search-ride .search-button .btn-search { width: auto; white-space: nowrap; }
+  /* No stray left-dividers now that gaps separate each field. */
   .mm-search-dock .box-search-ride .search-from,
   .mm-search-dock .box-search-ride .search-to,
   .mm-search-dock .box-search-ride .search-time { border-left: 0; }
-  /* Keep the validation toast clear of the last row. */
+  /* Keep the validation toast clear of the row. */
   .mm-search-dock .box-search-ride .mm-search-error { bottom: -30px; left: 26px; }
 }
