@@ -84,6 +84,52 @@ img {
   max-height: 760px;
 }
 
+/* Hero headline fit on <1200px.
+   The overlaid search card (@frontend-booking) is compact and BOTTOM-anchored
+   (bottom:16px, ~404px tall). The template centres the hero title vertically
+   (.box-banner-info top:40%) and keeps it at 52px, so on tablet/phone the big
+   2-line H2 drops into the middle of the hero and overlaps the card
+   (~144px overlap at 768, ~68px at 375). Fix in the marketing lane: top-anchor
+   the title into the hero's top band and shrink it per breakpoint so the H2
+   sits fully ABOVE the card at 768 / 430 / 375px. Desktop (>=1200px) keeps the
+   template's centred 52px headline untouched. These rules out-specify the
+   template (.banner-home1 .box-banner-info[.heading-52-medium]) and custom.css
+   loads after luxride.css, so they win. */
+@media (max-width: 1199.98px) {
+  /* A little extra floor so title + bottom card both fit on shorter viewports
+     (max-height stays 760px, so tablet/desktop height is unchanged). */
+  .banner-home1 .box-cover-image { min-height: 560px; }
+  /* Top-anchor the title block instead of vertical-centre (template top:40%). */
+  .banner-home1 .box-banner-info { top: 90px; }
+  /* Shrink the otherwise-52px 2-line headline (biggest offender at ~768px). */
+  .banner-home1 .box-banner-info .heading-52-medium {
+    font-size: 40px;
+    line-height: 50px;
+  }
+  .banner-home1 .box-banner-info .text-16 { margin-bottom: 6px; }
+}
+@media (max-width: 767.98px) {
+  .banner-home1 .box-banner-info { top: 64px; }
+  .banner-home1 .box-banner-info .heading-52-medium {
+    font-size: 34px;
+    line-height: 42px;
+  }
+}
+@media (max-width: 575.98px) {
+  .banner-home1 .box-banner-info { top: 44px; }
+  .banner-home1 .box-banner-info .heading-52-medium {
+    font-size: 27px;
+    line-height: 34px;
+  }
+}
+@media (max-width: 449.98px) {
+  .banner-home1 .box-banner-info { top: 32px; }
+  .banner-home1 .box-banner-info .heading-52-medium {
+    font-size: 25px;
+    line-height: 32px;
+  }
+}
+
 /* ===================================================================== *
  * Home search form + date/time pickers — themed to M&M (black / white)  *
  * ===================================================================== */
