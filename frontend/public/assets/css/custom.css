@@ -325,51 +325,66 @@ img {
  * no change to the marketing-owned hero wrapper/height is required.     *
  * ===================================================================== */
 @media (max-width: 1199.98px) {
-  /* Overlay the whole dock (trip tabs + card) on the hero, centred with
-     comfortable side gutters and anchored a little above the hero floor. */
+  /* Overlay the whole dock (trip tabs + card) on the hero, BOTTOM-ANCHORED so
+     the compact card hugs the hero floor and the hero headline stays clearly
+     visible ABOVE it (375 / 430 / 768px). Side gutters keep it off the edges. */
   .mm-search-dock {
     position: absolute;
-    left: 16px; right: 16px; bottom: 22px;
+    left: 16px; right: 16px; bottom: 16px;
     margin: 0 auto;
     max-width: 560px;        /* keeps the stacked card tidy on tablet/large phone */
     z-index: 5;              /* above the banner image + overlay + title */
   }
-  /* Card: near-solid white so every input reads clearly over the photo. */
+  /* Card: near-solid white so every input reads clearly over the photo.
+     Compact — trimmed padding + tight gaps remove excess vertical space so the
+     whole card is short enough to sit below the hero title. */
   .mm-search-dock .box-search-ride {
     position: static; bottom: auto; left: auto; right: auto; margin: 0;
     width: 100%; max-width: none;
     flex-direction: column; align-items: stretch;
-    gap: 10px;
+    gap: 6px;
     background: rgba(255, 255, 255, 0.97);
-    border-radius: 18px;
+    border-radius: 16px;
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-    padding: 16px 16px 18px;
+    padding: 12px 14px 14px;
   }
-  /* Tighten the template's tall stacked fields so the card fits inside the
-     hero without overflowing on short screens; icons stay 40px (≥ comfortable
-     tap target) and the gap above replaces the template's 20px bottom margin. */
+  /* Compact stacked fields: trimmer vertical padding + smaller icons shave the
+     card height while the inputs stay fully readable (16px, full-width, labels
+     kept). The gaps above replace the template's 20px bottom margin. */
   .mm-search-dock .box-search-ride .search-item {
     margin-bottom: 0;
-    padding: 9px 12px;
+    padding: 6px 12px;
     background: #f6f6f7;
-    border-radius: 12px;
+    border-radius: 10px;
   }
   .mm-search-dock .box-search-ride .search-item .search-icon {
-    max-width: 40px; min-width: 40px; margin-right: 10px;
+    max-width: 34px; min-width: 34px; margin-right: 9px;
   }
   .mm-search-dock .box-search-ride .search-item .search-icon .item-icon {
-    width: 40px; height: 40px;
+    width: 34px; height: 34px;
+  }
+  /* Tighten the label/input stack inside each field — still 16px and readable,
+     just with less line spacing so the fields are shorter. */
+  .mm-search-dock .box-search-ride .search-item .search-inputs label {
+    font-size: 11px; margin-bottom: 1px;
+  }
+  .mm-search-dock .box-search-ride .search-input {
+    font-size: 16px; line-height: 22px; min-height: 24px; padding: 1px 0;
+  }
+  /* Slimmer trip-type tabs sitting just above the card. */
+  .mm-search-dock .mm-trip-tabs {
+    margin-bottom: 8px; padding: 3px;
   }
   /* Meet & Greet + Search sit flush (no grey pill) — the button goes
-     full-width with a comfortable 48px touch height. */
+     full-width with a tighter but still comfortable 44px touch height. */
   .mm-search-dock .box-search-ride .search-item.search-meet {
-    background: transparent; padding: 4px 4px 2px;
+    background: transparent; padding: 2px 4px;
   }
   .mm-search-dock .box-search-ride .search-item.search-button {
     background: transparent; padding: 0;
   }
   .mm-search-dock .box-search-ride .search-item.search-button .btn-search {
-    width: 100%; border-radius: 12px; min-height: 48px;
+    width: 100%; border-radius: 12px; min-height: 44px;
   }
   /* The desktop toast is absolutely pinned below the row; in the stacked card
      flow it instead reads centred under the fields. */
