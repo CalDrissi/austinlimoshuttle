@@ -2653,6 +2653,34 @@ body {
   z-index: 1;
 }
 
+/* Homepage hero carousel: responsive <img> slides fill the cover box, and a
+   left-to-right scrim keeps the headline + booking form readable. */
+.banner-home1 .box-cover-image {
+  overflow: hidden;
+}
+.banner-home1 .hero-slide-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  z-index: 1;
+}
+.banner-home1 .hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.35) 35%,
+    rgba(0, 0, 0, 0.05) 65%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
 .box-pagination-button {
   position: absolute;
   top: 30%;
@@ -6189,12 +6217,6 @@ footer a {
   background-image: url(../imgs/page/homepage1/bg-our-service.png);
   background-repeat: no-repeat;
   background-position: right top -460px;
-}
-
-.bg-faqs {
-  background-image: url(../imgs/page/homepage1/bg-faqs.png);
-  background-repeat: no-repeat;
-  background-position: left -100px bottom 50px;
 }
 
 .box-showcase {

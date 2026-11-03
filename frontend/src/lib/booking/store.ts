@@ -9,8 +9,9 @@ import type { QuoteResult } from "@/types/api";
 export interface Search {
   /**
    * "transfer" = point-to-point (needs a drop-off); "hourly" = by-the-hour
-   * (needs hours); "city" = fixed city-to-city (pickup/drop-off are cities and
-   * the flat route price applies).
+   * (needs hours); "city" = free-form city-to-city — a point-to-point trip
+   * (pickup + drop-off addresses, like a transfer) that the server prices on the
+   * measured distance against each vehicle's intercity rate card.
    */
   tripType: "transfer" | "hourly" | "city";
   pickupAddress: string;

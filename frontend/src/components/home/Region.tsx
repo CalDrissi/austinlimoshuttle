@@ -23,7 +23,7 @@ export default function Region() {
                 M&amp;M Austin Limousine covers Austin-Bergstrom Airport (AUS), Downtown, The Domain,
                 Round Rock and the wider Central Texas region.
               </p>
-              <a className="btn btn-primary" href="/contact">
+              <a className="btn btn-primary" href="/fleet">
                 Our Service Area
                 <svg
                   className="icon-16 ml-5"

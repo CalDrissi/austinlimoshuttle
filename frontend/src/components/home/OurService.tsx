@@ -7,18 +7,18 @@ import "swiper/css/navigation";
 
 const SERVICES = [
   {
-    title: "Intercity Rides",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
-    img: "/assets/imgs/page/homepage1/service1.png",
-  },
-  {
     title: "Airport Transfers",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
+    desc: "Door-to-door service to and from Austin-Bergstrom (AUS) with flight tracking and a meet-and-greet.",
     img: "/assets/imgs/page/homepage1/service3.png",
   },
   {
-    title: "Sprinter Class",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
+    title: "Corporate & Events",
+    desc: "On-time, professional transportation for meetings, conventions, weddings, and nights out.",
+    img: "/assets/imgs/page/homepage1/service1.png",
+  },
+  {
+    title: "Sprinter & Group Travel",
+    desc: "Mercedes-Benz Sprinter vans and SUVs for larger parties, luggage, and corporate groups.",
     img: "/assets/imgs/page/homepage1/service5.png",
   },
 ];
@@ -34,7 +34,7 @@ export default function OurService() {
           <div className="col-lg-6 col-sm-5 col-5 text-end">
             <Link
               className="text-16-medium color-primary d-flex align-items-center justify-content-end wow fadeInDown"
-              href="/services"
+              href="/fleet"
             >
               More Services
               <svg
@@ -80,7 +80,7 @@ export default function OurService() {
                     <h3 className="cardTitle text-20-medium color-white mb-10">{service.title}</h3>
                     <div className="box-inner-info">
                       <p className="cardDesc text-14 color-white mb-30">{service.desc}</p>
-                      <Link className="cardLink btn btn-arrow-up" href="/services">
+                      <Link className="cardLink btn btn-arrow-up" href="/fleet">
                         <svg
                           className="icon-16"
                           fill="none"

@@ -6,38 +6,21 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 
 // Ported from the template header (design-reference/index.html): a services
-// dropdown, a "For business" dropdown, and two flat links, with a language
-// selector and a sign-in button on the right.
+// dropdown, a "For business" dropdown, and two flat links, with a sign-in
+// button on the right.
 interface MenuItem {
   label: string;
   href: string;
   children?: { label: string; href: string }[];
 }
 
+// The storefront currently ships two pages — Home and the fleet — so the nav is
+// two flat links. The former services / for-business / for-chauffeurs / help
+// entries pointed at marketing pages that have been removed; rather than leave
+// orphaned dropdowns or dead links, the menu is rebuilt to match the live site.
 const MENU: MenuItem[] = [
-  {
-    label: "Our services",
-    href: "/services",
-    children: [
-      { label: "Airport transfers", href: "/services" },
-      { label: "Hourly hire", href: "/services" },
-      { label: "City-to-city", href: "/services" },
-      { label: "Chauffeur service", href: "/services" },
-      { label: "Limousine service", href: "/services" },
-    ],
-  },
-  {
-    label: "For business",
-    href: "#",
-    children: [
-      { label: "Overview", href: "/about" },
-      { label: "Corporations", href: "#" },
-      { label: "Travel agencies", href: "#" },
-      { label: "Strategic partnerships", href: "#" },
-    ],
-  },
-  { label: "For chauffeurs", href: "#" },
-  { label: "Help", href: "/contact" },
+  { label: "Home", href: "/" },
+  { label: "Our fleet", href: "/fleet" },
 ];
 
 export default function Header() {
@@ -89,18 +72,6 @@ export default function Header() {
               </div>
 
               <div className="header-right">
-                <div className="d-none d-xxl-inline-block box-dropdown-cart align-middle mr-10">
-                  <span className="text-14-medium icon-list icon-account">
-                    <span className="text-14-medium color-white arrow-down">EN</span>
-                  </span>
-                  <div className="dropdown-account">
-                    <ul>
-                      <li><a className="font-md" href="#">English</a></li>
-                      <li><a className="font-md" href="#">Español</a></li>
-                      <li><a className="font-md" href="#">Français</a></li>
-                    </ul>
-                  </div>
-                </div>
                 <div className="box-button-login d-inline-block align-middle">
                   <Link className="btn btn-default hover-up" href={user ? "/account" : "/login"}>
                     {user ? (user.first_name || "My account") : "Sign in"}
