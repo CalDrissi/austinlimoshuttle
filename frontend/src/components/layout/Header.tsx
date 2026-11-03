@@ -14,10 +14,12 @@ interface MenuItem {
   children?: { label: string; href: string }[];
 }
 
-// Trimmed to the pages the storefront currently ships: Home (the logo) and the
-// fleet. The former services / for-business / help entries pointed at marketing
-// pages that have been removed, so they are gone rather than left as 404s.
+// The storefront currently ships two pages — Home and the fleet — so the nav is
+// two flat links. The former services / for-business / for-chauffeurs / help
+// entries pointed at marketing pages that have been removed; rather than leave
+// orphaned dropdowns or dead links, the menu is rebuilt to match the live site.
 const MENU: MenuItem[] = [
+  { label: "Home", href: "/" },
   { label: "Our fleet", href: "/fleet" },
 ];
 

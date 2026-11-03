@@ -79,15 +79,12 @@ export default function Footer() {
             </div>
           </div>
 
+          {/* Three balanced columns for the Home + Fleet storefront. The old
+              "Company" column (about / services / contact / terms) was removed
+              with those pages; its one surviving link duplicated this Fleet
+              column, so the whole column is gone rather than left half-empty. */}
           <div className="row mb-40">
-            <div className="col-lg-3 col-md-6 mb-30">
-              <h5 className="text-18-medium color-white mb-20">Company</h5>
-              <ul className="menu-footer">
-                <li><Link href="/fleet">Our fleet</Link></li>
-              </ul>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-30">
+            <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Our Fleet</h5>
               <ul className="menu-footer">
                 {FLEET.map((v) => (
@@ -96,7 +93,7 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div className="col-lg-3 col-md-6 mb-30">
+            <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Where We Drive</h5>
               <ul className="menu-footer">
                 {SERVICE_AREAS.map((area) => (
@@ -105,7 +102,7 @@ export default function Footer() {
               </ul>
             </div>
 
-            <div className="col-lg-3 col-md-6 mb-30">
+            <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Book &amp; Manage</h5>
               <ul className="menu-footer">
                 <li><Link href="/booking/vehicle">Get a quote</Link></li>
@@ -131,6 +128,7 @@ export default function Footer() {
               </div>
               <div className="col-md-6 text-center text-md-end">
                 <ul className="menu-bottom justify-content-center justify-content-md-end">
+                  <li><Link href="/">Home</Link></li>
                   <li><Link href="/fleet">Our fleet</Link></li>
                 </ul>
               </div>
