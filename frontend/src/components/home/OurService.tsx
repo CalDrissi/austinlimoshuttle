@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import HomepagePicture from "./HomepagePicture";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Navigation } from "swiper/modules";
 import "swiper/css/navigation";
@@ -9,19 +10,19 @@ const SERVICES = [
   {
     title: "Airport Transfers",
     desc: "Door-to-door service to and from Austin-Bergstrom (AUS) with flight tracking and a meet-and-greet.",
-    img: "/assets/imgs/page/homepage1/service3.png",
+    img: "service-airport",
   },
   {
     title: "Corporate & Events",
     desc: "On-time, professional transportation for meetings, conventions, weddings, and nights out.",
-    img: "/assets/imgs/page/homepage1/service1.png",
+    img: "service-corporate",
   },
   {
     title: "Sprinter & Group Travel",
     desc: "Mercedes-Benz Sprinter vans and SUVs for larger parties, luggage, and corporate groups.",
-    img: "/assets/imgs/page/homepage1/service5.png",
+    img: "service-sprinter",
   },
-];
+] as const;
 
 export default function OurService() {
   return (
@@ -100,7 +101,7 @@ export default function OurService() {
                     </div>
                   </div>
                   <div className="cardImage">
-                    <img src={service.img} alt="Luxride" />
+                    <HomepagePicture image={service.img} alt={service.title} sizes="(max-width: 575px) 100vw, (max-width: 767px) 50vw, 33vw" />
                   </div>
                 </div>
               </SwiperSlide>

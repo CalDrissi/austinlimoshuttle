@@ -6295,7 +6295,11 @@ footer a {
 }
 
 .bg-region {
-  background-image: url(../imgs/page/homepage1/maps.png);
+  background-image: url(../imgs/page/homepage1/austin-map.webp);
+  background-image: image-set(
+    url(../imgs/page/homepage1/austin-map.avif) type("image/avif"),
+    url(../imgs/page/homepage1/austin-map.webp) type("image/webp")
+  );
   background-repeat: no-repeat;
   background-position: center right;
   background-size: contain;

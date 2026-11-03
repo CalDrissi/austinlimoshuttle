@@ -1,3 +1,5 @@
+import HomepagePicture from "./HomepagePicture";
+
 export default function Region() {
   return (
     <section className="section pt-120 pb-120 bg-region">
@@ -6,11 +8,11 @@ export default function Region() {
           <div className="col-lg-6 mb-30">
             <div className="box-gallery justify-content-center justify-content-lg-start">
               <div className="gallery-1 wow fadeInRight">
-                <img src="/assets/imgs/page/homepage1/img1.png" alt="luxride" />
+                <HomepagePicture image="austin-skyline" alt="Austin skyline" sizes="(max-width: 575px) 55vw, 311px" />
               </div>
               <div className="gallery-2 wow fadeInLeft">
-                <img src="/assets/imgs/page/homepage1/img2.png" alt="luxride" />
-                <img src="/assets/imgs/page/homepage1/img3.png" alt="luxride" />
+                <HomepagePicture image="austin-capitol" alt="Texas State Capitol in Austin" sizes="(max-width: 575px) 44vw, 249px" />
+                <HomepagePicture image="austin-pickup" alt="Chauffeured pickup in Austin" sizes="(max-width: 575px) 44vw, 249px" />
               </div>
             </div>
           </div>

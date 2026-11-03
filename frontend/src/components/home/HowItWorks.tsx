@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import HomepagePicture from "./HomepagePicture";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import type { Swiper as SwiperClass } from "swiper";
@@ -13,19 +14,19 @@ const STEPS = [
   {
     title: "Tell Us Your Trip",
     text: "Enter your pickup and drop-off addresses, or book a car and chauffeur by the hour for events, meetings, and nights out around Austin.",
-    image: "/assets/imgs/page/homepage1/laptop.png",
+    image: "how-trip",
   },
   {
     title: "Pick Your Vehicle",
     text: "Choose the sedan, SUV, or Sprinter that fits your party and luggage, then get an upfront quote with no hidden fees.",
-    image: "/assets/imgs/page/homepage1/desktop.png",
+    image: "how-vehicle",
   },
   {
     title: "Ride With a Pro",
     text: "Your licensed, insured chauffeur tracks your flight and arrives early, so you ride on time across Central Texas.",
-    image: "/assets/imgs/page/homepage1/desktop2.png",
+    image: "how-pro",
   },
-];
+] as const;
 
 export default function HowItWorks() {
   const [active, setActive] = useState(0);
@@ -48,7 +49,7 @@ export default function HowItWorks() {
                 >
                   {STEPS.map((s, i) => (
                     <SwiperSlide key={i}>
-                      <figure><img src={s.image} alt={s.title} /></figure>
+                      <figure><HomepagePicture image={s.image} alt={s.title} sizes="(max-width: 991px) 100vw, 50vw" /></figure>
                     </SwiperSlide>
                   ))}
                 </Swiper>

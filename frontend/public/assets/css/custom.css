@@ -541,3 +541,14 @@ img {
 .mm-signin-form .form-control:focus { border-color: #111; outline: 2px solid #111; outline-offset: 2px; box-shadow: none; }
 .mm-password-reset { color: #202020; text-decoration: underline; text-underline-offset: 3px; }
 .mm-password-reset:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+
+/* Use the portrait map crop behind the Austin section on narrow screens. */
+@media (max-width: 640px) {
+  .bg-region {
+    background-image: url(../imgs/page/homepage1/austin-map-mobile-640.webp);
+    background-image: image-set(
+      url(../imgs/page/homepage1/austin-map-mobile-640.avif) type("image/avif"),
+      url(../imgs/page/homepage1/austin-map-mobile-640.webp) type("image/webp")
+    );
+  }
+}
