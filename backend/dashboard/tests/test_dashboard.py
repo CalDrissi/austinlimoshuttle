@@ -764,6 +764,12 @@ class TestRateCardValidation:
             "bands-INITIAL_FORMS": "0",
             "bands-MIN_NUM_FORMS": "0",
             "bands-MAX_NUM_FORMS": "1000",
+            # The vehicle page now carries a second (city-to-city) card, so its
+            # empty management form must ride along or the page is invalid.
+            "intercity_bands-TOTAL_FORMS": "0",
+            "intercity_bands-INITIAL_FORMS": "0",
+            "intercity_bands-MIN_NUM_FORMS": "0",
+            "intercity_bands-MAX_NUM_FORMS": "1000",
         }
         for i, (start, end, rate) in enumerate(bands):
             data[f"bands-{i}-from_miles"] = str(start)
@@ -875,12 +881,114 @@ class TestRateCardRemoveControl:
             "bands-0-from_miles": "0", "bands-0-to_miles": "",
             "bands-0-rate_per_mile": "3.00",
             "bands-0-DELETE": "on",
+            "intercity_bands-TOTAL_FORMS": "0", "intercity_bands-INITIAL_FORMS": "0",
+            "intercity_bands-MIN_NUM_FORMS": "0", "intercity_bands-MAX_NUM_FORMS": "1000",
         }
         response = client.post(
             reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk]), data,
         )
         assert response.status_code == 302
         assert vehicle.bands.count() == 0
+
+
+@pytest.mark.django_db
+class TestCityToCityCard:
+    """
+    The vehicle edit page carries a second rate card -- the free-form
+    city-to-city (intercity) per-mile bands -- alongside the normal one, plus
+    the per-vehicle minimum distance that switches it on. The bands mirror the
+    distance card and reuse its whole-set validation.
+    """
+
+    def _login(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+    def _payload(self, vehicle, *, min_miles="", bands=()):
+        data = {
+            "name": vehicle.name, "slug": vehicle.slug, "description": "",
+            "features": "", "passenger_capacity": "3", "luggage_capacity": "2",
+            "hourly_rate": "85.00", "meet_greet_fee": "0.00",
+            "minimum_fare": "45.00", "city_to_city_min_miles": min_miles,
+            "display_order": "0", "is_active": "on",
+            "bands-TOTAL_FORMS": "0", "bands-INITIAL_FORMS": "0",
+            "bands-MIN_NUM_FORMS": "0", "bands-MAX_NUM_FORMS": "1000",
+            "intercity_bands-TOTAL_FORMS": str(len(bands)),
+            "intercity_bands-INITIAL_FORMS": "0",
+            "intercity_bands-MIN_NUM_FORMS": "0",
+            "intercity_bands-MAX_NUM_FORMS": "1000",
+        }
+        for i, (start, end, rate) in enumerate(bands):
+            data[f"intercity_bands-{i}-from_miles"] = str(start)
+            data[f"intercity_bands-{i}-to_miles"] = "" if end is None else str(end)
+            data[f"intercity_bands-{i}-rate_per_mile"] = str(rate)
+        return data
+
+    def test_edit_page_renders_the_section_and_field(self, client, roles, vehicle):
+        self._login(client, roles)
+        body = client.get(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk])
+        ).content.decode()
+        # The vehicle's own min-distance field, and the second card's formset.
+        assert 'name="city_to_city_min_miles"' in body
+        assert "City-to-city" in body
+        assert 'name="intercity_bands-TOTAL_FORMS"' in body
+        assert 'name="intercity_bands-0-rate_per_mile"' in body
+        # The original rate card is still there beside it.
+        assert 'name="bands-TOTAL_FORMS"' in body
+
+    def test_min_distance_and_intercity_bands_save(self, client, roles, vehicle):
+        self._login(client, roles)
+        response = client.post(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk]),
+            self._payload(vehicle, min_miles="50",
+                          bands=[(0, 30, "2.10"), (30, None, "1.80")]),
+        )
+        assert response.status_code == 302
+        vehicle.refresh_from_db()
+        assert vehicle.city_to_city_min_miles == Decimal("50")
+        assert vehicle.intercity_bands.count() == 2
+
+    def test_intercity_card_reuses_the_band_validation(self, client, roles, vehicle):
+        """A gap in the city-to-city card is refused, same as the normal card."""
+        self._login(client, roles)
+        response = client.post(
+            reverse("dashboard:managed_edit", args=["vehicles", vehicle.pk]),
+            self._payload(vehicle, min_miles="0",
+                          bands=[(0, 20, "2.00"), (40, None, "1.50")]),
+        )
+        assert response.status_code == 200
+        assert b"Nothing prices the miles between" in response.content
+        assert vehicle.intercity_bands.count() == 0
+
+
+@pytest.mark.django_db
+class TestCityRoutesPageRemoved:
+    """
+    The standalone "City routes" managed page was retired with the city-to-city
+    rework: intercity pricing now lives on the vehicle card. The slug must be
+    unregistered, the route gone, and no sidebar link left behind.
+    """
+
+    def test_slug_is_no_longer_registered(self):
+        from dashboard.crud import REGISTRY
+        assert "city-routes" not in REGISTRY
+
+    def test_managed_route_is_gone(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+        assert client.get(
+            reverse("dashboard:managed_list", args=["city-routes"])
+        ).status_code == 404
+
+    def test_no_sidebar_link_remains(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+        body = client.get(
+            reverse("dashboard:managed_list", args=["vehicles"])
+        ).content.decode()
+        assert "manage/city-routes/" not in body
+        assert "City routes" not in body
 
 
 @pytest.mark.django_db

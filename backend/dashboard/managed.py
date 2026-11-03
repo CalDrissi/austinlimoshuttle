@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from bookings.models import Driver
 from fleet.models import Vehicle
-from pricing.models import BlackoutDate, CityRoute, TimeSurcharge
+from pricing.models import BlackoutDate, TimeSurcharge
 
 from . import forms
-from .crud import Column, Managed, register
+from .crud import Column, Inline, Managed, register
 
 QUOTE_PREVIEW_CHARS = 70
 
@@ -70,10 +70,24 @@ register(Managed(
     ),
     search_fields=["name", "slug"],
     ordering=["display_order", "name"],
-    prefetch_related=["bands"],
-    inline_formset=forms.DistanceBandFormSet,
-    inline_label="Rate card",
-    inline_note="From/to are miles. Leave the final band's upper bound empty.",
+    prefetch_related=["bands", "intercity_bands"],
+    inlines=[
+        Inline(
+            forms.DistanceBandFormSet,
+            label="Rate card",
+            note="From/to are miles. Leave the final band's upper bound empty.",
+        ),
+        Inline(
+            forms.IntercityBandFormSet,
+            label="City-to-city",
+            note=(
+                "Per-mile card for free-form city-to-city trips. Fill in the "
+                "minimum distance above to switch it on: empty = never, "
+                "0 = any distance. Same from/to rules as the rate card."
+            ),
+            icon="bi-signpost-split",
+        ),
+    ],
     columns=[
         Column("Vehicle", "name", sub="slug"),
         Column("Seats", "passenger_capacity"),
@@ -85,34 +99,12 @@ register(Managed(
     ],
 ))
 
-register(Managed(
-    slug="city-routes",
-    model=CityRoute,
-    form_class=forms.CityRouteForm,
-    label="City route",
-    label_plural="City routes",
-    permission="pricing.change_cityroute",
-    icon="bi-signpost-split",
-    lede="Fixed intercity routes with an all-in flat price per vehicle class.",
-    form_note=(
-        "The flat price REPLACES the per-mile fare for this route and is all-in — "
-        "no time surcharge, event uplift or tax is added on top. Leave a vehicle "
-        "out to fall back to normal distance pricing for that class."
-    ),
-    search_fields=["origin", "destination"],
-    ordering=["origin", "destination"],
-    prefetch_related=["prices"],
-    inline_formset=forms.CityRoutePriceFormSet,
-    inline_label="Price per vehicle",
-    inline_note="All-in fare for each vehicle class on this route.",
-    columns=[
-        Column("Origin", "origin"),
-        Column("Destination", "destination"),
-        Column("Both ways", "bidirectional", boolean=True),
-        Column("Priced vehicles", lambda r: r.prices.count(), align_end=True),
-        Column("Active", "is_active", boolean=True),
-    ],
-))
+# "City routes" (CityRoute + CityRoutePrice) was removed from the dashboard on
+# 2026-11-03 as part of the city-to-city rework: intercity pricing is now the
+# free-form, per-mile IntercityBand card edited on the Vehicle screen above, so
+# the fixed-route page no longer has anything to manage. The CityRoute model is
+# untouched here (owned by @pricing-rates); the dashboard simply stops
+# registering it, so /dashboard/manage/city-routes/ no longer exists.
 
 register(Managed(
     slug="surcharges",
