@@ -16,9 +16,12 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
+from django.core.cache import cache
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.http import HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from config.session import scoped_ensure_csrf_cookie
 from drf_spectacular.utils import (
@@ -35,6 +38,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 
 from accounts.forms import MigrationPasswordResetForm
+from accounts.models import LoginCode
 from bookings.models import Booking, BookingStatusChange
 from content.models import Page, SiteSettings
 from enquiries.models import ContactMessage
@@ -65,9 +69,11 @@ from .serializers import (
     QuoteResponseSerializer,
     RegisterRequestSerializer,
     SavedCardSerializer,
+    SendCodeRequestSerializer,
     SiteSettingsSerializer,
     UserSerializer,
     VehicleSerializer,
+    VerifyCodeRequestSerializer,
 )
 
 User = get_user_model()
@@ -91,6 +97,14 @@ class QuoteThrottle(ScopedRateThrottle):
 
 class EnquiryThrottle(ScopedRateThrottle):
     scope = "enquiry"
+
+
+class LoginCodeSendThrottle(ScopedRateThrottle):
+    scope = "login_code_send"
+
+
+class LoginCodeVerifyThrottle(ScopedRateThrottle):
+    scope = "login_code_verify"
 
 
 # -- content ---------------------------------------------------------------
@@ -826,6 +840,130 @@ def auth_password_reset(request):
         {"detail": "If that address has an account, a reset link is on its way."},
         status=status.HTTP_202_ACCEPTED,
     )
+
+
+# A customer may ask for at most this many codes per address per window before
+# further requests are silently dropped. The per-IP ceiling lives in the DRF
+# throttle (scope ``login_code_send``); this one stops a single address being
+# hammered from a rotating pool of IPs and caps the mail we send per person.
+LOGIN_CODE_SEND_WINDOW = 600  # seconds
+LOGIN_CODE_SEND_MAX = 3
+
+
+def _email_login_code(request, user, code: str) -> None:
+    """Render and send the one-time code, mirroring the password-reset mail."""
+    context = {
+        "user": user,
+        "code": code,
+        "ttl_minutes": int(LoginCode.objects.CODE_TTL.total_seconds() // 60),
+        "protocol": "https" if request.is_secure() else "http",
+        "domain": request.get_host(),
+    }
+    subject = render_to_string(
+        "accounts/email/login_code_subject.txt", context,
+    ).strip()
+    text_body = render_to_string("accounts/email/login_code.txt", context)
+    html_body = render_to_string("accounts/email/login_code.html", context)
+
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+    )
+    message.attach_alternative(html_body, "text/html")
+    # A mail-server hiccup must not turn into a 500 that tells the caller the
+    # address exists -- the response is identical either way.
+    message.send(fail_silently=True)
+
+
+@extend_schema(
+    tags=["auth"],
+    summary="Email a one-time sign-in code",
+    description=(
+        "Passwordless sign-in, step one. Emails a six-digit code that is valid "
+        "for ten minutes, single-use, and rate-limited per address and per IP.\n\n"
+        "**Always returns 200** with a neutral message, whether or not the "
+        "address is registered -- the response cannot be used to discover who "
+        "has an account, exactly like password reset. A registered customer is "
+        "sent a code; nothing happens for anyone else."
+    ),
+    request=SendCodeRequestSerializer,
+    responses={200: DetailSerializer},
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([LoginCodeSendThrottle])
+def auth_send_code(request):
+    email = (request.data.get("email") or "").strip().lower()
+    neutral = Response({
+        "detail": "If that address has an account, a sign-in code is on its way.",
+    })
+
+    if not email or "@" not in email:
+        return neutral
+
+    # Per-address cooldown. Counted for unknown addresses too, so existence
+    # cannot be probed by watching for the limit to kick in.
+    bucket = f"login-code-send:{email}"
+    sent = cache.get(bucket, 0)
+    if sent >= LOGIN_CODE_SEND_MAX:
+        return neutral
+    cache.set(bucket, sent + 1, LOGIN_CODE_SEND_WINDOW)
+
+    user = User.objects.filter(email=email, is_active=True).first()
+    if user is not None:
+        _code, raw = LoginCode.objects.issue(email)
+        _email_login_code(request, user, raw)
+
+    return neutral
+
+
+@extend_schema(
+    tags=["auth"],
+    summary="Sign in with a one-time code",
+    description=(
+        "Passwordless sign-in, step two. Exchanges a valid, unexpired, unused "
+        "code for a session -- the response and cookie are identical to "
+        "`/auth/login/`. A wrong, expired, used or over-attempted code returns "
+        "**400** with a single neutral message. A correct code is consumed on "
+        "use and cannot be replayed."
+    ),
+    request=VerifyCodeRequestSerializer,
+    responses={200: UserSerializer, 400: DetailSerializer},
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([LoginCodeVerifyThrottle])
+def auth_verify_code(request):
+    email = (request.data.get("email") or "").strip().lower()
+    code_input = (request.data.get("code") or "").strip()
+
+    invalid = Response(
+        {"detail": "That code is invalid or has expired."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+    if not email or not code_input:
+        return invalid
+
+    if LoginCode.objects.verify(email, code_input) is None:
+        return invalid
+
+    user = User.objects.filter(email=email, is_active=True).first()
+    if user is None:
+        # A code existed for an address with no active account -- treat as
+        # invalid rather than leaking the discrepancy.
+        return invalid
+
+    # No password was involved, so there is no authenticate() step; log the
+    # user in directly. The session, cookie and payload match /auth/login/.
+    login(request, user)
+    return Response({
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+    })
 
 
 @extend_schema(

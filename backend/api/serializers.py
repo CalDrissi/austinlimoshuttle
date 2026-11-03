@@ -381,6 +381,15 @@ class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class SendCodeRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class VerifyCodeRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    code = serializers.CharField(help_text="The six-digit code from the email.")
+
+
 class CancelBookingSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["cancel"])
 
