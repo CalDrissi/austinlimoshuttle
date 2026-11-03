@@ -1277,20 +1277,19 @@ def managed_edit(request, slug, pk=None):
     queryset = managed.staff_queryset_filter(slug, entry.model._default_manager.all())
     instance = get_object_or_404(queryset, pk=pk) if pk else None
 
-    formset = None
     if request.method == "POST":
         form = entry.form_class(request.POST, request.FILES, instance=instance)
-        if entry.inline_formset:
-            formset = entry.inline_formset(
-                request.POST, instance=instance or entry.model(),
-            )
+        formsets = [
+            inline.formset(request.POST, instance=instance or entry.model())
+            for inline in entry.inlines
+        ]
 
-        if form.is_valid() and (formset is None or formset.is_valid()):
+        if form.is_valid() and all(fs.is_valid() for fs in formsets):
             with transaction.atomic():
                 saved = form.save()
-                if formset is not None:
-                    formset.instance = saved
-                    formset.save()
+                for fs in formsets:
+                    fs.instance = saved
+                    fs.save()
 
             logger.info(
                 "%s %s %s by %s",
@@ -1306,13 +1305,21 @@ def managed_edit(request, slug, pk=None):
         messages.error(request, "Please correct the errors below.")
     else:
         form = entry.form_class(instance=instance)
-        if entry.inline_formset:
-            formset = entry.inline_formset(instance=instance or entry.model())
+        formsets = [
+            inline.formset(instance=instance or entry.model())
+            for inline in entry.inlines
+        ]
+
+    inlines = [
+        {"formset": fs, "label": inline.label,
+         "note": inline.note, "icon": inline.icon}
+        for inline, fs in zip(entry.inlines, formsets, strict=True)
+    ]
 
     return render(request, "dashboard/managed_form.html", {
         "entry": entry,
         "form": form,
-        "formset": formset,
+        "inlines": inlines,
         "instance": instance,
         "roles": role_names(request.user),
         "is_manager": is_manager(request.user),
