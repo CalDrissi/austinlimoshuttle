@@ -71,10 +71,10 @@ export default function HeroSection() {
                 <span className="hero-scrim" aria-hidden="true" />
               </div>
               <div className="box-banner-info">
-                <p className="text-16 color-white">Where Would You Like To Go?</p>
+                <p className="text-16 color-white">Serving Austin &amp; Central Texas</p>
                 <h2 className="heading-52-medium color-white">
-                  Your Personal <br className="d-none d-lg-block" />
-                  Chauffeur Services
+                  Austin&rsquo;s Premier <br className="d-none d-lg-block" />
+                  Chauffeur &amp; Limo Service
                 </h2>
               </div>
             </SwiperSlide>

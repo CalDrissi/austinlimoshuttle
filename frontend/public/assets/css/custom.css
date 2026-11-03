@@ -77,11 +77,46 @@ img {
    search widget (position:absolute; bottom:50px) below the fold on laptop
    screens. Cap the banner to the viewport height (minus the ~66px header) so
    the form is always fully visible; clamp so it stays reasonable on very
-   short/tall screens. */
+   short/tall screens. Taller caps give the hero real vertical presence. */
 .banner-home1 .box-cover-image {
   height: calc(100vh - 66px);
-  min-height: 520px;
-  max-height: 760px;
+  min-height: 620px;
+  max-height: 880px;
+  overflow: hidden;
+}
+
+/* Hero carousel slide images. These rules were authored against the template
+   copy of luxride.css, which is NOT the served stylesheet — the page links
+   /assets/css/luxride.css + this file, so without them here the <img> fell
+   back to its intrinsic 1672x941 size and overflowed/failed to cover. Pin each
+   slide to fill the cover box with object-fit so it covers cleanly (no stretch,
+   no collapse) at every breakpoint. */
+.banner-home1 .hero-slide-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 1;
+}
+/* Readability scrim over the photo: a left→right wash keeps the headline legible
+   and a bottom lift darkens the floor under the search dock on every slide. */
+.banner-home1 .hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,
+      rgba(0, 0, 0, 0.62) 0%,
+      rgba(0, 0, 0, 0.42) 36%,
+      rgba(0, 0, 0, 0.12) 68%,
+      rgba(0, 0, 0, 0) 100%),
+    linear-gradient(0deg,
+      rgba(0, 0, 0, 0.45) 0%,
+      rgba(0, 0, 0, 0.12) 24%,
+      rgba(0, 0, 0, 0) 46%);
 }
 
 /* Hero headline fit on <1200px.
@@ -96,9 +131,9 @@ img {
    template (.banner-home1 .box-banner-info[.heading-52-medium]) and custom.css
    loads after luxride.css, so they win. */
 @media (max-width: 1199.98px) {
-  /* A little extra floor so title + bottom card both fit on shorter viewports
-     (max-height stays 760px, so tablet/desktop height is unchanged). */
-  .banner-home1 .box-cover-image { min-height: 560px; }
+  /* Taller floor on tablet/phone so the hero keeps real presence and there is
+     room to lift the search dock off the floor without crowding the title. */
+  .banner-home1 .box-cover-image { min-height: 640px; }
   /* Top-anchor the title block instead of vertical-centre (template top:40%). */
   .banner-home1 .box-banner-info { top: 90px; }
   /* Shrink the otherwise-52px 2-line headline (biggest offender at ~768px). */
@@ -298,7 +333,7 @@ img {
 .mm-search-dock { position: relative; }
 @media (min-width: 1200px) {
   .mm-search-dock {
-    position: absolute; bottom: 50px; left: 0; right: 0;
+    position: absolute; bottom: 104px; left: 0; right: 0;
     /* Widened from the template's 1170px so the single-row card has room to give
        the pickup/drop-off fields the most width possible. The dock is full-bleed
        inside the (full-width) hero banner, so this only changes its centred width
@@ -382,7 +417,7 @@ img {
      visible ABOVE it (375 / 430 / 768px). Side gutters keep it off the edges. */
   .mm-search-dock {
     position: absolute;
-    left: 16px; right: 16px; bottom: 16px;
+    left: 16px; right: 16px; bottom: 44px;
     margin: 0 auto;
     max-width: 560px;        /* keeps the stacked card tidy on tablet/large phone */
     z-index: 5;              /* above the banner image + overlay + title */
