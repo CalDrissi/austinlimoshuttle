@@ -18,10 +18,10 @@ export default function Region() {
           </div>
           <div className="col-lg-6 mb-30">
             <div className="box-region-right wow fadeInUp">
-              <h2 className="heading-44-medium color-text mb-30">
+              <h2 className="heading-44-medium mb-30">
                 Serving the greater Austin area
               </h2>
-              <p className="text-16 color-text mb-30">
+              <p className="text-16 mb-30">
                 M&amp;M Austin Limousine covers Austin-Bergstrom Airport (AUS), Downtown, The Domain,
                 Round Rock and the wider Central Texas region.
               </p>
