@@ -876,6 +876,30 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Homepage: stripped theme-demo placeholder sections + hardened fleet grid</span><span class="tbl">frontend</span></div>
+    <table>
+      <tr><td><b>Removed the leftover Luxride template/demo sections</b> from the homepage so it no longer
+      reads like a theme demo. Deleted <code>PartnersStrip.tsx</code> ("the partners who sell our products"
+      logo strip), <code>Showcase.tsx</code> (the fake "285 vehicles / 97 awards / 13K happy customers" stat
+      block), <code>Testimonials.tsx</code> ("I really can recommend this theme…" placeholder quote + stock
+      video), and <code>LatestNews.tsx</code> (wrong-city blog cards — Dubai/Dallas/LA) and dropped their
+      imports from <code>app/page.tsx</code>. Remaining homepage order: Hero → Our Fleet → Trip Your Way →
+      Our Services → How It Works → Service Area → FAQ. <b>Rewrote placeholder copy to real, on-brand text:</b>
+      <code>Faqs.tsx</code> lorem-ipsum replaced with 5 genuine Austin chauffeur Q&amp;As (service area, booking
+      lead time, flight tracking, upfront pricing, cancellation), now data-driven from a <code>FAQS</code> array;
+      <code>HowItWorks.tsx</code> steps re-titled/re-written (Tell Us Your Trip → Pick Your Vehicle → Ride With a
+      Pro); <code>TripYourWay.tsx</code> three identical "shipments" blurbs replaced with distinct real ones; and
+      <code>OurService.tsx</code> fixed the three duplicate vehicle-list descriptions (Airport Transfers,
+      Corporate &amp; Events, Sprinter &amp; Group Travel). <b>Hardened the fleet grid</b> (<code>OurFleet.tsx</code>
+      + <code>/fleet</code>, both already dynamic from the catalog API) for the incoming vehicle photos: in
+      <code>custom.css</code> every <code>.cardFleet .cardImage img</code> is now locked to one fixed
+      <code>aspect-ratio:16/10; object-fit:cover</code> box so mixed-dimension images render uniformly, cards
+      stay equal-height (flex column + 3-line description clamp), and the passenger/luggage footer pins to the
+      bottom. <b>Verified:</b> <code>npm run build</code> passes (13/13 static pages). Booking widget untouched.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-03 · Homepage hero carousel: removed nav controls + smooth crossfade</span><span class="tbl">frontend</span></div>
     <table>
       <tr><td><b>Polished the homepage hero carousel per client feedback</b> in <code>HeroSection.tsx</code>.

@@ -18,8 +18,8 @@ export default function TripYourWay() {
               </div>
               <div className="cardDesc">
                 <p className="text-16 color-text">
-                  Both you and your shipments will travel with professional drivers. Always with the
-                  highest quality standards.
+                  Every ride is handled by a licensed, background-checked chauffeur in a fully
+                  insured, late-model vehicle that is cleaned and inspected before pickup.
                 </p>
               </div>
             </div>
@@ -34,8 +34,8 @@ export default function TripYourWay() {
               </div>
               <div className="cardDesc">
                 <p className="text-16 color-text">
-                  Both you and your shipments will travel with professional drivers. Always with the
-                  highest quality standards.
+                  You see the full fare before you book. Flat rates on airport runs and clear hourly
+                  pricing mean no surge, no meter, and no surprises at drop-off.
                 </p>
               </div>
             </div>
@@ -50,8 +50,8 @@ export default function TripYourWay() {
               </div>
               <div className="cardDesc">
                 <p className="text-16 color-text">
-                  Both you and your shipments will travel with professional drivers. Always with the
-                  highest quality standards.
+                  From airport transfers and corporate travel to weddings and a night on Sixth
+                  Street, we tailor the ride to your schedule across the Austin area.
                 </p>
               </div>
             </div>

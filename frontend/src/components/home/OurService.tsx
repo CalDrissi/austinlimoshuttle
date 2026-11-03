@@ -7,18 +7,18 @@ import "swiper/css/navigation";
 
 const SERVICES = [
   {
-    title: "Intercity Rides",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
-    img: "/assets/imgs/page/homepage1/service1.png",
-  },
-  {
     title: "Airport Transfers",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
+    desc: "Door-to-door service to and from Austin-Bergstrom (AUS) with flight tracking and a meet-and-greet.",
     img: "/assets/imgs/page/homepage1/service3.png",
   },
   {
-    title: "Sprinter Class",
-    desc: "Mercedes-Benz E-Class, BMW 5 Series, Cadillac XTS or similar",
+    title: "Corporate & Events",
+    desc: "On-time, professional transportation for meetings, conventions, weddings, and nights out.",
+    img: "/assets/imgs/page/homepage1/service1.png",
+  },
+  {
+    title: "Sprinter & Group Travel",
+    desc: "Mercedes-Benz Sprinter vans and SUVs for larger parties, luggage, and corporate groups.",
     img: "/assets/imgs/page/homepage1/service5.png",
   },
 ];

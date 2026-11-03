@@ -11,18 +11,18 @@ import type { Swiper as SwiperClass } from "swiper";
 // both) instead of relying on a jQuery plugin we don't run.
 const STEPS = [
   {
-    title: "Create Your Route",
-    text: "Enter your pickup & dropoff locations or the number of hours you wish to book a car and driver for",
+    title: "Tell Us Your Trip",
+    text: "Enter your pickup and drop-off addresses, or book a car and chauffeur by the hour for events, meetings, and nights out around Austin.",
     image: "/assets/imgs/page/homepage1/laptop.png",
   },
   {
-    title: "Choose Vehicle For You",
-    text: "On the day of your ride, you will receive two email and SMS updates - one informing you that.",
+    title: "Pick Your Vehicle",
+    text: "Choose the sedan, SUV, or Sprinter that fits your party and luggage, then get an upfront quote with no hidden fees.",
     image: "/assets/imgs/page/homepage1/desktop.png",
   },
   {
-    title: "Enjoy The Journey",
-    text: "After your ride has taken place, we would appreciate it if you could rate your car and driver.",
+    title: "Ride With a Pro",
+    text: "Your licensed, insured chauffeur tracks your flight and arrives early, so you ride on time across Central Texas.",
     image: "/assets/imgs/page/homepage1/desktop2.png",
   },
 ];
