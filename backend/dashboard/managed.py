@@ -102,9 +102,9 @@ register(Managed(
 # "City routes" (CityRoute + CityRoutePrice) was removed from the dashboard on
 # 2026-11-03 as part of the city-to-city rework: intercity pricing is now the
 # free-form, per-mile IntercityBand card edited on the Vehicle screen above, so
-# the fixed-route page no longer has anything to manage. The CityRoute model is
-# untouched here (owned by @pricing-rates); the dashboard simply stops
-# registering it, so /dashboard/manage/city-routes/ no longer exists.
+# the fixed-route page no longer has anything to manage. The CityRoute /
+# CityRoutePrice models were since deleted entirely (owned by @pricing-rates),
+# so /dashboard/manage/city-routes/ no longer exists.
 
 register(Managed(
     slug="surcharges",
