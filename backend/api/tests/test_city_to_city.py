@@ -17,6 +17,7 @@ import pytest
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
+from bookings.models import Booking
 from fleet.models import DistanceBand, IntercityBand, Vehicle
 from pricing.distance import Journey
 from pricing.models import PricingSettings
@@ -110,6 +111,67 @@ class TestFreeFormCityToCity:
             content_type="application/json",
         )
         assert resp.status_code == 400
+
+
+def _transfer_quote(client, future, miles):
+    """Post a plain transfer quote (no city_to_city flag) with a stubbed distance."""
+    with patch("api.views.measure_journey", return_value=_journey(miles)):
+        return client.post(
+            reverse("api:quotes"),
+            {"pickup_address": "Austin, TX", "dropoff_address": "Houston, TX",
+             "pickup_at": future.isoformat()},
+            content_type="application/json",
+        )
+
+
+def _book(client, token):
+    return client.post(
+        reverse("api:create_booking"),
+        {"quote_token": token, "guest_email": "c@example.com",
+         "guest_phone": "+15125550000", "passenger_count": 2},
+        content_type="application/json",
+    )
+
+
+@pytest.mark.django_db
+class TestBookingPersistsCityToCityMarker:
+    """
+    create_booking stamps is_city_to_city to match the card that ACTUALLY priced
+    the fare, so Booking.reprice() reproduces the creation fare exactly.
+    """
+
+    def test_true_city_to_city_persists_true(self, client, vehicle, future):
+        """25 mi >= 20 mi minimum -> intercity card -> marker True; reprice matches."""
+        token = _c2c_quote(client, future, "25").json()["quotes"][0]["quote_token"]
+        resp = _book(client, token)
+        assert resp.status_code == 201
+        booking = Booking.objects.get(reference=resp.json()["reference"])
+        assert booking.is_city_to_city is True
+        assert booking.total == Decimal("250.00")  # 25 x $10 intercity
+        assert booking.reprice().total == booking.total
+
+    def test_normal_transfer_persists_false(self, client, vehicle, future):
+        """A plain transfer is never city-to-city; reprice stays on normal bands."""
+        token = _transfer_quote(client, future, "25").json()["quotes"][0]["quote_token"]
+        resp = _book(client, token)
+        assert resp.status_code == 201
+        booking = Booking.objects.get(reference=resp.json()["reference"])
+        assert booking.is_city_to_city is False
+        # 25 mi on normal bands: (6 x $15) + (19 x $2.90) = $90 + $55.10 = $145.10.
+        assert booking.total == Decimal("145.10")
+        assert booking.reprice().total == booking.total
+
+    def test_below_minimum_c2c_silent_fallback_persists_false(self, client, vehicle, future):
+        """10 mi < 20 mi minimum: charged on the normal card, so the marker is
+        False -- reprice() must NOT jump to the intercity rate."""
+        token = _c2c_quote(client, future, "10").json()["quotes"][0]["quote_token"]
+        resp = _book(client, token)
+        assert resp.status_code == 201
+        booking = Booking.objects.get(reference=resp.json()["reference"])
+        assert booking.is_city_to_city is False
+        # (6 x $15) + (4 x $2.90) = $101.60, the normal-card fare (not $100 intercity).
+        assert booking.total == Decimal("101.60")
+        assert booking.reprice().total == booking.total
 
 
 @pytest.mark.django_db

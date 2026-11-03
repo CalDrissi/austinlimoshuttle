@@ -49,7 +49,7 @@ from payments import gateway as payments_gateway
 from payments.models import SavedCard
 from pricing.distance import DistanceLookupError
 from pricing.distance import lookup as measure_journey
-from pricing.engine import QuoteError, quote, quote_all
+from pricing.engine import QuoteError, priced_city_to_city, quote_all
 from pricing.models import BlackoutDate, TimeSurcharge
 
 from . import quotes
@@ -423,6 +423,15 @@ def create_booking(request):
             distance_miles=quote_request.distance_miles,
             hours=quote_request.hours,
             meet_and_greet=quote_request.meet_and_greet,
+            # Persist whether the intercity card ACTUALLY priced this trip, not the
+            # mode the customer selected: a city-to-city trip below the vehicle's
+            # minimum distance was charged on the normal transfer card, so the
+            # marker stays False and a later reprice() reproduces the same fare.
+            is_city_to_city=priced_city_to_city(
+                vehicle,
+                distance_miles=quote_request.distance_miles,
+                city_to_city=quote_request.city_to_city,
+            ),
             passenger_count=data["passenger_count"],
             luggage_count=data["luggage_count"],
             flight_number=data.get("flight_number", ""),
@@ -648,23 +657,14 @@ def my_booking_detail(request, reference):
             if "pickup_at" in data and data["pickup_at"] != booking.pickup_at:
                 booking.pickup_at = data["pickup_at"]
                 changed.append("pickup_at")
-                # Re-price at the new time, reusing the stored distance/hours. The
-                # fare the client sees stays authoritative. NOTE: a free-form
-                # city-to-city booking re-prices on the vehicle's NORMAL transfer
-                # card here -- the Booking row has no persisted city_to_city marker
-                # yet (see CONTRACTS, @bookings-core follow-up), so the intercity
-                # card cannot be reselected on an amend. A time-only amend of an
-                # intercity trip is rare and is the only case this affects.
+                # Re-price at the new time via the booking's own re-quote entry
+                # point, which reuses the stored distance/hours and forwards the
+                # persisted `is_city_to_city` marker -- so an amended intercity
+                # trip keeps its intercity rate card instead of silently dropping
+                # to the normal distance bands. The fare the client sees stays
+                # authoritative.
                 try:
-                    recomputed = quote(
-                        booking.vehicle,
-                        pickup_at=booking.pickup_at,
-                        distance_miles=booking.distance_miles
-                        if booking.trip_type == Booking.TripType.TRANSFER else None,
-                        hours=booking.hours
-                        if booking.trip_type == Booking.TripType.HOURLY else None,
-                        meet_and_greet=booking.meet_and_greet,
-                    )
+                    recomputed = booking.reprice(pickup_at=booking.pickup_at)
                 except QuoteError as exc:
                     raise ValidationError({
                         "detail": "We couldn't re-price that time. Please contact us."

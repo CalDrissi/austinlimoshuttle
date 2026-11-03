@@ -149,6 +149,35 @@ def _city_to_city_bands(
     return bands if bands is not None else list(vehicle.bands.all())
 
 
+def priced_city_to_city(
+    vehicle: Vehicle,
+    *,
+    distance_miles: Decimal | None,
+    city_to_city: bool,
+    intercity_bands: list | None = None,
+) -> bool:
+    """
+    Whether a journey is ACTUALLY priced on the vehicle's intercity card.
+
+    Booking-creation paths persist this on `Booking.is_city_to_city`, so the
+    stored marker reflects the rate card the fare was charged on -- not the mode
+    the customer or dispatcher picked. A city-to-city request below the vehicle's
+    minimum distance (or for a vehicle that offers no intercity pricing) SILENTLY
+    falls back to the normal transfer card in `quote()`; this returns False for
+    exactly those cases, so a later `Booking.reprice()` reproduces the same fare
+    instead of jumping to the intercity rate. The condition mirrors the rate-card
+    selection in `_city_to_city_bands`.
+    """
+    if not city_to_city or distance_miles is None:
+        return False
+    ic_bands = (
+        intercity_bands if intercity_bands is not None
+        else list(vehicle.intercity_bands.all())
+    )
+    min_miles = vehicle.city_to_city_min_miles
+    return bool(ic_bands) and min_miles is not None and Decimal(distance_miles) >= min_miles
+
+
 def quote(
     vehicle: Vehicle,
     *,

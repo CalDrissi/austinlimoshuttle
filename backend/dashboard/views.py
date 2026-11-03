@@ -46,7 +46,7 @@ from content.models import SiteSettings
 from fleet.models import Vehicle
 from pricing.distance import DistanceLookupError
 from pricing.distance import lookup as measure_journey
-from pricing.engine import QuoteError, quote
+from pricing.engine import QuoteError, priced_city_to_city, quote
 from enquiries.models import ContactMessage
 from notifications import mailer, sms
 from notifications.models import EmailLog, EmailSettings, SmsLog, SmsSettings
@@ -607,6 +607,16 @@ def booking_create(request):
                         )
                         booking.distance_miles = distance
                         booking.hours = cd.get("hours") if mode == "hourly" else None
+                        # Persist whether the intercity card ACTUALLY priced this
+                        # trip (mirrors the engine): a city-to-city trip below the
+                        # vehicle's minimum distance was charged on the normal
+                        # transfer card, so the marker stays False and a later
+                        # reprice() reproduces the same fare.
+                        booking.is_city_to_city = priced_city_to_city(
+                            cd["vehicle"],
+                            distance_miles=distance,
+                            city_to_city=(mode == "city"),
+                        )
                         booking.currency = priced.currency
                         if override is not None:
                             booking.subtotal = override

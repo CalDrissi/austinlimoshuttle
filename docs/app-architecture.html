@@ -871,6 +871,28 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Persist <code>is_city_to_city</code> at booking creation (api + dashboard)</span><span class="tbl">backend · api · dashboard</span></div>
+    <table>
+      <tr><td>The <code>Booking.is_city_to_city</code> field existed (bookings/0006) and <code>reprice()</code> forwarded it,
+      but neither create path <b>set</b> it, so every real booking stored <code>False</code>. The fare was right at
+      creation, yet a later amend/<code>reprice()</code> of a city-to-city trip silently dropped to the normal transfer
+      rate card. Both create paths now stamp the marker via a new engine predicate
+      <code>pricing.engine.priced_city_to_city(vehicle, distance_miles=…, city_to_city=…)</code> that mirrors
+      <code>_city_to_city_bands</code>: it is <code>True</code> <b>only when the intercity card actually priced the trip</b>
+      (vehicle offers intercity pricing and <code>distance &gt;= city_to_city_min_miles</code>), not when the user merely
+      picked "city". The <b>silent fallback</b> — a city-to-city trip below the minimum distance, charged on the normal
+      card — persists <code>False</code>, so <code>reprice()</code> reproduces the creation fare exactly.
+      <code>api/views.py create_booking</code> reads the flag from the signed quote token;
+      <code>dashboard/views.py booking_create</code> reads it from the manual trip mode + measured distance. The API
+      <code>amend</code> branch now re-prices through <code>booking.reprice()</code> (was a bare <code>quote()</code> that
+      ignored the marker), so an amended intercity trip keeps its card. <b>Verified:</b> added view-level tests
+      (true c2c → True, normal transfer → False, below-min c2c fallback → False; each confirms
+      <code>reprice().total == booking.total</code>); api + dashboard + bookings = 219 passed. <b>Not merged / not
+      deployed.</b></td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-03 · <code>CityRoute</code> / <code>CityRoutePrice</code> models deleted (city-to-city rework, Phase 3)</span><span class="tbl">pricing</span></div>
     <table>
       <tr><td>With every consumer gone — the engine, the <code>GET /api/city-routes/</code> endpoint, the dashboard
