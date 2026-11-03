@@ -13,6 +13,58 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-03 — City-to-city intercity pricing (per-vehicle intercity rate card + min distance)
+- Owner: @fleet
+- Affects: @pricing-engine (quote rule), @pricing-rates (owns CityRoute/CityRoutePrice — now superseded
+  by free-form intercity), @dashboard (admin editing of the new card + field), @api (exposing both cards)
+- Change: additive. Nothing existing changed — `DistanceBand` (`related_name="bands"`), `CityRoute`,
+  `CityRoutePrice` and the pricing engine are all untouched.
+
+### What's new
+
+**`fleet.models.IntercityBand`** — the city-to-city (free-form origin→destination) per-mile rate card.
+A second, independent band card that **mirrors `DistanceBand` exactly** (both now inherit the shared
+abstract `fleet.models.RateBand`, so band arithmetic/validation is identical and stays in sync).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `vehicle` | FK → `fleet.Vehicle`, `on_delete=CASCADE`, **`related_name="intercity_bands"`** | Fetch a vehicle's intercity card: `vehicle.intercity_bands.all()` (ordered by `from_miles`). |
+| `from_miles` | `DecimalField(max_digits=6, decimal_places=2, default=0)` | Lower bound, **inclusive**. |
+| `to_miles` | `DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)` | Upper bound, **exclusive**. `null` = final unbounded band. |
+| `rate_per_mile` | `DecimalField(max_digits=8, decimal_places=2)` | Per-mile rate inside this band. |
+
+- **Cumulative bands**, same semantics as `DistanceBand`: `band.miles_within(total)` returns miles of
+  `total` inside that band; `band.contains(miles)` is lower-inclusive/upper-exclusive; `band.clean()`
+  rejects `to_miles <= from_miles`. Unique constraint `unique_intercity_band_start_per_vehicle` on
+  `(vehicle, from_miles)` — **separate** from DistanceBand's constraint, so the same `from_miles` may
+  exist on both cards for one vehicle.
+
+**`fleet.Vehicle.city_to_city_min_miles`** — `DecimalField(max_digits=6, decimal_places=2, null=True,
+blank=True, MinValueValidator(0))`. Per-vehicle minimum trip distance (miles) that unlocks intercity pricing:
+- **`NULL` (default) → intercity NOT offered** for this vehicle: always price with the normal `bands`.
+- **`0` → no minimum**: intercity applies at any distance (when `intercity_bands` exist).
+- **`> 0` → threshold**: intercity applies only at trip distance **≥** this value.
+
+### Intended quote rule (for @pricing-engine to implement — NOT built here)
+For a free-form city-to-city trip of `distance` miles on a vehicle `v`:
+```
+if v.city_to_city_min_miles is not None
+   and v.intercity_bands.exists()
+   and distance >= v.city_to_city_min_miles:
+       price using v.intercity_bands        # INTERCITY card
+else:
+       price using v.bands                  # NORMAL card (existing behaviour)
+```
+i.e. `distance >= min` → intercity bands; `distance < min` (or not offered / no intercity bands) → normal
+`bands`. The band-charging math is the existing cumulative algorithm applied to whichever card is chosen.
+The engine itself is unchanged in this task; this is the interface it should build against.
+
+- Migration: `fleet/migrations/0002_vehicle_city_to_city_min_miles_intercityband.py` (additive — adds the
+  field + creates the table; applies cleanly; no data migration needed). Dependents: build new behaviour
+  against the above; existing `bands`-only vehicles keep today's behaviour because the field defaults to NULL.
+
+---
+
 ## 2026-10-23 — DriverTripEvent (driver trip-status events)
 - Owner: @bookings-core
 - Affects: @driver-portal (creates events), @notifications (listens to the signal),
