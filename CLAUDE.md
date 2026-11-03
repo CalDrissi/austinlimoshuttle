@@ -31,6 +31,9 @@ rebuilds it (`graphify update .` + restart `docker-compose.graphify.yml`) before
 - Each task runs in its **own git worktree + branch** (`agent/<domain>/<short-task>`), created
   from `origin/main`. Never commit directly to `main`.
 - Rebase `main` into your branch before you start a task and before you hand off.
+- **Merge foundations sooner.** Prefer merging a verified foundation/independent branch to `main`
+  promptly (via the gate) rather than stacking many branches off each other. Deep branch stacks
+  make integration slow and conflict-prone — keep `main` the common base.
 
 ## The merge gate (autonomous on green)
 A branch merges to `main` **only** when BOTH verifiers pass:
@@ -44,6 +47,19 @@ A branch merges to `main` **only** when BOTH verifiers pass:
 
 **No fast-pathing.** A change reaches `main` ONLY after BOTH verifiers pass — never merge on
 partial/implied verification.
+
+### Tiered gate (scale to risk)
+The gate **scales to the risk of the change** — don't re-run the full isolated suite on trivial
+edits. Classify each change, then run the matching gate:
+- **LOW-RISK** (CSS / templates / copy / docs / frontend-only, no migrations): **light gate** —
+  `npm run build` (frontend) or an import/lint check (backend), plus `/code-review`. Skip the full
+  isolated backend rebuild and prod-parity.
+- **HIGH-RISK** (models, migrations, pricing, auth, payments, settings/middleware, deps): **FULL
+  gate** — full backend `pytest` + frontend build + `/code-review` + **prod-parity** (prod image +
+  `collectstatic` + boot). Both verifiers required.
+
+Use the **fast cached test runner** (`ops/fast-test.sh`) for backend tests, not a from-scratch
+rebuild.
 
 On both-green, **repo-manager** merges, then **rebuilds the graph** (`graphify --update` +
 `docker compose -f docker-compose.graphify.yml restart`) and **re-runs the suite on `main`**;
