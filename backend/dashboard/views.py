@@ -14,12 +14,14 @@ import json
 import logging
 from collections import defaultdict
 from datetime import date, timedelta
+from functools import wraps
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import REDIRECT_FIELD_NAME, get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -96,12 +98,36 @@ def admin_login_redirect(request):
     return redirect(f"{reverse('dashboard:login')}?{urlencode({REDIRECT_FIELD_NAME: target})}")
 
 
+DASHBOARD_PERMISSION = "bookings.view_booking"
+
+NON_STAFF_MESSAGE = (
+    "Please sign in with a staff account to access the back office."
+)
+
+
 def staff_required(view):
-    """Dashboard access requires a staff account, not merely a login."""
-    return login_required(
-        permission_required("bookings.view_booking", raise_exception=True)(view),
-        login_url="dashboard:login",
-    )
+    """
+    Dashboard access requires a staff account, not merely a login.
+
+    Anonymous visitors are sent to the sign-in page. A logged-in account that
+    lacks the staff permission is sent there too -- with a message -- rather
+    than shown a bare 403: the back office stays invisible to non-staff (the
+    view never runs, so no data leaks), they are just redirected to a door that
+    explains itself instead of a dead end. The ?next= is preserved so an
+    account that then signs in as staff lands where it meant to go.
+    """
+
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        user = request.user
+        if not user.is_authenticated:
+            return redirect_to_login(request.get_full_path(), "dashboard:login")
+        if not user.has_perm(DASHBOARD_PERMISSION):
+            messages.info(request, NON_STAFF_MESSAGE)
+            return redirect_to_login(request.get_full_path(), "dashboard:login")
+        return view(request, *args, **kwargs)
+
+    return wrapped
 
 
 @staff_required

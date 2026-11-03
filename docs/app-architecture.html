@@ -876,6 +876,28 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Back-office gate: authenticated non-staff gets a friendly redirect, not a bare 403</span><span class="tbl">backend</span></div>
+    <table>
+      <tr><td><b>Problem:</b> a <i>logged-in</i> account without the staff permission that hit a
+      <code>@staff_required</code> dashboard view (e.g. <code>/dashboard/</code>) got a hard
+      <code>403 PermissionDenied</code> — the old <code>staff_required</code> wrapped
+      <code>permission_required("bookings.view_booking", raise_exception=True)</code>, which raises for any
+      authenticated-but-unauthorised user. A bare 403 is a dead end for a customer who simply used the wrong login.
+      <b>Fix:</b> <code>dashboard/views.py staff_required</code> is now an explicit decorator — anonymous visitors
+      still redirect to the staff sign-in (<code>302 → dashboard:login</code> with <code>?next=</code>), and an
+      authenticated non-staff account is <b>also</b> redirected there with a flash message
+      (<i>"Please sign in with a staff account to access the back office."</i>) instead of a 403. <b>Security is
+      unchanged:</b> the guarded view never runs for a non-staff user, so no dashboard data leaks — they are only
+      shown a door that explains itself rather than a dead end. Per-action endpoints that layer
+      <code>@login_required</code> + <code>@permission_required(raise_exception=True)</code> (booking create/edit,
+      settings, refunds) are out of scope and still 403 an authenticated user lacking that specific permission.
+      <b>Verified:</b> <code>dashboard/tests/test_dashboard.py</code> green (102 passed) incl. a new test —
+      authenticated non-staff <code>GET /dashboard/{home,dispatch,bookings}</code> → <code>302</code> to login with
+      <code>next=</code>, anonymous → <code>302</code> login, staff → <code>200</code>.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
     <table>
       <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does

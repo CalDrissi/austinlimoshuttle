@@ -85,7 +85,27 @@ class TestAccessControl:
         """Content editors have no business seeing customer journeys."""
         staff_in(EDITOR, roles)
         client.login(username="editor@example.com", password="DashLocal!2026")
-        assert client.get(reverse("dashboard:bookings")).status_code == 403
+        response = client.get(reverse("dashboard:bookings"))
+        # No booking data leaks: an account without the view permission is
+        # bounced to the gate, not served the screen (and not shown a bare 403).
+        assert response.status_code == 302
+        assert "/dashboard/login/" in response["Location"]
+
+    @pytest.mark.parametrize(
+        "url_name", ["dashboard:home", "dashboard:dispatch", "dashboard:bookings"],
+    )
+    def test_authenticated_non_staff_is_redirected_not_403(self, client, roles, url_name):
+        """
+        A logged-in non-staff account gets a friendly redirect to the staff
+        sign-in page (302), never a bare 403: the back office stays invisible,
+        but the door explains itself.
+        """
+        User.objects.create_user(email="cust@example.com", password="DashLocal!2026")
+        client.login(username="cust@example.com", password="DashLocal!2026")
+        response = client.get(reverse(url_name))
+        assert response.status_code == 302
+        assert "/dashboard/login/" in response["Location"]
+        assert f"next={reverse(url_name)}" in response["Location"]
 
 
 @pytest.mark.django_db
@@ -1040,7 +1060,11 @@ class TestTripEvents:
         """An editor has no bookings.view_booking, so no trip history either."""
         staff_in(EDITOR, roles)
         client.login(username="editor@example.com", password="DashLocal!2026")
-        assert client.get(reverse("dashboard:trip_events")).status_code == 403
+        # Bounced to the staff gate rather than shown a bare 403; the feed view
+        # never runs, so no trip data leaks to an unauthorised account.
+        response = client.get(reverse("dashboard:trip_events"))
+        assert response.status_code == 302
+        assert "/dashboard/login/" in response["Location"]
 
     def test_feed_allows_dispatcher(self, client, roles):
         self._as_dispatcher(client, roles)
