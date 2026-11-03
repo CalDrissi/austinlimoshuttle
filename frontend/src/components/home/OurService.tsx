@@ -34,7 +34,7 @@ export default function OurService() {
           <div className="col-lg-6 col-sm-5 col-5 text-end">
             <Link
               className="text-16-medium color-primary d-flex align-items-center justify-content-end wow fadeInDown"
-              href="/services"
+              href="/fleet"
             >
               More Services
               <svg
@@ -80,7 +80,7 @@ export default function OurService() {
                     <h3 className="cardTitle text-20-medium color-white mb-10">{service.title}</h3>
                     <div className="box-inner-info">
                       <p className="cardDesc text-14 color-white mb-30">{service.desc}</p>
-                      <Link className="cardLink btn btn-arrow-up" href="/services">
+                      <Link className="cardLink btn btn-arrow-up" href="/fleet">
                         <svg
                           className="icon-16"
                           fill="none"

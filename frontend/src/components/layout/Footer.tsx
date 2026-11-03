@@ -83,11 +83,7 @@ export default function Footer() {
             <div className="col-lg-3 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Company</h5>
               <ul className="menu-footer">
-                <li><Link href="/about">About us</Link></li>
-                <li><Link href="/services">Services</Link></li>
                 <li><Link href="/fleet">Our fleet</Link></li>
-                <li><Link href="/contact">Contact</Link></li>
-                <li><Link href="/terms">Terms &amp; privacy</Link></li>
               </ul>
             </div>
 
@@ -104,7 +100,7 @@ export default function Footer() {
               <h5 className="text-18-medium color-white mb-20">Where We Drive</h5>
               <ul className="menu-footer">
                 {SERVICE_AREAS.map((area) => (
-                  <li key={area}><Link href="/services">{area}</Link></li>
+                  <li key={area}><Link href="/fleet">{area}</Link></li>
                 ))}
               </ul>
             </div>
@@ -135,8 +131,7 @@ export default function Footer() {
               </div>
               <div className="col-md-6 text-center text-md-end">
                 <ul className="menu-bottom justify-content-center justify-content-md-end">
-                  <li><Link href="/terms">Terms</Link></li>
-                  <li><Link href="/contact">Contact</Link></li>
+                  <li><Link href="/fleet">Our fleet</Link></li>
                 </ul>
               </div>
             </div>

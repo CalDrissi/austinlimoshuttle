@@ -14,30 +14,11 @@ interface MenuItem {
   children?: { label: string; href: string }[];
 }
 
+// Trimmed to the pages the storefront currently ships: Home (the logo) and the
+// fleet. The former services / for-business / help entries pointed at marketing
+// pages that have been removed, so they are gone rather than left as 404s.
 const MENU: MenuItem[] = [
-  {
-    label: "Our services",
-    href: "/services",
-    children: [
-      { label: "Airport transfers", href: "/services" },
-      { label: "Hourly hire", href: "/services" },
-      { label: "City-to-city", href: "/services" },
-      { label: "Chauffeur service", href: "/services" },
-      { label: "Limousine service", href: "/services" },
-    ],
-  },
-  {
-    label: "For business",
-    href: "#",
-    children: [
-      { label: "Overview", href: "/about" },
-      { label: "Corporations", href: "#" },
-      { label: "Travel agencies", href: "#" },
-      { label: "Strategic partnerships", href: "#" },
-    ],
-  },
-  { label: "For chauffeurs", href: "#" },
-  { label: "Help", href: "/contact" },
+  { label: "Our fleet", href: "/fleet" },
 ];
 
 export default function Header() {
