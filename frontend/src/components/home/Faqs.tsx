@@ -3,7 +3,7 @@ const FAQ_BODY =
 
 export default function Faqs() {
   return (
-    <section className="section pt-80 mb-30 bg-faqs">
+    <section className="section pt-80 mb-30">
       <div className="container-sub">
         <div className="box-faqs">
           <div className="text-center">
