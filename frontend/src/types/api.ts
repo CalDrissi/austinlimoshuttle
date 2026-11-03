@@ -68,13 +68,13 @@ export interface QuoteRequest {
   /** Hourly hire only. */
   hours?: string;
   meet_and_greet?: boolean;
-  /** Fixed city-to-city: addresses are cities and the flat route price applies. */
+  /**
+   * Free-form city-to-city: a point-to-point trip (needs `dropoff_address`) that
+   * asks the engine to prefer each vehicle's intercity rate card. The server
+   * measures the distance from the two addresses and silently falls back to the
+   * normal transfer card when the trip is below a vehicle's minimum distance.
+   */
   city_to_city?: boolean;
-}
-
-export interface CityRouteOptions {
-  cities: string[];
-  routes: { origin: string; destination: string; bidirectional: boolean }[];
 }
 
 export type QuoteLineKind =

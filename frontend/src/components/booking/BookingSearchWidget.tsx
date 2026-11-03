@@ -2,11 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import DayPicker from "@/components/ui/DayPicker";
 import TimePicker from "@/components/ui/TimePicker";
-import { catalogService } from "@/lib/api/catalog.service";
 import { useBookingStore } from "@/lib/booking/store";
 import {
   fetchPlaceSuggestions,
@@ -136,32 +134,6 @@ const TABS: [TripType, string][] = [
 
 const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-/** A city picker backed by the back-office routes. */
-function CityField({ label, value, onChange, cities, placeholder }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  cities: string[];
-  placeholder: string;
-}) {
-  return (
-    <div className="search-inputs">
-      <label>{label}</label>
-      <select
-        className="search-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ border: "none", background: "transparent", width: "100%", cursor: "pointer" }}
-      >
-        <option value="">{placeholder}</option>
-        {cities.map((c) => (
-          <option key={c} value={c}>{c}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 export default function BookingSearchWidget() {
   const router = useRouter();
   const setSearch = useBookingStore((s) => s.setSearch);
@@ -175,58 +147,34 @@ export default function BookingSearchWidget() {
   const [meetGreet, setMeetGreet] = useState(false);
   const [error, setError] = useState("");
 
-  // Cities for the City-to-City tab. Loaded up front (cheap, cached) so the tab
-  // only appears once the back office has at least one route to offer.
-  const { data: cityData } = useQuery({
-    queryKey: ["city-routes"],
-    queryFn: () => catalogService.cityRoutes(),
-    staleTime: 5 * 60 * 1000,
-  });
-  const cities = cityData?.cities ?? [];
-  const tabs = cities.length ? TABS : TABS.filter(([v]) => v !== "city");
+  // City-to-city is always selectable: it is now a free-form origin→destination
+  // trip (pickup + drop-off addresses), priced server-side on the measured
+  // distance against each vehicle's intercity rate card.
+  const tabs = TABS;
 
-  // From/To hold addresses for a transfer but city names for city-to-city;
-  // clear them when crossing that boundary so a stale value can't leak in.
   const changeTab = (value: TripType) => {
     setError("");
-    if ((value === "city") !== (tripType === "city")) { setFrom(""); setTo(""); }
     setTripType(value);
   };
 
   const handleSearch = () => {
-    if (tripType === "city") {
-      if (!from || !to) {
-        setError("Choose both a pickup and a drop-off city.");
-        return;
-      }
-      if (from === to) {
-        setError("Pickup and drop-off cities must be different.");
-        return;
-      }
-      if (!date || !time) {
-        setError("Please fill in date and time.");
-        return;
-      }
-      setSearch({
-        tripType: "city",
-        pickupAddress: from, dropoffAddress: to,
-        date, time, meetGreet: false,
-      });
-      router.push("/booking/vehicle");
-      return;
-    }
-
     if (!from.trim() || !date || !time) {
       setError("Please fill in date, time and pickup.");
       return;
     }
-    if (tripType === "transfer") {
+    // A transfer and a city-to-city trip both need a drop-off address; only an
+    // hourly hire omits it.
+    if (tripType === "transfer" || tripType === "city") {
       if (!to.trim()) {
-        setError("Please enter a drop-off address, or switch to “By the hour”.");
+        setError(
+          tripType === "city"
+            ? "Please enter a drop-off address for your city-to-city trip."
+            : "Please enter a drop-off address, or switch to “By the hour”.",
+        );
         return;
       }
       setSearch({
-        tripType: "transfer",
+        tripType,
         pickupAddress: from.trim(), dropoffAddress: to.trim(),
         date, time, meetGreet,
       });
@@ -281,23 +229,13 @@ export default function BookingSearchWidget() {
 
         <div className="search-item search-from">
           <div className="search-icon"><span className="item-icon icon-from" /></div>
-          {tripType === "city" ? (
-            <CityField label="From" value={from} onChange={setFrom} cities={cities} placeholder="Pickup city" />
-          ) : (
-            <AddressField label="From" value={from} onChange={setFrom} placeholder="Pickup address" />
-          )}
+          <AddressField label="From" value={from} onChange={setFrom} placeholder="Pickup address" />
         </div>
 
-        {tripType === "transfer" && (
+        {(tripType === "transfer" || tripType === "city") && (
           <div className="search-item search-to">
             <div className="search-icon"><span className="item-icon icon-to" /></div>
             <AddressField label="To" value={to} onChange={setTo} placeholder="Drop-off address" />
-          </div>
-        )}
-        {tripType === "city" && (
-          <div className="search-item search-to">
-            <div className="search-icon"><span className="item-icon icon-to" /></div>
-            <CityField label="To" value={to} onChange={setTo} cities={cities} placeholder="Drop-off city" />
           </div>
         )}
         {tripType === "hourly" && (
@@ -319,8 +257,9 @@ export default function BookingSearchWidget() {
           </div>
         )}
 
-        {/* Meet & Greet doesn't apply to the flat city-to-city fare. */}
-        {tripType !== "city" && (
+        {/* Meet & Greet applies to every point-to-point trip (transfer or
+            city-to-city); only an hourly hire has no fixed drop-off to meet at. */}
+        {tripType !== "hourly" && (
           <div className="search-item search-meet">
             <label className="mm-check">
               <input type="checkbox" checked={meetGreet} onChange={(e) => setMeetGreet(e.target.checked)} />
