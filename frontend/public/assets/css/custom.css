@@ -126,8 +126,7 @@ img {
    2-line H2 drops into the middle of the hero and overlaps the card
    (~144px overlap at 768, ~68px at 375). Fix in the marketing lane: top-anchor
    the title into the hero's top band and shrink it per breakpoint so the H2
-   sits fully ABOVE the card at 768 / 430 / 375px. Desktop (>=1200px) keeps the
-   template's centred 52px headline untouched. These rules out-specify the
+   sits fully ABOVE the card at 768 / 430 / 375px. Desktop uses a shared headline/dock flow below. These rules out-specify the
    template (.banner-home1 .box-banner-info[.heading-52-medium]) and custom.css
    loads after luxride.css, so they win. */
 @media (max-width: 1199.98px) {
@@ -480,3 +479,49 @@ img {
     bottom: auto; left: auto; right: auto;
   }
 }
+
+/* Keep desktop content in one flow: wrapping headlines reserve their full
+   height before the tabs, rather than colliding with a bottom-anchored dock. */
+@media (min-width: 1200px) {
+  .banner-home1 {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 40px;
+    min-height: clamp(620px, calc(100vh - 66px), 880px);
+    padding: 80px 24px 104px;
+  }
+  .banner-home1 > .box-swiper { position: absolute; inset: 0; }
+  .banner-home1 > .box-swiper,
+  .banner-home1 .swiper-banner-1,
+  .banner-home1 .box-cover-image { height: 100%; min-height: 0; max-height: none; }
+  .banner-home1 .box-banner-info {
+    position: relative;
+    top: auto;
+    flex: none;
+    margin: 0 auto;
+  }
+  .banner-home1 .box-banner-info .heading-52-medium {
+    line-height: 1.12;
+    margin-bottom: 0;
+  }
+  .banner-home1 .box-banner-info .text-16 { margin-bottom: 12px; }
+  .banner-home1 > .mm-search-dock {
+    position: relative;
+    bottom: auto;
+    flex: none;
+    width: 100%;
+    margin: 0 auto;
+  }
+}
+
+/* Stretch carousel slides and grid columns to their row's tallest card. */
+.bg-our-fleet .swiper-wrapper { align-items: stretch; }
+.bg-our-fleet .swiper-slide { display: flex; height: auto; }
+.fleet-grid > [class*="col-"] { display: flex; }
+.bg-our-fleet .cardFleet,
+.fleet-grid .cardFleet { display: flex; flex-direction: column; }
+.bg-our-fleet .cardFleet .cardImage,
+.fleet-grid .cardFleet .cardImage { margin-top: auto; }
+.bg-our-fleet .cardFleet .cardImage img,
+.fleet-grid .cardFleet .cardImage img { aspect-ratio: 16 / 9; object-fit: contain; }

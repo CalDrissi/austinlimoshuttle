@@ -85,13 +85,13 @@ export default function OurFleet() {
                     <div className="passenger">
                       <span className="icon-circle icon-passenger"></span>
                       <span className="text-14">
-                        Passengers<span>{v.passenger_capacity}</span>
+                        Passengers <span>{v.passenger_capacity}</span>
                       </span>
                     </div>
                     <div className="luggage">
                       <span className="icon-circle icon-luggage"></span>
                       <span className="text-14">
-                        Luggage<span>{v.luggage_capacity}</span>
+                        Luggage <span>{v.luggage_capacity}</span>
                       </span>
                     </div>
                   </div>
