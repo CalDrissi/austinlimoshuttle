@@ -876,6 +876,27 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Branded 403 / 404 / 500 error pages</span><span class="tbl">backend</span></div>
+    <table>
+      <tr><td><b>Problem:</b> the server-rendered surfaces (admin, dashboard, driver) fell back to Django's stark
+      default error pages — unbranded grey text that reads as a different product. <b>Fix:</b> added on-brand templates
+      <code>backend/templates/403.html</code>, <code>404.html</code> and <code>500.html</code>, all extending a shared
+      <code>error_base.html</code> (navy→green gradient + brand header, a friendly per-code message — 403 "You don't have
+      access to this page", 404 "Page not found", 500 "Something went wrong" — and buttons to the dashboard and home).
+      Django's default handlers in <code>django.views.defaults</code> pick these up automatically from the project
+      template dir when <code>DEBUG=False</code>, so <b>no handler wiring in the root URLconf was needed</b> and no
+      security/DEBUG setting changed. The pages are <b>deliberately self-contained and CSP-safe</b>: inline styles only
+      (the CSP allows <code>style-src 'unsafe-inline'</code> but no inline scripts), no <code>{% templatetag openblock %} static {% templatetag closeblock %}</code>
+      or <code>{% templatetag openblock %} url {% templatetag closeblock %}</code> and no context variables — because the
+      500 handler renders with an empty context and no request. <b>Note:</b> under <code>DEBUG=true</code> (local dev)
+      Django shows its technical debug page instead, so these only appear under prod settings (testmode).
+      <b>Verified:</b> <code>config/test_error_pages.py</code> (7 passed) renders each of 403/404/500 — and a real
+      missing-URL request through the test client — under <code>DEBUG=False</code> and asserts the branded template, not
+      the default, is served.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
     <table>
       <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does
