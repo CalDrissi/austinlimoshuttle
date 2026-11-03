@@ -86,9 +86,15 @@ class TestPublicContent:
         assert client.get(reverse("api:page_detail", args=["draft"])).status_code == 404
 
     def test_vehicle_list_hides_inactive(self, client, vehicle):
-        Vehicle.objects.create(name="Retired", slug="retired", is_active=False)
+        active = Vehicle.objects.create(
+            name="Shown Shuttle", slug="shown-shuttle", is_active=True,
+        )
+        inactive = Vehicle.objects.create(
+            name="Retired", slug="retired", is_active=False,
+        )
         names = [v["name"] for v in client.get(reverse("api:vehicles")).json()]
-        assert names == ["Business Class"]
+        assert active.name in names
+        assert inactive.name not in names
 
     def test_vehicle_list_is_public(self, client, vehicle):
         assert client.get(reverse("api:vehicles")).status_code == 200
