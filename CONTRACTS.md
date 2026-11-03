@@ -13,6 +13,37 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-03 — City-to-city quoting is free-form + distance-based (quote() call shape)
+- Owner: @pricing-engine
+- Affects: @api (api/views.py, api/quotes.py), @dashboard (dashboard/views.py) — every caller that
+  passes `route=` or prices via `CityRoute.find_pair`/`CityRoute.match`; @pricing-rates (may now
+  delete CityRoute/CityRoutePrice in Phase 3 — the engine no longer references them)
+- Change: `pricing.engine.quote()` / `quote_all()` **no longer accept `route=<CityRoute>`**. The old
+  flat, all-in route-price path (no surcharge/tax) is removed. City-to-city is now a free-form
+  origin→destination trip priced on distance, implementing @fleet's Phase-1 rule below. New signatures:
+  - `quote(vehicle, *, pickup_at, distance_miles=None, hours=None, meet_and_greet=False,
+    city_to_city=False, settings=None, surcharges=None, blackouts=None, bands=None,
+    intercity_bands=None)` — `route` **removed**; `city_to_city: bool` and `intercity_bands: list|None`
+    (optional preload, parallels `bands`) **added**.
+  - `quote_all(pickup_at, *, distance_miles=None, hours=None, meet_and_greet=False,
+    city_to_city=False)` — `route` **removed**; `city_to_city: bool` **added**.
+  With `city_to_city=True` the engine selects the intercity card vs normal `bands` internally per
+  @fleet's rule (intercity when `city_to_city_min_miles` is not NULL, the vehicle has
+  `intercity_bands`, and `distance >= min`; `min==0` = any distance; otherwise **silent** fallback to
+  normal `bands` — no error). Surcharge, meet&greet, minimum fare and tax then apply exactly as for a
+  transfer. The returned `Quote` shape is unchanged (standard BAND/SURCHARGE/MEET_GREET/MINIMUM/TAX lines).
+- Migration (what @api / @dashboard must do):
+  - Stop passing `route=` to `quote`/`quote_all`. For a city-to-city request, resolve the free-form
+    pickup/drop-off addresses to a distance via `distance.lookup()` (the same path used for a transfer),
+    then call `quote_all(pickup_at, distance_miles=<measured>, city_to_city=True)`.
+  - Drop the `CityRoute.find_pair()` / `CityRoute.match()` / `route.price_for()` pricing lookups — the
+    engine no longer consumes a route object. City/route selection UI backed by `CityRoute` needs
+    rethinking (free-form addresses now); coordinate @api ↔ @frontend.
+  - `bookings.Booking.city_route` FK and any admin/forms referencing CityRoute/CityRoutePrice still
+    exist until their owning lanes remove them; only the **engine's** use is gone.
+
+---
+
 ## 2026-11-03 — City-to-city intercity pricing (per-vehicle intercity rate card + min distance)
 - Owner: @fleet
 - Affects: @pricing-engine (quote rule), @pricing-rates (owns CityRoute/CityRoutePrice — now superseded
