@@ -38,6 +38,8 @@ urlpatterns = [
     path("auth/logout/", views.auth_logout, name="logout"),
     path("auth/register/", views.auth_register, name="register"),
     path("auth/password-reset/", views.auth_password_reset, name="password_reset"),
+    path("auth/send-code/", views.auth_send_code, name="send_code"),
+    path("auth/verify-code/", views.auth_verify_code, name="verify_code"),
     path("auth/me/", views.auth_me, name="me"),
 
     # Payments

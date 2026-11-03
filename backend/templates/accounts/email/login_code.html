@@ -1,0 +1,28 @@
+{% autoescape off %}<!doctype html>
+<html>
+<body style="margin:0;padding:24px;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#15181c">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #e2e7ec;border-radius:12px;padding:30px">
+    <div style="font-weight:700;color:#0f6b4f;margin-bottom:18px">Austin Limo Shuttle</div>
+
+    <p style="margin:0 0 14px">Hello{% if user.first_name %} {{ user.first_name }}{% endif %},</p>
+
+    <p style="margin:0 0 20px">
+      Use this code to sign in to Austin Limo Shuttle:
+    </p>
+    <p style="margin:0 0 20px;text-align:center">
+      <span style="display:inline-block;background:#f4f6f8;border:1px solid #e2e7ec;border-radius:8px;padding:14px 26px;font-size:30px;font-weight:700;letter-spacing:8px;color:#0f6b4f">{{ code }}</span>
+    </p>
+
+    <p style="margin:0 0 14px;color:#5b636d;font-size:14px">
+      It expires in {{ ttl_minutes }} minutes and can only be used once.
+      If you didn't ask to sign in, ignore this email &mdash; nothing will
+      happen without this code.
+    </p>
+
+    <p style="margin:22px 0 0;color:#5b636d;font-size:13px;border-top:1px solid #e2e7ec;padding-top:16px">
+      Austin Limo Shuttle · <a href="{{ protocol }}://{{ domain }}" style="color:#0f6b4f">{{ domain }}</a>
+    </p>
+  </div>
+</body>
+</html>
+{% endautoescape %}

@@ -216,6 +216,11 @@ REST_FRAMEWORK = {
         "user": "1000/day",
         "quote": "30/hour",
         "enquiry": "10/hour",
+        # Passwordless sign-in, keyed by IP. The per-address ceiling is a
+        # separate cache cooldown in api.views (a code request names an address
+        # DRF cannot see); these cap one IP's volume.
+        "login_code_send": "10/hour",
+        "login_code_verify": "20/hour",
     },
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",

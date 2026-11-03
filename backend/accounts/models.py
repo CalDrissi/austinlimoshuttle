@@ -14,6 +14,10 @@ Legacy findings that shaped this module:
     a recoverable form, and the importer never reads the legacy column.
 """
 
+import secrets
+from datetime import timedelta
+
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -204,3 +208,105 @@ class CorporateAccount(models.Model):
 
     def __str__(self):
         return self.company_name
+
+
+class LoginCodeManager(models.Manager):
+    """Issues and verifies one-time sign-in codes."""
+
+    CODE_TTL = timedelta(minutes=10)
+
+    def issue(self, email):
+        """
+        Create a fresh code for ``email`` and return ``(instance, raw_code)``.
+
+        Any still-live code for the address is superseded first, so a second
+        request does not leave two valid codes in flight. The six-digit value
+        is returned to the caller to email and is never persisted in the clear.
+        """
+        email = (email or "").strip().lower()
+        self.filter(email=email, used_at__isnull=True).update(
+            used_at=timezone.now(),
+        )
+        raw = f"{secrets.randbelow(1_000_000):06d}"
+        code = self.create(
+            email=email,
+            code_hash=make_password(raw),
+            expires_at=timezone.now() + self.CODE_TTL,
+        )
+        return code, raw
+
+    def verify(self, email, raw_code):
+        """
+        Return the matching :class:`LoginCode` for a correct guess, else None.
+
+        The newest outstanding code for the address is the only candidate; the
+        attempt is counted *before* the comparison so a flood of guesses burns
+        the budget whether or not any is right, and a correct guess is consumed
+        (``used_at`` stamped) so it cannot be replayed.
+        """
+        email = (email or "").strip().lower()
+        raw_code = (raw_code or "").strip()
+        code = (
+            self.filter(email=email, used_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if code is None or not code.is_usable():
+            return None
+
+        code.attempts = models.F("attempts") + 1
+        code.save(update_fields=["attempts"])
+        code.refresh_from_db(fields=["attempts"])
+
+        # check_password compares via the hasher, which is constant-time.
+        if not check_password(raw_code, code.code_hash):
+            return None
+
+        code.used_at = timezone.now()
+        code.save(update_fields=["used_at"])
+        return code
+
+
+class LoginCode(models.Model):
+    """
+    A one-time numeric code for passwordless storefront sign-in.
+
+    The code is never stored in the clear -- only a salted hash, so a database
+    read cannot reveal a live code and the comparison at verify time is
+    constant-time. A row is single-use (``used_at`` is stamped the moment it
+    verifies), expires after ten minutes, and counts verification attempts so
+    the 10^6 space cannot be brute-forced within a code's short life.
+    """
+
+    MAX_ATTEMPTS = 5
+
+    email = models.EmailField(db_index=True, help_text="Stored lowercase.")
+    code_hash = models.CharField(
+        max_length=255, help_text="Salted hash of the six-digit code.",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Stamped on a successful verify (or when superseded). "
+                  "A stamped code is spent.",
+    )
+    attempts = models.PositiveSmallIntegerField(
+        default=0, help_text="Failed/used verification attempts against this code.",
+    )
+
+    objects = LoginCodeManager()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["email", "-created_at"])]
+
+    def __str__(self):
+        return f"login code for {self.email}"
+
+    def is_usable(self) -> bool:
+        return (
+            self.used_at is None
+            and self.attempts < self.MAX_ATTEMPTS
+            and timezone.now() < self.expires_at
+        )
