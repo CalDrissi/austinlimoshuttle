@@ -46,7 +46,7 @@ from payments.models import SavedCard
 from pricing.distance import DistanceLookupError
 from pricing.distance import lookup as measure_journey
 from pricing.engine import QuoteError, quote, quote_all
-from pricing.models import BlackoutDate, CityRoute, TimeSurcharge
+from pricing.models import BlackoutDate, TimeSurcharge
 
 from . import quotes
 from .serializers import (
@@ -56,7 +56,6 @@ from .serializers import (
     BookingSerializer,
     BookingStatusSerializer,
     CancelBookingSerializer,
-    CityRouteOptionsSerializer,
     DetailSerializer,
     EnquirySerializer,
     LoginRequestSerializer,
@@ -277,23 +276,13 @@ def create_quote(request):
 
     journey = None
     distance_miles = None
-    route = None
+    city_to_city = data.get("city_to_city", False)
 
-    if data.get("city_to_city"):
-        # Explicit fixed-route request: the addresses are cities chosen from the
-        # storefront dropdown. Look the route up by its endpoints -- no billed
-        # Google distance lookup, and the flat price is all-in.
-        route = CityRoute.find_pair(data["pickup_address"], data["dropoff_address"])
-        if route is None:
-            return Response(
-                {"detail": "We don't have a fixed price for that city pair. "
-                           "Please pick another, or switch to Transfer."},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-    elif data.get("hours") is None:
-        # The distance is measured here, from the addresses. It is never accepted
-        # from the client, and there is no fallback if the lookup fails -- a
-        # fallback would simply be the vulnerability behind a retry.
+    if data.get("hours") is None:
+        # Both a transfer and a city-to-city trip are free-form origin->destination
+        # journeys measured server-side from the two addresses. The distance is
+        # never accepted from the client, and there is no fallback if the lookup
+        # fails -- a fallback would simply be the vulnerability behind a retry.
         try:
             journey = measure_journey(data["pickup_address"], data["dropoff_address"])
         except DistanceLookupError as exc:
@@ -301,27 +290,23 @@ def create_quote(request):
                 {"detail": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
         distance_miles = journey.distance_miles
-        # Fixed city-to-city: if the resolved pickup/drop-off cities match a
-        # route, its flat per-vehicle price replaces the per-mile fare (all-in).
-        route = CityRoute.match(journey.resolved_origin, journey.resolved_destination)
 
+    # With city_to_city the engine prices each vehicle on its intercity rate card
+    # when the vehicle offers intercity pricing and the trip is long enough,
+    # otherwise it silently falls back to the normal transfer card.
     results = quote_all(
         data["pickup_at"],
         distance_miles=distance_miles,
         hours=data.get("hours"),
         meet_and_greet=data["meet_and_greet"],
-        route=route,
+        city_to_city=city_to_city,
     )
 
     if not results:
-        # In city mode the route was found but no vehicle is priced on it yet.
-        detail = (
-            "We don't have a fixed price for that city pair. "
-            "Please pick another, or switch to Transfer."
-            if data.get("city_to_city")
-            else "No vehicle can be priced for that journey."
+        return Response(
+            {"detail": "No vehicle can be priced for that journey."},
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
-        return Response({"detail": detail}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     payload = []
     for result in results:
@@ -333,7 +318,7 @@ def create_quote(request):
             meet_and_greet=data["meet_and_greet"],
             pickup_address=data["pickup_address"],
             dropoff_address=data.get("dropoff_address", ""),
-            route_id=route.pk if route else None,
+            city_to_city=city_to_city,
         ))
         payload.append({
             "vehicle_id": result.vehicle_id,
@@ -358,32 +343,6 @@ def create_quote(request):
             "dropoff_address": journey.resolved_destination,
         } if journey else None,
         "quotes": payload,
-    })
-
-
-@extend_schema(
-    tags=["quotes"],
-    summary="City-to-city pickup/drop-off options",
-    description=(
-        "The cities offered in the storefront's City-to-City tab, taken from the "
-        "fixed routes defined in the back office. Both endpoints of every active "
-        "route are listed; whether a particular pair is priced is settled when a "
-        "quote is requested with `city_to_city=true`."
-    ),
-    responses={200: CityRouteOptionsSerializer},
-)
-@api_view(["GET"])
-@permission_classes([AllowAny])
-def city_routes(request):
-    """Cities and route pairs for the storefront City-to-City dropdowns."""
-    routes = list(CityRoute.objects.filter(is_active=True).order_by("origin", "destination"))
-    return Response({
-        "cities": CityRoute.cities(),
-        "routes": [
-            {"origin": r.origin.strip(), "destination": r.destination.strip(),
-             "bidirectional": r.bidirectional}
-            for r in routes
-        ],
     })
 
 
@@ -434,14 +393,6 @@ def create_booking(request):
     # token can be replayed with any counts, so enforce them here on the server.
     _enforce_capacity(vehicle, data["passenger_count"], data["luggage_count"])
 
-    # Stamp the route only if it's still active (mirrors what redeem() priced).
-    city_route_id = (
-        quote_request.route_id
-        if quote_request.route_id
-        and CityRoute.objects.filter(pk=quote_request.route_id, is_active=True).exists()
-        else None
-    )
-
     with transaction.atomic():
         booking = Booking.objects.create(
             customer=customer,
@@ -452,7 +403,6 @@ def create_booking(request):
                 else Booking.TripType.TRANSFER
             ),
             status=Booking.Status.PENDING,
-            city_route_id=city_route_id,
             pickup_address=quote_request.pickup_address,
             dropoff_address=quote_request.dropoff_address,
             pickup_at=quote_request.pickup_at,
@@ -684,8 +634,13 @@ def my_booking_detail(request, reference):
             if "pickup_at" in data and data["pickup_at"] != booking.pickup_at:
                 booking.pickup_at = data["pickup_at"]
                 changed.append("pickup_at")
-                # Re-price at the new time, reusing the stored distance/hours and
-                # any fixed route. The fare the client sees stays authoritative.
+                # Re-price at the new time, reusing the stored distance/hours. The
+                # fare the client sees stays authoritative. NOTE: a free-form
+                # city-to-city booking re-prices on the vehicle's NORMAL transfer
+                # card here -- the Booking row has no persisted city_to_city marker
+                # yet (see CONTRACTS, @bookings-core follow-up), so the intercity
+                # card cannot be reselected on an amend. A time-only amend of an
+                # intercity trip is rare and is the only case this affects.
                 try:
                     recomputed = quote(
                         booking.vehicle,
@@ -695,7 +650,6 @@ def my_booking_detail(request, reference):
                         hours=booking.hours
                         if booking.trip_type == Booking.TripType.HOURLY else None,
                         meet_and_greet=booking.meet_and_greet,
-                        route=booking.city_route,
                     )
                 except QuoteError as exc:
                     raise ValidationError({

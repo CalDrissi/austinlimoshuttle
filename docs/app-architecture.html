@@ -631,13 +631,8 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="codes"><span class="code ok">200</span></div></div></div>
 
   <h3>Quote &amp; booking</h3>
-  <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/city-routes/</span><span class="au">public</span></div>
-    <div class="ep-b"><p class="sm">Cities + route pairs for the storefront's City-to-City tab, from the active back-office routes. Both endpoints of every active route are listed.</p>
-      <div class="lab">Response 200 · CityRouteOptions</div>
-      <div class="fieldgrid"><span class="r">cities<span class="ty"> str[]</span></span><span class="r">routes<span class="ty"> {origin, destination, bidirectional}[]</span></span></div>
-      <div class="codes"><span class="code ok">200</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/quotes/</span><span class="au">public</span></div>
-    <div class="ep-b"><p class="sm">Price a journey across <b>every</b> vehicle. Returns a signed <code>quote_token</code> per vehicle (~30&nbsp;min TTL). The one call that decides money. Set <code>city_to_city=true</code> with two cities (from <code>/api/city-routes/</code>) for the flat intercity fare — no distance lookup.</p>
+    <div class="ep-b"><p class="sm">Price a journey across <b>every</b> vehicle. Returns a signed <code>quote_token</code> per vehicle (~30&nbsp;min TTL). The one call that decides money. Set <code>city_to_city=true</code> with two <b>free-form addresses</b> (pickup + drop-off) to prefer each vehicle's intercity rate card; the trip is measured server-side exactly like a transfer (distance lookup runs), and vehicles silently fall back to their normal card when intercity isn't offered or the trip is below the vehicle's minimum distance. (The old fixed-route <code>GET /api/city-routes/</code> options endpoint was removed.)</p>
       <div class="lab">Request · QuoteRequest</div>
       <div class="fieldgrid"><span class="r">pickup_address<span class="ty"> str</span></span><span>dropoff_address<span class="ty"> str</span></span><span class="r">pickup_at<span class="ty"> datetime</span></span><span>hours<span class="ty"> decimal</span></span><span>meet_and_greet<span class="ty"> bool</span></span><span>city_to_city<span class="ty"> bool</span></span></div>
       <div class="lab">Response 200 · QuoteResponse</div>
@@ -874,6 +869,27 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · City-to-City is now free-form &amp; distance-based (API); fixed-route endpoint removed</span><span class="tbl">backend · api</span></div>
+    <table>
+      <tr><td><b>The city-to-city quote no longer uses a fixed route.</b> A city-to-city request now carries
+      two <b>free-form addresses</b> (pickup + drop-off) plus <code>city_to_city:true</code>, just like a transfer.
+      <code>POST /api/quotes/</code> measures the distance server-side (billed Google lookup runs for city-to-city
+      too) and calls the rebuilt engine with <code>city_to_city=True, distance_miles=&lt;measured&gt;</code>; each vehicle
+      is priced on its <b>intercity rate card</b> when it offers intercity pricing and the trip meets the vehicle's
+      minimum distance, otherwise it <b>silently falls back</b> to the normal transfer card. The response
+      <code>journey</code> is now populated for city-to-city (previously null). The signed quote token carries a
+      <code>c2c</code> bool (was <code>rt</code>/route_id), so booking re-prices on the right card.
+      <b>Removed:</b> the public <code>GET /api/city-routes/</code> options endpoint and its
+      <code>CityRouteOptions</code> serializers; the API no longer references <code>CityRoute</code>/<code>CityRoutePrice</code>
+      (the models stay until Phase 3). New tests in <code>api/tests/test_city_to_city.py</code> (free-form intercity ≥min,
+      silent fallback &lt;min, token re-price, endpoint-gone); 60 api tests green. <b>Owner action:</b> the storefront
+      City-to-City tab must switch from city dropdowns to free-form address inputs (frontend task). A time-amend of an
+      intercity booking currently re-prices on the normal card — a persisted city-to-city marker on <code>Booking</code>
+      is a later-phase follow-up.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>

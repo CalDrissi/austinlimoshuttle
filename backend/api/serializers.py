@@ -97,9 +97,11 @@ class QuoteRequestSerializer(serializers.Serializer):
         help_text="Hourly hire only. Omit for a point-to-point transfer.",
     )
     meet_and_greet = serializers.BooleanField(default=False)
-    # Fixed city-to-city: the two addresses are cities picked from the storefront
-    # dropdown and the fare is the flat route price, so the server does NOT bill a
-    # Google distance lookup -- it looks the route up by its endpoints instead.
+    # City-to-city is a free-form origin->destination trip, exactly like a
+    # transfer: the server measures the distance from the two addresses. The flag
+    # only selects the vehicle's intercity rate card (the engine falls back to the
+    # normal transfer card when intercity pricing is not offered or the trip is
+    # shorter than the vehicle's minimum). It is NOT a fixed route lookup.
     city_to_city = serializers.BooleanField(default=False)
 
     def validate_pickup_at(self, value):
@@ -118,11 +120,11 @@ class QuoteRequestSerializer(serializers.Serializer):
         if attrs.get("city_to_city"):
             if hours is not None:
                 raise serializers.ValidationError(
-                    "City-to-city is a fixed route, not hourly hire."
+                    "City-to-city is a point-to-point trip, not hourly hire."
                 )
             if not dropoff:
                 raise serializers.ValidationError(
-                    "Choose both a pickup and a drop-off city."
+                    "Provide both a pickup and a drop-off address."
                 )
             attrs["dropoff_address"] = dropoff
             return attrs
@@ -138,17 +140,6 @@ class QuoteRequestSerializer(serializers.Serializer):
             )
         attrs["dropoff_address"] = dropoff
         return attrs
-
-
-class CityRouteOptionSerializer(serializers.Serializer):
-    origin = serializers.CharField()
-    destination = serializers.CharField()
-    bidirectional = serializers.BooleanField()
-
-
-class CityRouteOptionsSerializer(serializers.Serializer):
-    cities = serializers.ListField(child=serializers.CharField())
-    routes = CityRouteOptionSerializer(many=True)
 
 
 class PriceLineSerializer(serializers.Serializer):

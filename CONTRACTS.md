@@ -13,6 +13,66 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-03 — Free-form city-to-city API (quote request/response + token; city-routes endpoint removed)
+- Owner: @api-core
+- Affects: @frontend-booking (quote + booking requests), @api-quotes (quote token now carries
+  `city_to_city`, not a route id), @pricing-rates (API no longer references CityRoute/CityRoutePrice —
+  clears Phase-3 model deletion), @bookings-core (amend re-price gap, below)
+- Change: the city-to-city quote is now a **free-form origin→destination trip**, measured and priced
+  exactly like a transfer. There is no fixed route id and no city-pair lookup anymore.
+
+### `POST /api/quotes/` — request (unchanged field set; `city_to_city` re-defined)
+```jsonc
+{
+  "pickup_address": "Austin, TX",       // required
+  "dropoff_address": "Houston, TX",     // required for a transfer AND for city_to_city
+  "pickup_at": "2026-09-01T14:30:00-05:00",
+  "meet_and_greet": false,              // optional
+  "city_to_city": true                  // optional; see below
+}
+```
+- `city_to_city: true` **no longer means a fixed route**. It is a flag that tells the engine to
+  prefer each vehicle's INTERCITY rate card. The server still **measures the distance from the two
+  addresses** (same Google Distance Matrix path as a transfer) — a billed lookup now happens for
+  city-to-city too. `dropoff_address` is **required** when `city_to_city` is true; `hours` is rejected.
+- A vehicle is priced on its intercity card only when it offers intercity pricing and the trip is at
+  least its minimum distance; otherwise it **silently** falls back to the normal transfer card (no
+  error, no 422). See @pricing-engine's entry for the exact rule.
+
+### `POST /api/quotes/` — response (shape UNCHANGED; `journey` now populated for city_to_city)
+Same `{ "journey": {...} | null, "quotes": [ { vehicle_id, vehicle_name, subtotal, surcharge_total,
+tax, total, currency, lines[], quote_token } ] }`. The only observable difference: a city-to-city
+quote now returns a non-null `journey` (distance/duration/resolved addresses), because the trip is
+measured. Previously it was `null` for the fixed-route path.
+
+### `POST /api/bookings/` — unchanged
+Still takes a `quote_token` + passenger/guest details; no money field. The `city_to_city` flag rides
+**inside the signed token**, so the fare is recomputed on the correct (intercity/normal) card at
+redeem time. Nothing new for the client to send.
+
+### REMOVED
+- `GET /api/city-routes/` endpoint (cities + route pairs) — **deleted**. The storefront's
+  City-to-City tab must switch to free-form address inputs (pickup + drop-off), not a dropdown of
+  fixed cities. @frontend-booking: drop any fetch of `/api/city-routes/` and the city dropdown.
+- `CityRouteOptionsSerializer` / `CityRouteOptionSerializer` removed.
+- The quote token field `rt` (route id) is replaced by `c2c` (bool). Old outstanding tokens issued
+  with `rt` will simply ignore it and price as a normal trip on redeem — acceptable (tokens are
+  short-lived).
+
+### Cross-lane edits made in this task (noted per lane ownership)
+- `backend/api/quotes.py` is @api-quotes' lane. This cohesive change required it: `QuoteRequest.route_id`
+  → `city_to_city: bool`, token key `rt` → `c2c`, and `redeem()` now calls `quote(..., city_to_city=…)`
+  instead of resolving a `CityRoute`. @api-quotes please confirm.
+- **@bookings-core follow-up (amend re-price gap):** the `Booking` row has **no persisted
+  city-to-city marker** now that `city_route` is no longer set by the API (it defaults to null; the FK
+  is untouched for Phase 3). On a customer *amend* that changes `pickup_at`, the API re-prices on the
+  vehicle's NORMAL transfer card, because it can't tell a stored free-form intercity trip from a plain
+  transfer. To preserve intercity pricing across a time-amend, `Booking` needs a persisted
+  `city_to_city` flag (or a `CITY_TO_CITY` trip type); the API would then pass it into `quote()`.
+  Low impact (time-only amends of intercity trips are rare), flagged for a later phase.
+
+---
+
 ## 2026-11-03 — City-to-city quoting is free-form + distance-based (quote() call shape)
 - Owner: @pricing-engine
 - Affects: @api (api/views.py, api/quotes.py), @dashboard (dashboard/views.py) — every caller that
