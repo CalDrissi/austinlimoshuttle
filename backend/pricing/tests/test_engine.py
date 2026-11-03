@@ -15,7 +15,7 @@ import pytest
 from django.utils import timezone
 
 from bookings.models import BookingPriceLine
-from fleet.models import DistanceBand, Vehicle
+from fleet.models import DistanceBand, IntercityBand, Vehicle
 from pricing.engine import QuoteError, quote, quote_all, surcharge_percentage_for
 from pricing.models import BlackoutDate, PricingSettings, TimeSurcharge
 
@@ -334,3 +334,124 @@ class TestPriceLinePersistence:
 
         assert booking.price_lines.count() == len(result.lines)
         assert sum(line.amount for line in booking.price_lines.all()) == result.total
+
+
+@pytest.fixture
+def intercity_class(db):
+    """A vehicle with BOTH a normal transfer card and a cheaper intercity card.
+
+    Normal: $3.00/mi flat. Intercity: $1.50/mi flat (long-haul discount), used
+    for city-to-city trips >= 50 mi. Distinct flat rates make it unambiguous
+    which card priced a given trip.
+    """
+    v = Vehicle.objects.create(
+        name="Intercity Class", slug="ic",
+        hourly_rate=Decimal("85.00"),
+        minimum_fare=Decimal("0.00"),
+        city_to_city_min_miles=Decimal("50.00"),
+    )
+    DistanceBand.objects.create(
+        vehicle=v, from_miles=0, to_miles=None, rate_per_mile=Decimal("3.00"),
+    )
+    IntercityBand.objects.create(
+        vehicle=v, from_miles=0, to_miles=None, rate_per_mile=Decimal("1.50"),
+    )
+    return v
+
+
+@pytest.mark.django_db
+class TestCityToCity:
+    """Free-form, distance-based city-to-city with a per-vehicle minimum."""
+
+    NOON = austin(2026, 6, 1, 12)  # no surcharge window
+
+    def test_intercity_card_used_when_distance_at_or_above_minimum(
+        self, intercity_class, settings_obj
+    ):
+        q = quote(intercity_class, pickup_at=self.NOON,
+                  distance_miles=Decimal("60"), city_to_city=True)
+        assert q.total == Decimal("90.00")  # 60 mi × $1.50 intercity, not × $3.00
+
+    def test_minimum_boundary_is_inclusive(self, intercity_class, settings_obj):
+        q = quote(intercity_class, pickup_at=self.NOON,
+                  distance_miles=Decimal("50"), city_to_city=True)
+        assert q.total == Decimal("75.00")  # exactly at min -> intercity (50 × 1.50)
+
+    def test_silent_fallback_to_normal_when_distance_below_minimum(
+        self, intercity_class, settings_obj
+    ):
+        q = quote(intercity_class, pickup_at=self.NOON,
+                  distance_miles=Decimal("40"), city_to_city=True)
+        assert q.total == Decimal("120.00")  # 40 mi × $3.00 normal, no error
+
+    def test_fallback_when_minimum_is_null(self, intercity_class, settings_obj):
+        intercity_class.city_to_city_min_miles = None  # intercity not offered
+        intercity_class.save()
+        q = quote(intercity_class, pickup_at=self.NOON,
+                  distance_miles=Decimal("60"), city_to_city=True)
+        assert q.total == Decimal("180.00")  # 60 mi × $3.00 normal despite the IC card
+
+    def test_fallback_when_no_intercity_bands(self, settings_obj, db):
+        v = Vehicle.objects.create(
+            name="No IC card", slug="noic", minimum_fare=Decimal("0.00"),
+            city_to_city_min_miles=Decimal("50.00"),
+        )
+        DistanceBand.objects.create(
+            vehicle=v, from_miles=0, to_miles=None, rate_per_mile=Decimal("3.00"),
+        )
+        q = quote(v, pickup_at=self.NOON,
+                  distance_miles=Decimal("60"), city_to_city=True)
+        assert q.total == Decimal("180.00")  # normal card; no intercity card exists
+
+    def test_zero_minimum_applies_intercity_at_any_distance(
+        self, intercity_class, settings_obj
+    ):
+        intercity_class.city_to_city_min_miles = Decimal("0.00")  # no minimum
+        intercity_class.save()
+        q = quote(intercity_class, pickup_at=self.NOON,
+                  distance_miles=Decimal("10"), city_to_city=True)
+        assert q.total == Decimal("15.00")  # 10 mi × $1.50 intercity
+
+    def test_city_to_city_requires_a_distance(self, intercity_class, settings_obj):
+        with pytest.raises(QuoteError):
+            quote(intercity_class, pickup_at=self.NOON, hours=Decimal("3"),
+                  city_to_city=True)
+
+    def test_intercity_card_is_cumulative_across_bands(self, settings_obj, db):
+        """Intercity bands use the same cumulative math as normal DistanceBands."""
+        v = Vehicle.objects.create(
+            name="Tiered IC", slug="tic", minimum_fare=Decimal("0.00"),
+            city_to_city_min_miles=Decimal("0.00"),
+        )
+        DistanceBand.objects.create(
+            vehicle=v, from_miles=0, to_miles=None, rate_per_mile=Decimal("9.99"),
+        )
+        for start, end, rate in [(0, 50, "2.00"), (50, None, "1.00")]:
+            IntercityBand.objects.create(
+                vehicle=v, from_miles=start, to_miles=end, rate_per_mile=Decimal(rate),
+            )
+        q = quote(v, pickup_at=self.NOON,
+                  distance_miles=Decimal("70"), city_to_city=True)
+        assert q.total == Decimal("120.00")  # 50×2.00 + 20×1.00, not 70×9.99
+
+    def test_surcharge_still_applies_to_an_intercity_fare(
+        self, intercity_class, settings_obj, late_night
+    ):
+        """City-to-city changes the base card only; the transfer pipeline is intact."""
+        q = quote(intercity_class, pickup_at=austin(2026, 6, 1, 23),
+                  distance_miles=Decimal("60"), city_to_city=True)
+        # 60 × 1.50 = 90.00 base, +20% late-night = 108.00
+        assert q.subtotal == Decimal("90.00")
+        assert q.total == Decimal("108.00")
+
+    def test_normal_transfer_ignores_the_intercity_card(
+        self, intercity_class, settings_obj
+    ):
+        """A plain transfer (city_to_city=False) never touches intercity bands."""
+        q = quote(intercity_class, pickup_at=self.NOON, distance_miles=Decimal("60"))
+        assert q.total == Decimal("180.00")  # 60 × $3.00 normal
+
+    def test_quote_all_prices_city_to_city(self, intercity_class, settings_obj):
+        results = quote_all(self.NOON, distance_miles=Decimal("60"), city_to_city=True)
+        by_name = {q.vehicle_name: q for q in results}
+        assert by_name["Intercity Class"].total == Decimal("90.00")
