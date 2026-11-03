@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import { authService } from "@/lib/api/auth.service";
+import { ApiRequestError } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
 import OrderSummary from "@/components/booking/OrderSummary";
 
@@ -35,6 +36,9 @@ export default function BookingPassengerPage() {
   const [authErr, setAuthErr] = useState("");
   const [authMsg, setAuthMsg] = useState("");
   const [li, setLi] = useState({ email: "", password: "" });
+  const [loginMethod, setLoginMethod] = useState<"password" | "code">("password");
+  const [codeSent, setCodeSent] = useState(false);
+  const [code, setCode] = useState("");
   const [reg, setReg] = useState({ first_name: "", last_name: "", email: "", password: "", phone: "" });
 
   useEffect(() => {
@@ -58,6 +62,31 @@ export default function BookingPassengerPage() {
       await refreshAuth();
     } catch (e) {
       setAuthErr(e instanceof Error ? e.message : "Sign in failed.");
+    }
+    setAuthBusy(false);
+  };
+
+  const doSendCode = async () => {
+    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
+    try {
+      await authService.sendCode(li.email.trim());
+      setCodeSent(true);
+      setAuthMsg("If that address has an account, a code is on its way.");
+    } catch (e) {
+      setAuthErr(e instanceof Error ? e.message : "Unable to send a code. Please try again.");
+    }
+    setAuthBusy(false);
+  };
+
+  const doVerifyCode = async () => {
+    setAuthBusy(true); setAuthErr("");
+    try {
+      await authService.verifyCode({ email: li.email.trim(), code });
+      await refreshAuth();
+    } catch (e) {
+      setAuthErr(e instanceof ApiRequestError && e.status === 400
+        ? "That code is invalid or has expired."
+        : e instanceof Error ? e.message : "Sign in failed.");
     }
     setAuthBusy(false);
   };
@@ -139,18 +168,32 @@ export default function BookingPassengerPage() {
                       <div className="row">
                         <div className="col-12 mb-15">
                           <label htmlFor="booking-signin-email" className="text-14">Email</label>
-                          <input id="booking-signin-email" autoComplete="email" placeholder="you@example.com" type="email" className="form-control" value={li.email} onChange={(e) => setLi({ ...li, email: e.target.value })} />
+                          <input id="booking-signin-email" autoComplete="email" placeholder="you@example.com" type="email" className="form-control" value={li.email} disabled={authBusy} onChange={(e) => { setLi({ ...li, email: e.target.value }); setCodeSent(false); setCode(""); setAuthMsg(""); setAuthErr(""); }} />
                         </div>
-                        <div className="col-12 mb-15">
+                        {loginMethod === "password" && <div className="col-12 mb-15">
                           <label htmlFor="booking-signin-password" className="text-14">Password</label>
                           <input id="booking-signin-password" autoComplete="current-password" placeholder="Your password" type="password" className="form-control" value={li.password} onChange={(e) => setLi({ ...li, password: e.target.value })} />
-                        </div>
+                        </div>}
+                        {loginMethod === "code" && codeSent && <div className="col-12 mb-15">
+                          <label htmlFor="booking-signin-code" className="text-14">6-digit email code</label>
+                          <input id="booking-signin-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className="form-control" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
+                        </div>}
                       </div>
-                      <p className="mb-15"><a className="mm-password-reset" href={`${API_BASE_URL.replace(/\/api\/?$/, "")}/accounts/password-reset/`}>Forgot password?</a></p>
-                      {authErr && <p className="text-14" style={{ color: "#c0392b" }}>{authErr}</p>}
-                      <button className="btn btn-primary hover-up" onClick={doLogin} disabled={authBusy}>
-                        {authBusy ? "Signing in…" : "Sign in"}
-                      </button>
+                      {loginMethod === "password" && <p className="mb-15"><a className="mm-password-reset" href={`${API_BASE_URL.replace(/\/api\/?$/, "")}/accounts/password-reset/`}>Forgot password?</a></p>}
+                      {authMsg && <p role="status" className="text-14">{authMsg}</p>}
+                      {authErr && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{authErr}</p>}
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        <button type="button" className="btn btn-primary hover-up"
+                          onClick={loginMethod === "password" ? doLogin : codeSent ? doVerifyCode : doSendCode}
+                          disabled={authBusy || (loginMethod === "code" && (!li.email.trim() || (codeSent && code.length !== 6)))}>
+                          {authBusy ? "Please wait…" : loginMethod === "password" ? "Sign in" : codeSent ? "Sign in with code" : "Send code"}
+                        </button>
+                        <button type="button" className="btn btn-default hover-up" disabled={authBusy}
+                          onClick={() => { setLoginMethod(loginMethod === "password" ? "code" : "password"); setAuthErr(""); setAuthMsg(""); setCodeSent(false); setCode(""); }}>
+                          {loginMethod === "password" ? "Email me a code" : "Use password"}
+                        </button>
+                        {loginMethod === "code" && codeSent && <button type="button" className="btn btn-default hover-up" disabled={authBusy} onClick={doSendCode}>Resend code</button>}
+                      </div>
                     </div>
                   )}
 

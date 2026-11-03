@@ -7,6 +7,8 @@ import type { User, LoginRequest, RegisterRequest } from "@/types/api";
  */
 export const authService = {
   login: (body: LoginRequest) => apiPost<User>("/auth/login/", body),
+  sendCode: (email: string) => apiPost<{ detail: string }>("/auth/send-code/", { email }),
+  verifyCode: (body: { email: string; code: string }) => apiPost<User>("/auth/verify-code/", body),
   register: (body: RegisterRequest) => apiPost<User>("/auth/register/", body),
   logout: () => apiPost<void>("/auth/logout/", {}),
   me: () => apiGet<User>("/auth/me/"),
