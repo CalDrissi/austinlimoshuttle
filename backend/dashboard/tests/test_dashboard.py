@@ -921,7 +921,7 @@ class TestManualBooking:
             pickup_address="Austin", dropoff_address="", hours="",
             passenger_count="1", luggage_count="0", flight_number="",
             status=Booking.Status.CONFIRMED, notes="",
-            trip_mode="hourly", city_route="", override_total="",
+            trip_mode="hourly", override_total="",
             customer_id="", driver="", payment_method="cash",
         )
         data.update(over)
@@ -959,17 +959,42 @@ class TestManualBooking:
         assert r.status_code == 200
         assert not Booking.objects.exists()
 
-    def test_city_uses_the_flat_route_price(self, client, roles, vehicle):
-        from pricing.models import CityRoute, CityRoutePrice
-        route = CityRoute.objects.create(origin="Austin", destination="Houston")
-        CityRoutePrice.objects.create(route=route, vehicle=vehicle, price=Decimal("395"))
+    def test_city_is_priced_free_form_by_distance(self, client, roles, vehicle):
+        """City-to-city is now a free-form origin->destination trip: staff enter a
+        drop-off, the distance is measured like a transfer, and the engine prices
+        it on the vehicle's bands (no fixed CityRoute)."""
+        from unittest.mock import patch
+
+        from fleet.models import DistanceBand
+        from pricing.distance import Journey
+
+        DistanceBand.objects.create(
+            vehicle=vehicle, from_miles=Decimal("0"), to_miles=None,
+            rate_per_mile=Decimal("5.00"),
+        )
         self._login(client, roles)
-        r = client.post(reverse("dashboard:booking_create"),
-                        self._payload(vehicle, trip_mode="city", city_route=str(route.pk)))
+        journey = Journey(
+            distance_miles=Decimal("50"), duration_minutes=60,
+            resolved_origin="Austin, TX", resolved_destination="Houston, TX",
+        )
+        with patch("dashboard.views.measure_journey", return_value=journey):
+            r = client.post(
+                reverse("dashboard:booking_create"),
+                self._payload(vehicle, trip_mode="city",
+                              pickup_address="Austin", dropoff_address="Houston"),
+            )
         assert r.status_code == 302
         b = Booking.objects.get()
-        assert b.total == Decimal("395.00")
-        assert b.city_route_id == route.pk
+        assert b.distance_miles == Decimal("50")
+        assert b.total == Decimal("250.00")  # 50 mi x $5/mi
+        assert b.city_route_id is None  # no fixed route anymore
+
+    def test_city_requires_a_dropoff(self, client, roles, vehicle):
+        self._login(client, roles)
+        r = client.post(reverse("dashboard:booking_create"),
+                        self._payload(vehicle, trip_mode="city", dropoff_address=""))
+        assert r.status_code == 200
+        assert not Booking.objects.exists()
 
     def test_new_customer_created_from_email(self, client, roles, vehicle):
         self._login(client, roles)
