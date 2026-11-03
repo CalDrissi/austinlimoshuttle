@@ -892,6 +892,24 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   </div>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Manual booking city-to-city is now free-form + distance-based (Phase 4b)</span><span class="tbl">backend · dashboard</span></div>
+    <table>
+      <tr><td>The city-to-city engine rework (see CONTRACTS.md 2026-11-03) removed <code>route=</code> from
+      <code>pricing.engine.quote()/quote_all()</code>, which broke the back-office manual booking
+      (<code>quote() got an unexpected keyword argument route</code>, 8 <code>TestManualBooking</code> failures).
+      <b>Fix:</b> the manual booking's <code>city</code> trip mode no longer selects a fixed <code>CityRoute</code>.
+      Like a transfer, staff enter an origin + drop-off; <code>dashboard/views.py _quote_manual</code> measures the
+      distance via <code>pricing.distance.lookup()</code> and calls <code>quote(vehicle, distance_miles=&lt;measured&gt;,
+      city_to_city=True)</code> (engine selects the intercity rate card vs normal bands internally).
+      <code>CityRoute</code> is no longer referenced in <code>dashboard/views.py</code>; the <code>city_route</code> field
+      was dropped from <code>ManualBookingForm</code>, its form block from <code>booking_form.html</code>, and its POST key
+      from <code>static/js/booking-form.js</code>. A manual city booking now stores <code>city_route=NULL</code> and a
+      measured <code>distance_miles</code>. <b>Verified:</b> full dashboard suite green (100 passed), including the
+      rewritten <code>test_city_is_priced_free_form_by_distance</code> + new <code>test_city_requires_a_dropoff</code>.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
     <table>
       <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does

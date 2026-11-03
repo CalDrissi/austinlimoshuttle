@@ -52,7 +52,7 @@ from notifications import mailer, sms
 from notifications.models import EmailLog, EmailSettings, SmsLog, SmsSettings
 from payments import gateway, paypal
 from payments.models import Payment, PaymentSettings, PayPalSettings, SavedCard
-from pricing.models import CityRoute, PricingSettings
+from pricing.models import PricingSettings
 
 from . import crud, managed
 from .forms import (
@@ -392,13 +392,19 @@ def trip_events(request):
 
 
 def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,
-                  hours, city_route, meet_and_greet):
+                  hours, meet_and_greet):
     """
     Price a manual booking with the SAME engine as the website.
 
-    `mode` is "transfer" | "hourly" | "city". Returns (quote, distance_miles,
-    route); raises ValueError with a staff-facing message on any problem, so the
-    caller can surface it in the form or as JSON.
+    `mode` is "transfer" | "hourly" | "city". Returns (quote, distance_miles);
+    raises ValueError with a staff-facing message on any problem, so the caller
+    can surface it in the form or as JSON.
+
+    City-to-city is now a free-form origin->destination trip (no fixed route):
+    staff enter a drop-off address, the distance is measured the same way as a
+    transfer, and the engine prices it with `city_to_city=True` (intercity rate
+    card when the vehicle offers it and the trip is long enough, otherwise the
+    normal distance bands).
     """
     if vehicle is None:
         raise ValueError("Choose a vehicle first.")
@@ -406,17 +412,17 @@ def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,
         raise ValueError("Set the pickup date & time first.")
 
     distance = None
-    route = None
-    if mode == "city":
-        route = city_route
-        if route is None:
-            raise ValueError("Choose a city-to-city route.")
-    elif mode == "hourly":
+    city_to_city = mode == "city"
+    if mode == "hourly":
         if not hours or hours <= 0:
             raise ValueError("Enter how many hours for the hourly hire.")
-    else:  # transfer
+    else:  # transfer or city -- both are free-form, distance-measured trips
         if not (dropoff_address or "").strip():
-            raise ValueError("Enter a drop-off address for the transfer.")
+            raise ValueError(
+                "Enter a drop-off address for the city-to-city trip."
+                if city_to_city else
+                "Enter a drop-off address for the transfer."
+            )
         try:
             journey = measure_journey(pickup_address, dropoff_address)
         except DistanceLookupError as exc:
@@ -430,11 +436,11 @@ def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,
             distance_miles=distance,
             hours=hours if mode == "hourly" else None,
             meet_and_greet=meet_and_greet,
-            route=route,
+            city_to_city=city_to_city,
         )
     except QuoteError as exc:
         raise ValueError(str(exc)) from exc
-    return q, distance, route
+    return q, distance
 
 
 def _resolve_customer(cd):
@@ -524,7 +530,6 @@ def booking_quote(request):
     """Live fare preview for the New Booking form -- same engine as the website."""
     post = request.POST
     vehicle = Vehicle.objects.filter(pk=post.get("vehicle") or 0, is_active=True).first()
-    route = CityRoute.objects.filter(pk=post.get("city_route") or 0, is_active=True).first()
     pickup_at = parse_datetime(post.get("pickup_at") or "")
     if pickup_at and timezone.is_naive(pickup_at):
         pickup_at = timezone.make_aware(pickup_at)
@@ -533,12 +538,12 @@ def booking_quote(request):
     except (InvalidOperation, KeyError):
         hours = None
     try:
-        q, distance, _ = _quote_manual(
+        q, distance = _quote_manual(
             post.get("trip_mode", "transfer"), vehicle,
             pickup_at=pickup_at or timezone.now(),
             pickup_address=post.get("pickup_address", ""),
             dropoff_address=post.get("dropoff_address", ""),
-            hours=hours, city_route=route,
+            hours=hours,
             meet_and_greet=post.get("meet_and_greet") in ("on", "true", "True", "1"),
         )
     except ValueError as exc:
@@ -574,13 +579,12 @@ def booking_create(request):
             mode = cd["trip_mode"]
             override = cd.get("override_total")
             try:
-                priced, distance, route = _quote_manual(
+                priced, distance = _quote_manual(
                     mode, cd["vehicle"],
                     pickup_at=cd["pickup_at"],
                     pickup_address=cd.get("pickup_address", ""),
                     dropoff_address=cd.get("dropoff_address", ""),
                     hours=cd.get("hours"),
-                    city_route=cd.get("city_route"),
                     meet_and_greet=cd.get("meet_and_greet", False),
                 )
             except ValueError as exc:
@@ -601,7 +605,6 @@ def booking_create(request):
                             Booking.TripType.HOURLY if mode == "hourly"
                             else Booking.TripType.TRANSFER
                         )
-                        booking.city_route = route
                         booking.distance_miles = distance
                         booking.hours = cd.get("hours") if mode == "hourly" else None
                         booking.currency = priced.currency

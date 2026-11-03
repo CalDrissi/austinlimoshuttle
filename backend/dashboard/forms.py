@@ -66,18 +66,15 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
 
     The fare is computed by the same pricing engine as the website, from the
     trip type and its inputs (distance for a transfer, hours for hourly, or a
-    flat city-to-city route). Staff may override the total for a negotiated or
-    corporate price; the override is recorded on the audit trail. The view does
-    the pricing -- this form only collects the inputs.
+    free-form origin->destination distance for city-to-city). Staff may override
+    the total for a negotiated or corporate price; the override is recorded on
+    the audit trail. The view does the pricing -- this form only collects the
+    inputs.
     """
 
     trip_mode = forms.ChoiceField(
         choices=TRIP_MODE_CHOICES, initial="transfer",
         widget=forms.RadioSelect, label="Trip type",
-    )
-    city_route = forms.ModelChoiceField(
-        queryset=CityRoute.objects.filter(is_active=True),
-        required=False, empty_label="— choose a route —", label="Route",
     )
     override_total = forms.DecimalField(
         required=False, min_value=Decimal("0"), max_digits=10, decimal_places=2,
@@ -105,7 +102,7 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         }
         help_texts = {
             "pickup_sign": "Who the ride is for -- shown to the driver.",
-            "dropoff_address": "Transfer: the drop-off. City-to-city: optional.",
+            "dropoff_address": "The drop-off address (transfer and city-to-city).",
             "hours": "By-the-hour only.",
             "guest_email": "Optional -- the receipt is emailed here if given.",
         }
@@ -139,16 +136,14 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         mode = cleaned.get("trip_mode")
-        if mode == "transfer":
+        if mode in ("transfer", "city"):
             if not (cleaned.get("dropoff_address") or "").strip():
+                trip = "city-to-city trip" if mode == "city" else "transfer"
                 self.add_error("dropoff_address",
-                               "A drop-off address is required for a transfer.")
+                               f"A drop-off address is required for a {trip}.")
         elif mode == "hourly":
             if not cleaned.get("hours") or cleaned["hours"] <= 0:
                 self.add_error("hours", "Enter how many hours for an hourly hire.")
-        elif mode == "city":
-            if not cleaned.get("city_route"):
-                self.add_error("city_route", "Choose a city-to-city route.")
         _apply_capacity_errors(self, cleaned)
         return cleaned
 
