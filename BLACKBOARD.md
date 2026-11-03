@@ -6,6 +6,7 @@ decisions go in `CONTRACTS.md`, not here. The read-only code map is the graphify
 
 ## In flight
 _One line per active task: `@handle — branch — what / status`._
+- 2026-11-03 @dashboard-bookings — agent/dashboard-bookings/c2c-manual-booking — Phase 4b: migrated manual booking `city` mode to free-form + distance (quote(city_to_city=True)), dropped CityRoute from dashboard/views.py. Also edited @dashboard-forms' `ManualBookingForm` (removed `city_route` field, city now requires a drop-off) for this cohesive change. Dashboard suite 100 green. Awaiting merge gate.
 
 ## Findings & gotchas
 _Short discoveries worth sharing across lanes._

@@ -9,6 +9,13 @@ ADJUST_DISTANCE_FIFTY_TO_HUNDRED = 100). Changing a pricing tier therefore meant
 editing code and redeploying.
 
 Here the tiers are DistanceBand rows, so staff can reshape them from the admin.
+
+A vehicle carries TWO independent band rate cards with identical cumulative
+semantics (see RateBand):
+  * `bands`           -- the normal per-mile rate card (DistanceBand).
+  * `intercity_bands` -- the city-to-city rate card (IntercityBand), used for
+                         free-form origin->destination trips at or above the
+                         vehicle's `city_to_city_min_miles` threshold.
 """
 
 from decimal import Decimal
@@ -50,6 +57,18 @@ class Vehicle(models.Model):
         help_text="Fare floor. Applied after every other adjustment.",
     )
 
+    city_to_city_min_miles = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text=(
+            "Trip distance (miles) at or above which the city-to-city "
+            "`intercity_bands` rate card is used instead of the normal `bands`. "
+            "NULL = intercity pricing not offered for this vehicle (always use "
+            "`bands`). 0 = no minimum (intercity applies at any distance). "
+            "Only takes effect when the vehicle has intercity_bands."
+        ),
+    )
+
     display_order = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(
         default=True,
@@ -78,15 +97,19 @@ class Vehicle(models.Model):
         return Decimal("0.00")
 
 
-class DistanceBand(models.Model):
+class RateBand(models.Model):
     """
     One tier of a vehicle's per-mile rate card.
 
     Bands are cumulative: a 70-mile trip is charged the 0-6 band for its first
     6 miles, the 6-50 band for the next 44, and the 50-100 band for the last 20.
-    """
 
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="bands")
+    Abstract so the normal card (DistanceBand) and the city-to-city card
+    (IntercityBand) share identical band arithmetic and validation. The
+    `vehicle` FK and Meta (ordering + unique-start constraint) live on the
+    concrete subclasses so each card keeps its own `related_name` and
+    constraint name.
+    """
 
     from_miles = models.DecimalField(
         max_digits=6, decimal_places=2, default=Decimal("0.00"),
@@ -104,12 +127,7 @@ class DistanceBand(models.Model):
     )
 
     class Meta:
-        ordering = ["vehicle", "from_miles"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["vehicle", "from_miles"], name="unique_band_start_per_vehicle",
-            ),
-        ]
+        abstract = True
 
     def __str__(self):
         upper = f"{self.to_miles:g}" if self.to_miles is not None else "∞"
@@ -139,3 +157,41 @@ class DistanceBand(models.Model):
             raise ValidationError(
                 {"to_miles": "Upper bound must be greater than the lower bound."}
             )
+
+
+class DistanceBand(RateBand):
+    """One tier of a vehicle's NORMAL per-mile rate card. See RateBand."""
+
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE, related_name="bands")
+
+    class Meta:
+        ordering = ["vehicle", "from_miles"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vehicle", "from_miles"], name="unique_band_start_per_vehicle",
+            ),
+        ]
+
+
+class IntercityBand(RateBand):
+    """
+    One tier of a vehicle's CITY-TO-CITY per-mile rate card. See RateBand.
+
+    Identical cumulative-band semantics and validation as DistanceBand, but a
+    separate card: used for free-form origin->destination intercity trips when
+    the trip distance meets the vehicle's `city_to_city_min_miles` threshold.
+    Fetch a vehicle's intercity card with `vehicle.intercity_bands.all()`.
+    """
+
+    vehicle = models.ForeignKey(
+        Vehicle, on_delete=models.CASCADE, related_name="intercity_bands",
+    )
+
+    class Meta:
+        ordering = ["vehicle", "from_miles"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["vehicle", "from_miles"],
+                name="unique_intercity_band_start_per_vehicle",
+            ),
+        ]

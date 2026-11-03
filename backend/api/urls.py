@@ -15,7 +15,6 @@ urlpatterns = [
     path("availability/", views.availability, name="availability"),
 
     # Quoting and booking
-    path("city-routes/", views.city_routes, name="city_routes"),
     path("quotes/", views.create_quote, name="quotes"),
     path("bookings/", views.create_booking, name="create_booking"),
     path("bookings/<str:reference>/status/", views.booking_status,

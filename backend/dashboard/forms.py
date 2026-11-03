@@ -9,10 +9,10 @@ from django.contrib.auth.password_validation import validate_password
 
 from bookings.models import Booking, Driver
 from content.models import Banner, GalleryImage, Page, SiteSettings, Testimonial
-from fleet.models import DistanceBand, Vehicle
+from fleet.models import DistanceBand, IntercityBand, Vehicle
 from notifications.models import EmailSettings, SmsSettings
 from payments.models import PaymentSettings, PayPalSettings
-from pricing.models import BlackoutDate, CityRoute, CityRoutePrice, PricingSettings, TimeSurcharge
+from pricing.models import BlackoutDate, CityRoute, PricingSettings, TimeSurcharge
 
 User = get_user_model()
 
@@ -66,18 +66,15 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
 
     The fare is computed by the same pricing engine as the website, from the
     trip type and its inputs (distance for a transfer, hours for hourly, or a
-    flat city-to-city route). Staff may override the total for a negotiated or
-    corporate price; the override is recorded on the audit trail. The view does
-    the pricing -- this form only collects the inputs.
+    free-form origin->destination distance for city-to-city). Staff may override
+    the total for a negotiated or corporate price; the override is recorded on
+    the audit trail. The view does the pricing -- this form only collects the
+    inputs.
     """
 
     trip_mode = forms.ChoiceField(
         choices=TRIP_MODE_CHOICES, initial="transfer",
         widget=forms.RadioSelect, label="Trip type",
-    )
-    city_route = forms.ModelChoiceField(
-        queryset=CityRoute.objects.filter(is_active=True),
-        required=False, empty_label="— choose a route —", label="Route",
     )
     override_total = forms.DecimalField(
         required=False, min_value=Decimal("0"), max_digits=10, decimal_places=2,
@@ -105,7 +102,7 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         }
         help_texts = {
             "pickup_sign": "Who the ride is for -- shown to the driver.",
-            "dropoff_address": "Transfer: the drop-off. City-to-city: optional.",
+            "dropoff_address": "The drop-off address (transfer and city-to-city).",
             "hours": "By-the-hour only.",
             "guest_email": "Optional -- the receipt is emailed here if given.",
         }
@@ -139,16 +136,14 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         mode = cleaned.get("trip_mode")
-        if mode == "transfer":
+        if mode in ("transfer", "city"):
             if not (cleaned.get("dropoff_address") or "").strip():
+                trip = "city-to-city trip" if mode == "city" else "transfer"
                 self.add_error("dropoff_address",
-                               "A drop-off address is required for a transfer.")
+                               f"A drop-off address is required for a {trip}.")
         elif mode == "hourly":
             if not cleaned.get("hours") or cleaned["hours"] <= 0:
                 self.add_error("hours", "Enter how many hours for an hourly hire.")
-        elif mode == "city":
-            if not cleaned.get("city_route"):
-                self.add_error("city_route", "Choose a city-to-city route.")
         _apply_capacity_errors(self, cleaned)
         return cleaned
 
@@ -501,8 +496,19 @@ class VehicleForm(BootstrapFormMixin, forms.ModelForm):
             "name", "slug", "description", "features", "photo",
             "passenger_capacity", "luggage_capacity",
             "hourly_rate", "meet_greet_fee", "minimum_fare",
+            "city_to_city_min_miles",
             "display_order", "is_active",
         ]
+        labels = {
+            "city_to_city_min_miles": "City-to-city minimum distance (miles)",
+        }
+        help_texts = {
+            "city_to_city_min_miles": (
+                "At or above this trip distance the City-to-city card below is "
+                "used instead of the rate card. Leave blank to never offer "
+                "city-to-city pricing for this vehicle; 0 means any distance."
+            ),
+        }
         widgets = {
             "description": forms.Textarea(attrs={"rows": 3}),
             "features": forms.Textarea(attrs={"rows": 3}),
@@ -515,15 +521,23 @@ class DistanceBandForm(BootstrapFormMixin, forms.ModelForm):
         fields = ["from_miles", "to_miles", "rate_per_mile"]
 
 
-class BaseDistanceBandFormSet(forms.BaseInlineFormSet):
+class IntercityBandForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = IntercityBand
+        fields = ["from_miles", "to_miles", "rate_per_mile"]
+
+
+class BaseRateBandFormSet(forms.BaseInlineFormSet):
     """
     A vehicle's rate card, validated as a set.
 
-    Bands are cumulative, so the individual rows can each be valid while the
-    card as a whole is wrong: a gap between 6 and 10 miles silently prices those
-    four miles at zero, and an overlap charges them twice. Neither is visible
-    when checking one row at a time, and both misprice every future quote for
-    that vehicle.
+    Shared by the normal distance card and the city-to-city card: both are
+    cumulative per-mile bands with identical semantics, so the same whole-set
+    validation holds. The individual rows can each be valid while the card as a
+    whole is wrong: a gap between 6 and 10 miles silently prices those four
+    miles at zero, and an overlap charges them twice. Neither is visible when
+    checking one row at a time, and both misprice every future quote for that
+    vehicle.
     """
 
     def clean(self):
@@ -573,56 +587,23 @@ class BaseDistanceBandFormSet(forms.BaseInlineFormSet):
 
 
 DistanceBandFormSet = forms.inlineformset_factory(
-    Vehicle, DistanceBand, form=DistanceBandForm, formset=BaseDistanceBandFormSet,
+    Vehicle, DistanceBand, form=DistanceBandForm, formset=BaseRateBandFormSet,
     extra=2, can_delete=True,
 )
 
-
-class CityRouteForm(BootstrapFormMixin, forms.ModelForm):
-    class Meta:
-        model = CityRoute
-        fields = ["origin", "destination", "bidirectional", "is_active"]
-        help_texts = {
-            "bidirectional": "Price the reverse direction (B → A) at the same rate.",
-        }
-
-
-class CityRoutePriceForm(BootstrapFormMixin, forms.ModelForm):
-    class Meta:
-        model = CityRoutePrice
-        fields = ["vehicle", "price"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Only active vehicles can be priced; a retired class shouldn't appear.
-        self.fields["vehicle"].queryset = Vehicle.objects.filter(
-            is_active=True
-        ).order_by("display_order", "name")
-
-
-class BaseCityRoutePriceFormSet(forms.BaseInlineFormSet):
-    """A route's price list. Each vehicle may appear at most once."""
-
-    def clean(self):
-        super().clean()
-        if any(self.errors):
-            return
-        seen = set()
-        for form in self.forms:
-            if not form.cleaned_data or form.cleaned_data.get("DELETE"):
-                continue
-            vehicle = form.cleaned_data.get("vehicle")
-            if vehicle in seen:
-                raise forms.ValidationError(
-                    f"{vehicle} is priced twice — one price per vehicle on a route."
-                )
-            seen.add(vehicle)
-
-
-CityRoutePriceFormSet = forms.inlineformset_factory(
-    CityRoute, CityRoutePrice, form=CityRoutePriceForm,
-    formset=BaseCityRoutePriceFormSet, extra=3, can_delete=True,
+# City-to-city card. Mirrors the distance rate card exactly (same fields, same
+# whole-set validation); its "intercity_bands" accessor gives it a distinct
+# form prefix, so both cards coexist on the vehicle edit page without clashing.
+IntercityBandFormSet = forms.inlineformset_factory(
+    Vehicle, IntercityBand, form=IntercityBandForm, formset=BaseRateBandFormSet,
+    extra=2, can_delete=True,
 )
+
+# The "City routes" managed page (CityRouteForm / CityRoutePriceForm) was
+# removed on 2026-11-03 with the city-to-city rework -- fixed flat-rate routes
+# are superseded by the free-form per-mile IntercityBand card above. The
+# CityRoute model itself stays (owned by @pricing-rates, and still referenced by
+# the manual-booking form); only the dashboard editing forms for it are gone.
 
 
 class TimeSurchargeForm(BootstrapFormMixin, forms.ModelForm):

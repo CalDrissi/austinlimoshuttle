@@ -180,7 +180,6 @@
     body.set("pickup_address", field("pickup_address"));
     body.set("dropoff_address", field("dropoff_address"));
     body.set("hours", field("hours"));
-    body.set("city_route", field("city_route"));
     var mg = form.querySelector('[name="meet_and_greet"]');
     body.set("meet_and_greet", mg && mg.checked ? "on" : "");
     body.set("csrfmiddlewaretoken", field("csrfmiddlewaretoken"));

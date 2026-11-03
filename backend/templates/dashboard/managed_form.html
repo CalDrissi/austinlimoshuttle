@@ -59,7 +59,7 @@
     </div>
   </div>
 
-  {% if formset %}
+  {% if inlines %}
     {# CSP forbids scripts, so the delete toggle is pure CSS: a hidden native #}
     {# checkbox wrapped in a label that looks and behaves like a trash button. #}
     <style>
@@ -69,58 +69,60 @@
       .remove-row-btn:focus-within { box-shadow: 0 0 0 .25rem rgba(220,53,69,.35); outline: none; }
       tr:has(.remove-row-btn input:checked) td { opacity: .45; text-decoration: line-through; }
     </style>
-    <div class="card mb-3">
-      <div class="card-header"><i class="bi bi-rulers me-2"></i>{{ entry.inline_label }}</div>
-      <div class="card-body">
-        {% if entry.inline_note %}<p class="small text-secondary">{{ entry.inline_note }}</p>{% endif %}
+    {% for item in inlines %}
+      <div class="card mb-3">
+        <div class="card-header"><i class="bi {{ item.icon }} me-2"></i>{{ item.label }}</div>
+        <div class="card-body">
+          {% if item.note %}<p class="small text-secondary">{{ item.note }}</p>{% endif %}
 
-        {{ formset.management_form }}
-        {% if formset.non_form_errors %}
-          <div class="alert alert-danger">{{ formset.non_form_errors }}</div>
-        {% endif %}
+          {{ item.formset.management_form }}
+          {% if item.formset.non_form_errors %}
+            <div class="alert alert-danger">{{ item.formset.non_form_errors }}</div>
+          {% endif %}
 
-        <div class="table-responsive">
-          <table class="table table-sm align-middle mb-0">
-            <thead>
-              <tr>
-                {% for field in formset.empty_form %}
-                  {% if not field.is_hidden and field.name != 'DELETE' %}<th class="small">{{ field.label }}</th>{% endif %}
-                {% endfor %}
-                <th class="small text-end">Remove</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for inline in formset %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
                 <tr>
-                  {{ inline.id }}
-                  {% for field in inline.visible_fields %}
-                    {% if field.name != 'DELETE' %}
-                      <td>
-                        {{ field }}
-                        {% for error in field.errors %}
-                          <div class="small text-danger">{{ error }}</div>
-                        {% endfor %}
-                      </td>
-                    {% endif %}
+                  {% for field in item.formset.empty_form %}
+                    {% if not field.is_hidden and field.name != 'DELETE' %}<th class="small">{{ field.label }}</th>{% endif %}
                   {% endfor %}
-                  <td class="text-end">
+                  <th class="small text-end">Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for inline in item.formset %}
+                  <tr>
+                    {{ inline.id }}
                     {% for field in inline.visible_fields %}
-                      {% if field.name == 'DELETE' %}
-                        <label class="remove-row-btn btn btn-sm btn-outline-danger" title="Remove this row">
+                      {% if field.name != 'DELETE' %}
+                        <td>
                           {{ field }}
-                          <i class="bi bi-trash" aria-hidden="true"></i>
-                          <span class="visually-hidden">Remove this row</span>
-                        </label>
+                          {% for error in field.errors %}
+                            <div class="small text-danger">{{ error }}</div>
+                          {% endfor %}
+                        </td>
                       {% endif %}
                     {% endfor %}
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+                    <td class="text-end">
+                      {% for field in inline.visible_fields %}
+                        {% if field.name == 'DELETE' %}
+                          <label class="remove-row-btn btn btn-sm btn-outline-danger" title="Remove this row">
+                            {{ field }}
+                            <i class="bi bi-trash" aria-hidden="true"></i>
+                            <span class="visually-hidden">Remove this row</span>
+                          </label>
+                        {% endif %}
+                      {% endfor %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
+    {% endfor %}
   {% endif %}
 
   <div class="d-flex gap-2 align-items-center">

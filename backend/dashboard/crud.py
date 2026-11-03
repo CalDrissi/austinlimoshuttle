@@ -49,6 +49,23 @@ class Column:
 
 
 @dataclass(frozen=True)
+class Inline:
+    """
+    One inline formset shown beneath a managed record's own form.
+
+    A record can carry more than one -- a vehicle has both its normal rate card
+    and its city-to-city card -- so each is labelled and noted independently.
+    The formset's own default prefix (its related-name accessor) keeps the two
+    sets of POST fields apart, so no explicit prefix is needed here.
+    """
+
+    formset: type[BaseInlineFormSet]
+    label: str = ""
+    note: str = ""
+    icon: str = "bi-rulers"
+
+
+@dataclass(frozen=True)
 class Managed:
     """
     One manageable model.
@@ -73,10 +90,8 @@ class Managed:
     #: Guidance rendered above the form. Use it where a field is dangerous.
     form_note: str = ""
     can_delete: bool = True
-    #: Optional inline formset, e.g. a vehicle's distance bands.
-    inline_formset: type[BaseInlineFormSet] | None = None
-    inline_label: str = ""
-    inline_note: str = ""
+    #: Inline formsets edited alongside the record, e.g. a vehicle's rate cards.
+    inlines: list[Inline] = field(default_factory=list)
     #: Related names to select_related, to keep list screens off N+1.
     select_related: list[str] = field(default_factory=list)
     prefetch_related: list[str] = field(default_factory=list)

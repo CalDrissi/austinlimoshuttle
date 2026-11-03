@@ -119,6 +119,36 @@ def surcharge_percentage_for(
     return total, reasons
 
 
+def _city_to_city_bands(
+    vehicle: Vehicle,
+    distance: Decimal,
+    *,
+    bands: list | None = None,
+    intercity_bands: list | None = None,
+) -> list:
+    """
+    The rate card a free-form city-to-city trip is priced on.
+
+    The vehicle's INTERCITY card (`intercity_bands`) is used when the vehicle
+    offers intercity pricing (`city_to_city_min_miles` is set, not NULL), it has
+    an intercity card, and the trip is at least that minimum distance. A minimum
+    of 0 means "no minimum" -- intercity applies at any distance, matching the
+    `Vehicle.city_to_city_min_miles` field semantics.
+
+    Every other case -- the trip is shorter than the minimum, intercity pricing
+    is not offered (minimum is NULL), or the vehicle has no intercity card --
+    SILENTLY falls back to the normal transfer card (`bands`). No error.
+    """
+    ic_bands = (
+        intercity_bands if intercity_bands is not None
+        else list(vehicle.intercity_bands.all())
+    )
+    min_miles = vehicle.city_to_city_min_miles
+    if ic_bands and min_miles is not None and distance >= min_miles:
+        return ic_bands
+    return bands if bands is not None else list(vehicle.bands.all())
+
+
 def quote(
     vehicle: Vehicle,
     *,
@@ -126,40 +156,34 @@ def quote(
     distance_miles: Decimal | None = None,
     hours: Decimal | None = None,
     meet_and_greet: bool = False,
+    city_to_city: bool = False,
     settings: PricingSettings | None = None,
     surcharges: list[TimeSurcharge] | None = None,
     blackouts: dict | None = None,
     bands: list | None = None,
-    route=None,
+    intercity_bands: list | None = None,
 ) -> Quote:
     """
     Price one vehicle for one journey.
 
     Supply `distance_miles` for a transfer or `hours` for hourly hire. The
-    optional `surcharges`/`blackouts`/`bands` arguments let callers preload
-    reference data once when pricing many journeys (the historical replay does
-    this); omitted, they are read from the database.
+    optional `surcharges`/`blackouts`/`bands`/`intercity_bands` arguments let
+    callers preload reference data once when pricing many journeys (the
+    historical replay does this); omitted, they are read from the database.
 
-    When `route` is a matched CityRoute and this vehicle is priced on it, the
-    fare is that flat, all-in price -- no distance bands, surcharge, meet&greet
-    or tax. A vehicle the route doesn't price falls through to distance pricing.
+    City-to-city is a free-form origin->destination trip, not a fixed route.
+    The caller measures the trip distance the same way as a transfer (the
+    Google Distance Matrix path in `distance.py`) and passes it as
+    `distance_miles` with `city_to_city=True`. The vehicle is then priced on
+    its INTERCITY rate card (`intercity_bands`) when it offers intercity pricing
+    and the trip is long enough -- otherwise the trip silently falls back to the
+    vehicle's NORMAL transfer rate card (`bands`). See `_city_to_city_bands`.
+    Surcharge, meet&greet, minimum fare and tax then apply exactly as for a
+    transfer; the only difference a city-to-city trip makes is which rate card
+    computes the base fare.
     """
-    if route is not None:
-        flat = route.price_for(vehicle)
-        if flat is not None:
-            flat = money(flat)
-            currency = (settings or PricingSettings.load()).currency
-            return Quote(
-                vehicle_id=vehicle.pk,
-                vehicle_name=vehicle.name,
-                lines=[Line(
-                    BookingPriceLine.Kind.BASE, f"City-to-city: {route.label}", flat,
-                )],
-                subtotal=flat,
-                total=flat,
-                currency=currency,
-            )
-
+    if city_to_city and distance_miles is None:
+        raise QuoteError("City-to-city pricing requires a measured trip distance.")
     if distance_miles is None and hours is None:
         raise QuoteError("Either distance_miles or hours is required.")
     if distance_miles is not None and hours is not None:
@@ -185,7 +209,12 @@ def quote(
         if distance < 0:
             raise QuoteError("Distance cannot be negative.")
 
-        vehicle_bands = bands if bands is not None else list(vehicle.bands.all())
+        if city_to_city:
+            vehicle_bands = _city_to_city_bands(
+                vehicle, distance, bands=bands, intercity_bands=intercity_bands,
+            )
+        else:
+            vehicle_bands = bands if bands is not None else list(vehicle.bands.all())
         if not vehicle_bands:
             raise QuoteError(f"{vehicle.name} has no distance bands and cannot be quoted.")
 
@@ -261,15 +290,26 @@ def quote_all(
     distance_miles: Decimal | None = None,
     hours: Decimal | None = None,
     meet_and_greet: bool = False,
-    route=None,
+    city_to_city: bool = False,
 ) -> list[Quote]:
-    """Price every bookable vehicle. Vehicles that cannot be priced are omitted."""
+    """
+    Price every bookable vehicle. Vehicles that cannot be priced are omitted.
+
+    Pass `city_to_city=True` for a free-form intercity trip: each vehicle is
+    priced on its intercity card when it offers intercity pricing and the trip
+    is long enough, else it silently falls back to its normal transfer card
+    (see `quote`).
+    """
     settings = PricingSettings.load()
     surcharges = list(TimeSurcharge.objects.filter(is_active=True))
     blackouts = {b.date: b for b in BlackoutDate.objects.filter(is_active=True)}
 
+    vehicles = Vehicle.objects.filter(is_active=True).prefetch_related("bands")
+    if city_to_city:
+        vehicles = vehicles.prefetch_related("intercity_bands")
+
     quotes = []
-    for vehicle in Vehicle.objects.filter(is_active=True).prefetch_related("bands"):
+    for vehicle in vehicles:
         try:
             quotes.append(quote(
                 vehicle,
@@ -277,11 +317,14 @@ def quote_all(
                 distance_miles=distance_miles,
                 hours=hours,
                 meet_and_greet=meet_and_greet,
+                city_to_city=city_to_city,
                 settings=settings,
                 surcharges=surcharges,
                 blackouts=blackouts,
                 bands=list(vehicle.bands.all()),
-                route=route,
+                intercity_bands=(
+                    list(vehicle.intercity_bands.all()) if city_to_city else None
+                ),
             ))
         except QuoteError:
             continue

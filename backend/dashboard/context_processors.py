@@ -56,7 +56,7 @@ def staff_context(request):
             ],
         }
         for label, slugs in (
-            ("Fleet & pricing", ["vehicles", "city-routes", "surcharges", "blackout-dates"]),
+            ("Fleet & pricing", ["vehicles", "surcharges", "blackout-dates"]),
             ("Website", ["pages", "testimonials", "banners", "gallery"]),
             ("People", ["drivers", "staff", "customers"]),
         )
