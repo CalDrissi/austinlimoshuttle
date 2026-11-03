@@ -73,6 +73,42 @@ redeem time. Nothing new for the client to send.
 
 ---
 
+## 2026-11-03 — City-to-city marker on Booking (persist + re-quote hook)
+- Owner: @bookings-core
+- Affects: @api (api/views.py `create_booking` + the `amend` re-quote path, api/quotes.py),
+  @dashboard (dashboard/views.py — any staff create/re-price path that builds a Booking)
+- Change: additive + backwards-compatible. `bookings.Booking` now persists whether a trip was
+  booked city-to-city, and owns the re-quote that keeps intercity pricing.
+
+### What's new on `bookings.models.Booking`
+- **Field** `is_city_to_city = BooleanField(default=False)`. True when the journey was booked as a
+  free-form city-to-city (intercity) trip. A plain boolean, **not** a new `TripType`: for pricing a
+  c2c trip *is* a distance-based `TRANSFER`, differing only in which rate card applies. Defaults
+  False, so every existing booking is unaffected. Migration `bookings/migrations/0006_booking_is_city_to_city.py`.
+- **Method** `Booking.reprice(*, pickup_at=None) -> Quote`. The single re-quote entry point for an
+  existing booking. Calls `pricing.engine.quote()` with the booking's own attributes and forwards
+  `city_to_city=self.is_city_to_city`, so an amended intercity trip stays on the intercity card
+  instead of silently falling back to the normal distance bands. Reuses stored `distance_miles`
+  (TRANSFER) / `hours` (HOURLY) and `meet_and_greet`; pass `pickup_at` to price a proposed new time.
+  Returns a fresh `Quote` and does **not** persist — the caller writes the figures if it chooses to.
+
+### Hooks other lanes must wire (bookings cannot reach into your views)
+1. **@api — booking creation** (`api/views.py` `create_booking`, ~L446 `Booking.objects.create(...)`):
+   set `is_city_to_city=<the c2c flag the quote was issued with>` when creating the Booking. The
+   storefront already carries `city_to_city` into the quote request (api/serializers.py L103,
+   api/views.py L282); sign it into the quote token (quotes.QuoteRequest) and stamp it onto the
+   Booking so the marker survives, exactly as `route_id` does today.
+2. **@api — amend re-quote** (`api/views.py` amend branch, ~L690): replace the current
+   `quote(..., route=booking.city_route)` call (now broken — the engine dropped `route=`) with
+   `recomputed = booking.reprice(pickup_at=booking.pickup_at)`. That single call restores the build
+   and preserves intercity pricing on amend.
+3. **@dashboard**: any staff create/re-price path that builds or re-prices a Booking should set/read
+   `is_city_to_city` and re-quote via `booking.reprice()` for the same reason.
+- Migration (what dependents must do): apply migration 0006; no data backfill needed (all existing
+  rows are correctly `False`). `Booking.city_route` is untouched and still present.
+
+---
+
 ## 2026-11-03 — City-to-city quoting is free-form + distance-based (quote() call shape)
 - Owner: @pricing-engine
 - Affects: @api (api/views.py, api/quotes.py), @dashboard (dashboard/views.py) — every caller that

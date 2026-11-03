@@ -910,6 +910,29 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   </div>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Persist a city-to-city marker on <code>Booking</code></span><span class="tbl">bookings</span></div>
+    <table>
+      <tr><td><b>Why.</b> City-to-city quoting is now free-form + distance-based: the engine picks the
+      vehicle's intercity rate card when a quote is made with <code>city_to_city=True</code> (see the
+      2026-11-03 engine entry). But an <b>amend / re-quote</b> had no way to know the trip was intercity —
+      a c2c booking priced on the intercity card would silently re-price onto the normal distance bands.
+      <b>Change.</b> Added <code>Booking.is_city_to_city</code> (<code>BooleanField(default=False)</code>,
+      migration <code>bookings/0006_booking_is_city_to_city.py</code>) — a persisted marker, not a new
+      <code>TripType</code>, because for pricing a c2c trip <i>is</i> a distance-based <code>TRANSFER</code>
+      that differs only in which card applies. Added <code>Booking.reprice(*, pickup_at=None) → Quote</code>:
+      the single re-quote entry point for an existing booking, which forwards
+      <code>city_to_city=self.is_city_to_city</code> to <code>pricing.engine.quote()</code> so an amended
+      intercity trip keeps its intercity card. <code>reprice()</code> does not persist — the caller writes
+      the returned figures if it chooses. <b>Scope.</b> Model + migration + tests only
+      (<code>backend/bookings/**</code>); creation/amend views live in the <code>api</code>/<code>dashboard</code>
+      lanes — the exact hooks (stamp the marker at <code>create_booking</code>; swap the amend re-quote to
+      <code>booking.reprice()</code>) are flagged in <code>CONTRACTS.md</code>. <b>Verified.</b> 32 bookings
+      tests pass (6 new), migration applies cleanly, <code>makemigrations --check</code> reports no drift.
+      Backwards-compatible: all existing rows are <code>False</code>, no backfill.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
     <table>
       <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does

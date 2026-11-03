@@ -115,6 +115,19 @@ class Booking(models.Model):
         related_name="bookings",
         help_text="Set when the fare came from a fixed city-to-city route.",
     )
+    # Persisted marker: this journey was booked as a free-form city-to-city
+    # (intercity) trip. A plain boolean rather than a `TripType` value because,
+    # for pricing, a city-to-city trip *is* a distance-based transfer -- it
+    # differs only in which rate card applies. The engine needs this at
+    # amend/re-quote time (`city_to_city=True`) so an amended intercity booking
+    # keeps its intercity card instead of silently dropping to the normal
+    # distance bands. Defaults False: every existing booking is a normal
+    # transfer or hourly hire, so the column is backwards-compatible.
+    is_city_to_city = models.BooleanField(
+        default=False,
+        help_text="True when the trip was booked as a free-form city-to-city "
+                  "(intercity) journey; keeps intercity pricing on re-quote.",
+    )
     status = models.CharField(
         max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True,
     )
@@ -248,6 +261,35 @@ class Booking(models.Model):
         if self.customer:
             return self.customer.get_full_name() or self.customer.email
         return self.pickup_sign or "Guest"
+
+    def reprice(self, *, pickup_at=None):
+        """
+        Re-run this booking through the pricing engine and return the fresh Quote.
+
+        The single re-quote entry point for an existing booking (amend / office
+        re-price). The booking's own attributes decide which rate card applies --
+        crucially `is_city_to_city`, forwarded as the engine's `city_to_city`
+        flag so an amended intercity trip keeps the intercity card instead of
+        silently falling back to the normal distance bands. Pass `pickup_at` to
+        price a proposed new time (time-based surcharges differ); it defaults to
+        the stored one.
+
+        Does NOT persist -- the caller writes the returned figures only if it
+        decides to (an amend may just be previewing a new time). Mirror of the
+        website amend path; see CONTRACTS.md -> "city-to-city marker on Booking".
+        """
+        from pricing.engine import quote
+
+        return quote(
+            self.vehicle,
+            pickup_at=pickup_at or self.pickup_at,
+            distance_miles=(
+                self.distance_miles if self.trip_type == self.TripType.TRANSFER else None
+            ),
+            hours=self.hours if self.trip_type == self.TripType.HOURLY else None,
+            meet_and_greet=self.meet_and_greet,
+            city_to_city=self.is_city_to_city,
+        )
 
 
 class BookingPriceLine(models.Model):
