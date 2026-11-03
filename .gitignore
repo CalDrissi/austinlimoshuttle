@@ -51,3 +51,7 @@ luxride-nextjs.vercel.appx/
 
 # graphify knowledge graph (generated, rebuildable)
 graphify-out/
+
+# Claude playwright-mcp screenshot/trace artifacts
+.playwright-mcp/
+frontend/.playwright-mcp/

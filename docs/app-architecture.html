@@ -876,6 +876,25 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · New optimized homepage hero carousel images</span><span class="tbl">frontend</span></div>
+    <table>
+      <tr><td><b>Replaced the homepage hero carousel backgrounds</b> with three dark-luxury images
+      (Escalade + Austin skyline / chauffeur at the door / leather interior) in
+      <code>HeroSection.tsx</code>, cut from 5 legacy <code>banner*.png</code> slides to 3.
+      Each slide now renders a responsive <code>&lt;picture&gt;</code> (AVIF + WebP, <code>srcset</code> at
+      640/768/1024/1366/1672w, <code>sizes="100vw"</code>) filling the cover box via <code>object-fit:cover</code>,
+      instead of a CSS <code>background-image</code>, so phones fetch small files. <b>Perf:</b> largest WebP
+      (1672w) is ~93&nbsp;KB (AVIF ~62&nbsp;KB); mobile 640w is 9–17&nbsp;KB per slide — down from
+      ~470–710&nbsp;KB PNGs. The <b>first slide is preloaded</b> (<code>ReactDOM.preload</code> + <code>fetchPriority="high"</code>,
+      responsive <code>imageSrcSet</code>) for LCP; the other two are <code>loading="lazy"</code>. A left-to-right
+      <code>.hero-scrim</code> gradient keeps the headline + booking form readable. Assets live in
+      <code>frontend/public/assets/imgs/page/homepage1/hero/</code>; source PNGs stay out of the repo.
+      <b>Verified:</b> <code>npm run build</code> passes; desktop + mobile screenshots confirm readable overlay
+      and the booking form unchanged.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-10-23 · Add <code>cryptography</code> to backend runtime deps (unblocks boot)</span><span class="tbl">backend</span></div>
     <table>
       <tr><td><b>Django could not start.</b> <code>config/crypto.py</code> does
