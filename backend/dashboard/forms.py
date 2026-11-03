@@ -12,7 +12,7 @@ from content.models import Banner, GalleryImage, Page, SiteSettings, Testimonial
 from fleet.models import DistanceBand, IntercityBand, Vehicle
 from notifications.models import EmailSettings, SmsSettings
 from payments.models import PaymentSettings, PayPalSettings
-from pricing.models import BlackoutDate, CityRoute, PricingSettings, TimeSurcharge
+from pricing.models import BlackoutDate, PricingSettings, TimeSurcharge
 
 User = get_user_model()
 
@@ -602,8 +602,8 @@ IntercityBandFormSet = forms.inlineformset_factory(
 # The "City routes" managed page (CityRouteForm / CityRoutePriceForm) was
 # removed on 2026-11-03 with the city-to-city rework -- fixed flat-rate routes
 # are superseded by the free-form per-mile IntercityBand card above. The
-# CityRoute model itself stays (owned by @pricing-rates, and still referenced by
-# the manual-booking form); only the dashboard editing forms for it are gone.
+# CityRoute / CityRoutePrice models themselves were deleted in the same rework
+# (all consumers are gone); city-to-city is now priced per-mile like a transfer.
 
 
 class TimeSurchargeForm(BootstrapFormMixin, forms.ModelForm):

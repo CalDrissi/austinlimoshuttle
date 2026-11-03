@@ -1095,7 +1095,6 @@ class TestManualBooking:
         b = Booking.objects.get()
         assert b.distance_miles == Decimal("50")
         assert b.total == Decimal("250.00")  # 50 mi x $5/mi
-        assert b.city_route_id is None  # no fixed route anymore
 
     def test_city_requires_a_dropoff(self, client, roles, vehicle):
         self._login(client, roles)

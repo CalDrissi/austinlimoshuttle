@@ -110,11 +110,6 @@ class Booking(models.Model):
     trip_type = models.CharField(
         max_length=10, choices=TripType.choices, default=TripType.TRANSFER,
     )
-    city_route = models.ForeignKey(
-        "pricing.CityRoute", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="bookings",
-        help_text="Set when the fare came from a fixed city-to-city route.",
-    )
     # Persisted marker: this journey was booked as a free-form city-to-city
     # (intercity) trip. A plain boolean rather than a `TripType` value because,
     # for pricing, a city-to-city trip *is* a distance-based transfer -- it

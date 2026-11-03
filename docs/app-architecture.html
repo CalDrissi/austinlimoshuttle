@@ -871,6 +871,26 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · <code>CityRoute</code> / <code>CityRoutePrice</code> models deleted (city-to-city rework, Phase 3)</span><span class="tbl">pricing</span></div>
+    <table>
+      <tr><td>With every consumer gone — the engine, the <code>GET /api/city-routes/</code> endpoint, the dashboard
+      "City routes" page, the manual-booking <code>city</code> mode, and the <code>Booking.city_route</code> FK (dropped
+      in <code>bookings/migrations/0007</code>) — the two fixed-route models were removed from <code>pricing/models.py</code>
+      and their tables dropped. Migration <code>pricing/0005_delete_cityroute_cityrouteprice.py</code> depends on
+      <code>bookings 0007</code> (so the inbound FK is gone first) and uses <code>DeleteModel</code> (DROP TABLE), dropping
+      the child <code>CityRoutePrice</code> before parent <code>CityRoute</code> — a bare <code>DROP COLUMN route_id</code>
+      is refused by MariaDB while that column still backs the <code>(route, vehicle)</code> unique index (err 1072).
+      Cross-lane cleanup: dropped the dead <code>CityRoute</code> import in <code>dashboard/forms.py</code>, refreshed the
+      now-stale "model stays" comments in <code>dashboard/forms.py</code> + <code>dashboard/managed.py</code>, and removed the
+      <code>b.city_route_id is None</code> assertion in <code>test_dashboard.py</code> (the field no longer exists).
+      City-to-city is now priced per-mile like a transfer. <b>Verified:</b> <code>grep CityRoute backend</code> is
+      migration-history only; <code>makemigrations --check</code> clean; migrations apply on a fresh DB; full suite green
+      (pricing + bookings + api + dashboard = 280 passed, plus 300 across the other non-legacy apps). <b>Not merged / not
+      deployed.</b></td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-03 · City-to-City is now free-form &amp; distance-based (API); fixed-route endpoint removed</span><span class="tbl">backend · api</span></div>
     <table>
       <tr><td><b>The city-to-city quote no longer uses a fixed route.</b> A city-to-city request now carries
