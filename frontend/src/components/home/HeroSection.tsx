@@ -2,9 +2,9 @@
 
 import ReactDOM from "react-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Pagination, Autoplay } from "swiper/modules";
-import "swiper/css/navigation";
-import "swiper/css/pagination";
+import { EffectFade, Autoplay } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/effect-fade";
 import BookingSearchWidget from "@/components/booking/BookingSearchWidget";
 
 const HERO_DIR = "/assets/imgs/page/homepage1/hero";
@@ -37,14 +37,17 @@ export default function HeroSection() {
       <div className="box-swiper">
         <Swiper
           className="swiper-container swiper-banner-1 pb-0"
-          modules={[Navigation, Pagination, Autoplay]}
+          modules={[EffectFade, Autoplay]}
           loop
-          autoplay={{ delay: 5000, disableOnInteraction: false }}
-          navigation={{
-            prevEl: ".swiper-button-prev-banner",
-            nextEl: ".swiper-button-next-banner",
+          effect="fade"
+          fadeEffect={{ crossFade: true }}
+          speed={1600}
+          allowTouchMove={false}
+          autoplay={{
+            delay: 5000,
+            disableOnInteraction: false,
+            pauseOnMouseEnter: true,
           }}
-          pagination={{ el: ".swiper-pagination-banner", type: "fraction" }}
         >
           {SLIDES.map((slide, i) => (
             <SwiperSlide key={slide.name}>
@@ -77,12 +80,6 @@ export default function HeroSection() {
             </SwiperSlide>
           ))}
         </Swiper>
-
-        <div className="box-pagination-button">
-          <div className="swiper-button-prev swiper-button-prev-banner" />
-          <div className="swiper-button-next swiper-button-next-banner" />
-          <div className="swiper-pagination swiper-pagination-banner swiper-pagination-fraction" />
-        </div>
       </div>
 
       <BookingSearchWidget />

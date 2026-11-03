@@ -876,6 +876,21 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-03 · Homepage hero carousel: removed nav controls + smooth crossfade</span><span class="tbl">frontend</span></div>
+    <table>
+      <tr><td><b>Polished the homepage hero carousel per client feedback</b> in <code>HeroSection.tsx</code>.
+      <b>Removed all visible nav controls</b> — the prev/next arrow buttons and the "X / N" fraction
+      slide counter (dropped the <code>Navigation</code>/<code>Pagination</code> Swiper modules and the
+      <code>box-pagination-button</code> markup). <b>Replaced the hard slide with a smooth crossfade</b>
+      (<code>EffectFade</code> + <code>fadeEffect.crossFade</code>, <code>speed=1600ms</code>) that
+      <b>auto-advances every 5s</b> (<code>Autoplay</code> delay 5000, <code>pauseOnMouseEnter</code>);
+      touch-drag disabled since there are no controls. The headline overlay + booking form stay intact
+      and readable over every slide, and the optimized responsive <code>&lt;picture&gt;</code> images
+      (AVIF/WebP, slide-1 preload, lazy rest) are unchanged. <b>Verified:</b> <code>npm run build</code> passes.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-03 · New optimized homepage hero carousel images</span><span class="tbl">frontend</span></div>
     <table>
       <tr><td><b>Replaced the homepage hero carousel backgrounds</b> with three dark-luxury images
