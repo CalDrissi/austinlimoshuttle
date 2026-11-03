@@ -310,6 +310,22 @@ img {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
+/* The same search dock embedded on a vehicle detail page. On the hero the dock
+   is absolutely positioned over the banner; embedded, it must flow normally in
+   its section, so undo the desktop absolute placement and let the card card sit
+   inside the page column. */
+.mm-book-embed .mm-search-dock { position: relative; max-width: none; }
+@media (min-width: 1200px) {
+  .mm-book-embed .mm-search-dock {
+    position: static; bottom: auto; left: auto; right: auto; max-width: none;
+  }
+}
+/* Small note above the embedded card naming the pre-selected vehicle. */
+.mm-preselect-note {
+  margin: 0 0 10px; font-size: 14px; color: #4a5568;
+}
+.mm-preselect-note strong { color: #0E0E0E; }
+
 /* ===================================================================== *
  * Home search card — single horizontal row (desktop)                    *
  *                                                                       *

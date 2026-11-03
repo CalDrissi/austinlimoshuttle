@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { quoteService } from "@/lib/api/quote.service";
@@ -50,6 +51,7 @@ export default function BookingVehiclePage() {
   const router = useRouter();
   const search = useBookingStore((s) => s.search);
   const setQuote = useBookingStore((s) => s.setQuote);
+  const clearPreferredVehicle = useBookingStore((s) => s.clearPreferredVehicle);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["quotes", search],
@@ -83,6 +85,25 @@ export default function BookingVehiclePage() {
   });
   const byId = new Map((vehicles ?? []).map((v) => [v.id, v]));
 
+  // When the funnel began on a vehicle's detail page, that class is already
+  // chosen: once its quote arrives, select it and skip ahead to the extras
+  // step. The preference is consumed (whether or not the vehicle was priced for
+  // this journey) so a Back from the next step shows the full list instead of
+  // bouncing forward again; if the vehicle couldn't be priced, we simply fall
+  // through to the normal list below.
+  const preferredId = search?.preferredVehicleId;
+  const consumed = useRef(false);
+  useEffect(() => {
+    if (consumed.current || preferredId == null || !data) return;
+    consumed.current = true;
+    const match = data.quotes.find((q) => q.vehicle_id === preferredId);
+    clearPreferredVehicle();
+    if (match) {
+      setQuote(match);
+      router.replace("/booking/extra");
+    }
+  }, [preferredId, data, clearPreferredVehicle, setQuote, router]);
+
   const handleSelect = (quote: QuoteResult) => {
     setQuote(quote);
     router.push("/booking/extra");
@@ -99,7 +120,9 @@ export default function BookingVehiclePage() {
               {!search && (
                 <p className="text-16 color-grey">Start with a search from the <a href="/">home page</a>.</p>
               )}
-              {isLoading && <p className="text-16 color-grey">Pricing vehicles for your journey…</p>}
+              {(isLoading || (preferredId != null && !error)) && (
+                <p className="text-16 color-grey">Pricing vehicles for your journey…</p>
+              )}
               {error && (
                 <p className="text-16" style={{ color: "#c0392b" }}>
                   {(error as Error).message || "Could not price that journey. Check the addresses and try again."}
@@ -107,7 +130,7 @@ export default function BookingVehiclePage() {
               )}
 
               <div className="list-vehicles">
-                {data?.quotes.map((q) => (
+                {preferredId == null && data?.quotes.map((q) => (
                   <VehicleCard
                     key={q.vehicle_id}
                     quote={q}

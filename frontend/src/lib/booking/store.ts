@@ -20,6 +20,12 @@ export interface Search {
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
   meetGreet: boolean;
+  /**
+   * Set when the search starts from a vehicle's detail page: the customer has
+   * already chosen this vehicle class, so the vehicle-pick step auto-selects its
+   * quote and skips ahead. Unset for the normal homepage funnel.
+   */
+  preferredVehicleId?: number;
 }
 
 export interface Trip {
@@ -55,6 +61,12 @@ interface BookingState {
   setTrip: (trip: Partial<Trip>) => void;
   setContact: (contact: Contact) => void;
   setReference: (reference: string) => void;
+  /**
+   * Consume the detail-page vehicle preference once the pick step has acted on
+   * it, so returning to the vehicle list (Back) shows the full list instead of
+   * auto-forwarding again. Leaves the current search and quote untouched.
+   */
+  clearPreferredVehicle: () => void;
   /** Clear the in-progress selections but keep the booking reference. */
   clearDraft: () => void;
   reset: () => void;
@@ -79,6 +91,10 @@ export const useBookingStore = create<BookingState>()(
       setTrip: (trip) => set((s) => ({ trip: { ...s.trip, ...trip } })),
       setContact: (contact) => set({ contact }),
       setReference: (reference) => set({ reference }),
+      clearPreferredVehicle: () =>
+        set((s) =>
+          s.search ? { search: { ...s.search, preferredVehicleId: undefined } } : {},
+        ),
       clearDraft: () =>
         set({ search: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
       reset: () => set(initial),

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { catalogService } from "@/lib/api/catalog.service";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
+import BookingSearchWidget from "@/components/booking/BookingSearchWidget";
 import type { Vehicle } from "@/types/api";
 
 /** Marketing copy from the DB is newline-separated; render it as a tick list. */
@@ -127,7 +128,7 @@ export default function FleetDetailPage() {
                 </ul>
 
                 <div className="mt-30">
-                  <Link className="btn btn-primary btn-book hover-up" href="/">
+                  <Link className="btn btn-primary btn-book hover-up" href="#book-this-vehicle">
                     Book Now
                     <svg className="icon-16 ml-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
@@ -136,6 +137,21 @@ export default function FleetDetailPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Embedded booking form, pre-selected to this vehicle. Reuses the hero
+          search widget; the resulting search carries this vehicle so the funnel
+          auto-selects it and skips the pick step. */}
+      <section id="book-this-vehicle" className="section pt-60 pb-60 mt-60 bg-1">
+        <div className="container-sub">
+          <h2 className="heading-44-medium color-text mb-10 text-center">Book the {vehicle.name}</h2>
+          <p className="text-16 color-grey mb-40 text-center">
+            Enter your trip details — we&rsquo;ll price this vehicle for your journey.
+          </p>
+          <div className="mm-book-embed">
+            <BookingSearchWidget preselectVehicleId={vehicle.id} vehicleName={vehicle.name} />
           </div>
         </div>
       </section>

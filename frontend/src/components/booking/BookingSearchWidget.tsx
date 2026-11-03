@@ -134,7 +134,19 @@ const TABS: [TripType, string][] = [
 
 const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-export default function BookingSearchWidget() {
+/**
+ * The hero search card. Reused, unchanged, on the homepage (no props) and on a
+ * vehicle's detail page: there `preselectVehicleId` is passed so the resulting
+ * search carries that vehicle, and the pick step auto-selects it. `vehicleName`
+ * is shown as a small heading so the customer sees which class they're booking.
+ */
+export default function BookingSearchWidget({
+  preselectVehicleId,
+  vehicleName,
+}: {
+  preselectVehicleId?: number;
+  vehicleName?: string;
+} = {}) {
   const router = useRouter();
   const setSearch = useBookingStore((s) => s.setSearch);
 
@@ -176,13 +188,13 @@ export default function BookingSearchWidget() {
       setSearch({
         tripType,
         pickupAddress: from.trim(), dropoffAddress: to.trim(),
-        date, time, meetGreet,
+        date, time, meetGreet, preferredVehicleId: preselectVehicleId,
       });
     } else {
       setSearch({
         tripType: "hourly",
         pickupAddress: from.trim(), dropoffAddress: "", hours: Number(hours),
-        date, time, meetGreet,
+        date, time, meetGreet, preferredVehicleId: preselectVehicleId,
       });
     }
     router.push("/booking/vehicle");
@@ -190,6 +202,11 @@ export default function BookingSearchWidget() {
 
   return (
     <div className="mm-search-dock">
+      {vehicleName && (
+        <p className="mm-preselect-note">
+          Booking the <strong>{vehicleName}</strong> — just enter your trip details.
+        </p>
+      )}
       {/* Segmented control, docked directly above the search card. */}
       <div className="mm-trip-tabs">
         {tabs.map(([value, label]) => (
