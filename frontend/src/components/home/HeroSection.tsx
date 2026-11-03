@@ -70,16 +70,18 @@ export default function HeroSection() {
                 </picture>
                 <span className="hero-scrim" aria-hidden="true" />
               </div>
-              <div className="box-banner-info">
-                <p className="text-16 color-white">Serving Austin &amp; Central Texas</p>
-                <h2 className="heading-52-medium color-white">
-                  Austin&rsquo;s Premier <br className="d-none d-lg-block" />
-                  Chauffeur &amp; Limo Service
-                </h2>
-              </div>
+
             </SwiperSlide>
           ))}
         </Swiper>
+      </div>
+
+      <div className="box-banner-info">
+        <p className="text-16 color-white">Serving Austin &amp; Central Texas</p>
+        <h1 className="heading-52-medium color-white">
+          Austin&rsquo;s Premier <br className="d-none d-lg-block" />
+          Chauffeur &amp; Limo Service
+        </h1>
       </div>
 
       <BookingSearchWidget />

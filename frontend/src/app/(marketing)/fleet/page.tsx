@@ -41,7 +41,7 @@ export default function FleetPage() {
             </div>
           </div>
 
-          <div className="row mt-30">
+          <div className="row mt-30 fleet-grid">
             {loading && <div className="col-12"><p className="text-16 color-grey">Loading the fleet…</p></div>}
             {!loading && !vehicles.length && (
               <div className="col-12"><p className="text-16 color-grey">No vehicles are available right now.</p></div>
@@ -59,8 +59,8 @@ export default function FleetPage() {
                     <Link href={`/fleet/${v.slug}`}><img src={v.photo || VEHICLE_PLACEHOLDER} alt={v.name} /></Link>
                   </div>
                   <div className="cardInfoBottom">
-                    <div className="passenger"><span className="icon-circle icon-passenger"></span><span className="text-14">Passengers<span>{v.passenger_capacity}</span></span></div>
-                    <div className="luggage"><span className="icon-circle icon-luggage"></span><span className="text-14">Luggage<span>{v.luggage_capacity}</span></span></div>
+                    <div className="passenger"><span className="icon-circle icon-passenger"></span><span className="text-14">Passengers <span>{v.passenger_capacity}</span></span></div>
+                    <div className="luggage"><span className="icon-circle icon-luggage"></span><span className="text-14">Luggage <span>{v.luggage_capacity}</span></span></div>
                   </div>
                 </div>
               </div>
