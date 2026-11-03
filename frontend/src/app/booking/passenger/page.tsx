@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import { authService } from "@/lib/api/auth.service";
+import { API_BASE_URL } from "@/lib/api/config";
 import OrderSummary from "@/components/booking/OrderSummary";
 
 type Panel = "signin" | "register" | null;
@@ -134,17 +135,18 @@ export default function BookingPassengerPage() {
                     </button>
                   </div>
                   {panel === "signin" && (
-                    <div className="mm-auth-form">
+                    <div className="mm-auth-form mm-signin-form">
                       <div className="row">
                         <div className="col-12 mb-15">
-                          <label className="text-14 color-grey">Email</label>
-                          <input type="email" className="form-control" value={li.email} onChange={(e) => setLi({ ...li, email: e.target.value })} />
+                          <label htmlFor="booking-signin-email" className="text-14">Email</label>
+                          <input id="booking-signin-email" autoComplete="email" placeholder="you@example.com" type="email" className="form-control" value={li.email} onChange={(e) => setLi({ ...li, email: e.target.value })} />
                         </div>
                         <div className="col-12 mb-15">
-                          <label className="text-14 color-grey">Password</label>
-                          <input type="password" className="form-control" value={li.password} onChange={(e) => setLi({ ...li, password: e.target.value })} />
+                          <label htmlFor="booking-signin-password" className="text-14">Password</label>
+                          <input id="booking-signin-password" autoComplete="current-password" placeholder="Your password" type="password" className="form-control" value={li.password} onChange={(e) => setLi({ ...li, password: e.target.value })} />
                         </div>
                       </div>
+                      <p className="mb-15"><a className="mm-password-reset" href={`${API_BASE_URL.replace(/\/api\/?$/, "")}/accounts/password-reset/`}>Forgot password?</a></p>
                       {authErr && <p className="text-14" style={{ color: "#c0392b" }}>{authErr}</p>}
                       <button className="btn btn-primary hover-up" onClick={doLogin} disabled={authBusy}>
                         {authBusy ? "Signing in…" : "Sign in"}

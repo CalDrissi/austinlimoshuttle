@@ -33,7 +33,7 @@ CSP_DIRECTIVES = {
     "default-src": "'self'",
     "script-src": f"'self' {STRIPE_JS} https://maps.googleapis.com https://maps.gstatic.com",
     "style-src": "'self' 'unsafe-inline'",
-    "img-src": f"'self' data: https://*.googleapis.com https://*.gstatic.com {OSM_TILES}",
+    "img-src": f"'self' data: https://*.googleapis.com https://*.gstatic.com {MAPS_HOSTS} {OSM_TILES}",
     "font-src": "'self'",
     "connect-src": f"'self' {STRIPE_API} {MAPS_HOSTS}",
     "frame-src": STRIPE_JS,

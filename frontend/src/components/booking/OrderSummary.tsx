@@ -1,6 +1,7 @@
 "use client";
 
 import { useBookingStore } from "@/lib/booking/store";
+import ItineraryMap from "./ItineraryMap";
 import type { Journey } from "@/types/api";
 
 function money(amount: string, currency: string) {
@@ -22,13 +23,14 @@ export default function OrderSummary({ journey }: { journey?: Journey | null }) 
           <a className="text-14-medium color-text text-decoration-underline" href="/">Edit</a>
         </div>
         <div className="mt-20">
-          <ul className="list-routes">
+          <ul className="mm-summary-routes" aria-label="Itinerary">
             <li><span className="location-item">A</span><span className="info-location text-14-medium">{search.pickupAddress}</span></li>
             {(search.tripType === "transfer" || search.tripType === "city") && (
               <li><span className="location-item">B</span><span className="info-location text-14-medium">{search.dropoffAddress}</span></li>
             )}
           </ul>
         </div>
+        <ItineraryMap search={search} />
         <div className="mt-20">
           <ul className="list-icons">
             {search.tripType === "hourly" && (
