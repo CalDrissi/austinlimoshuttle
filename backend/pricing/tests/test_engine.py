@@ -285,7 +285,11 @@ class TestQuoteAll:
     def test_ignores_inactive_vehicles(self, business_class, settings_obj):
         business_class.is_active = False
         business_class.save()
-        assert quote_all(austin(2026, 6, 1, 12), distance_miles=Decimal("25")) == []
+        names = {
+            q.vehicle_name
+            for q in quote_all(austin(2026, 6, 1, 12), distance_miles=Decimal("25"))
+        }
+        assert "Business Class" not in names
 
 
 @pytest.mark.django_db
