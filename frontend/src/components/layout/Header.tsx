@@ -62,13 +62,17 @@ export default function Header() {
                   </ul>
                 </nav>
 
-                <div
+                <button
+                  type="button"
+                  aria-label={mobileOpen ? "Close menu" : "Open menu"}
+                  aria-expanded={mobileOpen}
+                  aria-controls="storefront-mobile-menu"
                   className={`burger-icon burger-icon-white${mobileOpen ? " burger-close" : ""}`}
                   onClick={() => setMobileOpen(!mobileOpen)}
                 >
                   <span className="burger-icon-mid" />
                   <span className="burger-icon-bottom" />
-                </div>
+                </button>
               </div>
 
               <div className="header-right">
@@ -84,7 +88,7 @@ export default function Header() {
       </header>
 
       {/* Mobile nav */}
-      <div className={`mobile-header-active mobile-header-wrapper-style${mobileOpen ? " sidebar-visible" : ""}`}>
+      <div id="storefront-mobile-menu" className={`mobile-header-active mobile-header-wrapper-style${mobileOpen ? " sidebar-visible" : ""}`}>
         <div className="mobile-header-wrapper-inner">
           <div className="mobile-header-content-area">
             <div className="perfect-scroll">

@@ -8,6 +8,43 @@
  * markup. See §11 "Porting gotcha" in the dev docs.
  * ------------------------------------------------------------------ */
 
+/* Keep the sign-in pill visible alongside the compact navigation. The template
+   hides .box-button-login below 450px; reserve a separate hamburger touch area. */
+@media (max-width: 1199.98px) {
+  .header .main-header .header-left .header-logo { flex: 0 0 150px; }
+  .header .main-header .header-left .header-nav { width: 0; padding-left: 0; }
+  .header .main-header .header-left .header-right {
+    width: auto;
+    min-width: 0;
+    margin-left: auto;
+    padding-right: 56px;
+  }
+  .header .box-button-login { display: inline-block !important; }
+  .header .box-button-login .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    max-width: 100%;
+    padding: 10px 16px;
+    overflow-wrap: anywhere;
+  }
+  .header .burger-icon,
+  .header .burger-icon.burger-close {
+    width: 44px;
+    height: 44px;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .header .burger-icon > span { left: 10px; width: 24px; }
+  .header .burger-icon > span.burger-icon-mid { top: 16px; }
+  .header .burger-icon > span.burger-icon-bottom { bottom: 16px; }
+}
+
 /* Keep every image inside its box. */
 img {
   max-width: 100%;
