@@ -10,6 +10,7 @@ import type { BookingAmendRequest } from "@/lib/api/booking.service";
 import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { cardsService } from "@/lib/api/cards.service";
+import AddCard from "@/components/account/AddCard";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import type { Booking } from "@/types/api";
 
@@ -209,6 +210,16 @@ function AccountDashboard() {
     }
   };
 
+  const makeDefaultCard = async (id: number) => {
+    setActionError("");
+    try {
+      await cardsService.setDefault(id);
+      qc.invalidateQueries({ queryKey: ["my-cards"] });
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Could not set the default card.");
+    }
+  };
+
   const cancel = async (ref: string) => {
     setActionError("");
     try {
@@ -311,17 +322,25 @@ function AccountDashboard() {
                   </p>
                 )}
                 {cards.map((c) => (
-                  <div key={c.id} className="mm-ride" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div key={c.id} className="mm-ride" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                     <div>
                       <b>{c.label}</b>
                       {c.is_default && <span className="text-14 color-grey"> · default</span>}
                       {c.expiry && <div className="text-14 color-grey">Expires {c.expiry}</div>}
                     </div>
-                    <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => setPendingAction({ kind: "card", id: c.id })}>
-                      Remove
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {!c.is_default && (
+                        <button className="btn btn-border btn-sm hover-up" onClick={() => makeDefaultCard(c.id)}>
+                          Set default
+                        </button>
+                      )}
+                      <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => setPendingAction({ kind: "card", id: c.id })}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
+                <AddCard onAdded={() => qc.invalidateQueries({ queryKey: ["my-cards"] })} />
               </>
             )}
 

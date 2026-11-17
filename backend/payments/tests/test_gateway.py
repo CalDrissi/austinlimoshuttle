@@ -457,3 +457,66 @@ class TestRefunds:
         gateway.record_refund_from_charge(charge)
         assert Refund.objects.count() == 1
         assert Refund.objects.get().amount == Decimal("50.00")
+
+
+@pytest.mark.django_db
+class TestCardsOnFile:
+    """Saving a card via a SetupIntent -- no charge, just a card kept for later."""
+
+    @pytest.fixture
+    def customer(self, db):
+        return User.objects.create_user(
+            email="saver@example.com", password="PayLocal!2026",
+            first_name="Sa", last_name="Ver",
+        )
+
+    def test_setup_intent_creates_a_customer_and_returns_the_secret(self, customer, configured):
+        client = MagicMock()
+        client.customers.create.return_value = MagicMock(id="cus_new")
+        client.setup_intents.create.return_value = MagicMock(client_secret="seti_secret")
+        with patch("payments.gateway._client", return_value=client):
+            secret = gateway.create_setup_intent(customer)
+        assert secret == "seti_secret"
+        customer.refresh_from_db()
+        assert customer.stripe_customer_id == "cus_new"
+        _, kwargs = client.setup_intents.create.call_args
+        # Off-session usage so staff can bill the card later -- same as checkout.
+        assert kwargs["params"]["usage"] == "off_session"
+        assert kwargs["params"]["customer"] == "cus_new"
+
+    def test_save_card_rejects_a_foreign_payment_method(self, customer, configured):
+        customer.stripe_customer_id = "cus_mine"
+        customer.save(update_fields=["stripe_customer_id"])
+        client = MagicMock()
+        client.payment_methods.retrieve.return_value = MagicMock(
+            customer="cus_someone_else", card=MagicMock(),
+        )
+        with patch("payments.gateway._client", return_value=client):
+            with pytest.raises(gateway.PaymentGatewayError, match="could not be verified"):
+                gateway.save_card_from_setup(customer, "pm_theirs")
+        assert customer.saved_cards.count() == 0
+
+    def test_save_card_persists_display_bits_only(self, customer, configured):
+        customer.stripe_customer_id = "cus_mine"
+        customer.save(update_fields=["stripe_customer_id"])
+        client = MagicMock()
+        client.payment_methods.retrieve.return_value = MagicMock(
+            customer="cus_mine",
+            card=MagicMock(brand="visa", last4="4242", exp_month=4, exp_year=2031),
+        )
+        with patch("payments.gateway._client", return_value=client):
+            card = gateway.save_card_from_setup(customer, "pm_mine")
+        assert card.last4 == "4242"
+        assert card.brand == "visa"
+        assert card.is_default is True
+
+    def test_set_default_moves_the_flag(self, customer):
+        from payments.models import SavedCard
+        a = SavedCard.objects.create(customer=customer, stripe_payment_method_id="pm_a",
+                                     last4="1111", is_default=True)
+        b = SavedCard.objects.create(customer=customer, stripe_payment_method_id="pm_b",
+                                     last4="2222", is_default=False)
+        gateway.set_default_card(b)
+        a.refresh_from_db(); b.refresh_from_db()
+        assert b.is_default is True
+        assert a.is_default is False

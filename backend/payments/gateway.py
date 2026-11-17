@@ -266,6 +266,81 @@ def save_card_for_user(user, payment_method_id: str):
     return saved
 
 
+def create_setup_intent(user) -> str:
+    """
+    Start saving a card on file and return the SetupIntent client secret.
+
+    No charge happens: a SetupIntent collects and verifies a card for later
+    off-session use. It is attached to the user's Stripe Customer (created on
+    first use, reused after) so the resulting PaymentMethod is theirs and can be
+    charged later by staff -- the same customer/keys pattern as checkout.
+    """
+    config = _settings()
+
+    def _create():
+        customer_id = get_or_create_customer(user)
+        return _client(config).setup_intents.create(params={
+            "customer": customer_id,
+            "usage": "off_session",
+            "payment_method_types": ["card"],
+            "metadata": {"user_id": str(user.pk)},
+        })
+
+    try:
+        intent = _create()
+    except stripe.StripeError as exc:
+        # A stale cached customer id shouldn't wedge adding a card. Drop it and
+        # retry once with a freshly created customer.
+        if _is_missing_customer(exc):
+            user.stripe_customer_id = ""
+            user.save(update_fields=["stripe_customer_id"])
+            try:
+                intent = _create()
+            except stripe.StripeError as retry_exc:
+                logger.error("SetupIntent failed for user %s after customer reset: %s",
+                             user.pk, retry_exc)
+                raise PaymentGatewayError("Could not start adding a card.") from retry_exc
+        else:
+            logger.error("SetupIntent creation failed for user %s: %s", user.pk, exc)
+            raise PaymentGatewayError("Could not start adding a card.") from exc
+
+    return intent.client_secret
+
+
+def save_card_from_setup(user, payment_method_id: str):
+    """
+    Persist a card the customer just added via a SetupIntent.
+
+    The PaymentMethod must already be attached to this user's Stripe Customer
+    (the SetupIntent does that on confirmation). We verify that before saving so
+    nobody can record a PaymentMethod id that isn't theirs, then read the
+    display bits back from Stripe -- never from the client.
+    """
+    if not user.stripe_customer_id:
+        raise PaymentGatewayError("That card could not be verified for your account.")
+
+    client = _client(_settings())
+    try:
+        pm = client.payment_methods.retrieve(payment_method_id)
+    except stripe.StripeError as exc:
+        raise PaymentGatewayError("Could not read the card details.") from exc
+
+    if getattr(pm, "customer", None) != user.stripe_customer_id:
+        raise PaymentGatewayError("That card could not be verified for your account.")
+
+    return save_card_for_user(user, payment_method_id)
+
+
+def set_default_card(saved_card) -> None:
+    """Make one card the default; clears the flag on the user's other cards."""
+    user = saved_card.customer
+    user.saved_cards.exclude(pk=saved_card.pk).filter(is_default=True) \
+        .update(is_default=False)
+    if not saved_card.is_default:
+        saved_card.is_default = True
+        saved_card.save(update_fields=["is_default"])
+
+
 def charge_saved_card(saved_card, amount: Decimal, description: str, *, booking=None) -> Payment:
     """
     Charge a card on file off-session -- e.g. staff billing a trip extension.

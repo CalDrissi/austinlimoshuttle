@@ -446,6 +446,16 @@ class ProfileUpdateSerializer(serializers.Serializer):
     phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
 
 
+class AddCardSerializer(serializers.Serializer):
+    """The PaymentMethod id the browser produced after confirming a SetupIntent."""
+    payment_method_id = serializers.CharField(max_length=64)
+
+
+class SetupIntentResponseSerializer(serializers.Serializer):
+    client_secret = serializers.CharField()
+    publishable_key = serializers.CharField()
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

@@ -675,6 +675,29 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Response 201 · BookingAmendmentRequest {id, booking_reference, status, status_display, requested_changes, changes[], old_total, new_subtotal, new_surcharge_total, new_tax, new_total, currency, price_delta, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
       <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
 
+  <div class="ep"><div class="ep-h"><span class="m patch">PATCH</span><span class="sig">/api/account/profile/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">Self-service profile edit. All fields optional (partial PATCH). <code>email</code> is format-validated and must be <b>unique</b> across accounts (case-insensitive, excluding your own row) — it is also the sign-in identity, so a change updates how you log in. Values are normalised server-side (email lowercased, trimmed/length-capped). The <b>Profile</b> tab on <code>/account</code> loads the current values and saves here.</p>
+      <div class="lab">Request · ProfileUpdate (all optional)</div><div class="fieldgrid"><span>first_name<span class="ty"> str</span></span><span>last_name<span class="ty"> str</span></span><span>email<span class="ty"> email</span></span><span>phone<span class="ty"> str</span></span></div>
+      <div class="lab">Response 200 · User</div><div class="codes"><span class="code ok">200</span><span class="code">400</span><span class="code">403</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/account/cards/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">The signed-in customer's cards on file. Display bits only — no data you could charge with.</p>
+      <div class="lab">Response 200 · SavedCard[] {id, brand, last4, exp_month, exp_year, is_default, label, expiry}</div><div class="codes"><span class="code ok">200</span><span class="code">403</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/cards/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">Record a card the browser just added via a SetupIntent. The PaymentMethod must already be attached to <b>this user's</b> Stripe customer (the SetupIntent does that) — the server verifies ownership and reads brand/last4/expiry back from Stripe, never from the client. First card becomes the default.</p>
+      <div class="lab">Request · AddCard</div><div class="fieldgrid"><span class="r">payment_method_id<span class="ty"> str</span></span></div>
+      <div class="lab">Response 201 · SavedCard</div><div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">403</span><span class="code">502</span><span class="code">503</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/cards/setup-intent/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">Start adding a card. Ensures/reuses the customer's Stripe customer id and returns a <b>SetupIntent</b> client secret (no charge; <code>usage=off_session</code> so staff can bill it later). The browser confirms with Stripe Elements → <code>confirmCardSetup</code>, then POSTs the resulting PaymentMethod to <code>POST /api/account/cards/</code>.</p>
+      <div class="lab">Response 200 · {client_secret, publishable_key}</div><div class="codes"><span class="code ok">200</span><span class="code">403</span><span class="code">502</span><span class="code">503</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/cards/{pk}/default/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">Make a saved card the default; clears the flag on the customer's other cards. Scoped to the owner — another customer's card id is a <b>404</b>.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">pk<span class="ty"> int</span></span></div>
+      <div class="lab">Response 200 · SavedCard</div><div class="codes"><span class="code ok">200</span><span class="code">403</span><span class="code">404</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m delete">DELETE</span><span class="sig">/api/account/cards/{pk}/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm">Remove a card on file — detaches the PaymentMethod at Stripe and deletes the local record. Owner-scoped (404 otherwise). If the default is removed, the next card becomes default.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">pk<span class="ty"> int</span></span></div>
+      <div class="lab">Response 204</div><div class="codes"><span class="code ok">204</span><span class="code">403</span><span class="code">404</span></div></div></div>
+
   <h3>Staff — booking change requests <span class="muted" style="font-weight:400;font-size:13px">— require a staff session (<code>is_staff</code>)</span></h3>
   <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/staff/amendment-requests/</span><span class="au session">staff</span></div>
     <div class="ep-b"><p class="sm">The back-office review queue. Defaults to <code>pending</code>; <code>?status=approved|declined|all</code> widens it.</p>
@@ -889,6 +912,36 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-17 · Account self-service: edit profile + add/replace card on file</span><span class="tbl">api · payments · accounts · frontend</span></div>
+    <table>
+      <tr><td><b>Edit profile.</b> New owner-scoped <code>PATCH /api/account/profile/</code> (serializer
+      <code>ProfileUpdateSerializer</code>, view <code>api.views.account_profile</code>) edits
+      <code>first_name / last_name / email / phone</code> — all optional (partial PATCH). Email is format-validated
+      and checked <b>unique across accounts</b> (case-insensitive, excluding the caller's own row) since it is the
+      sign-in identity; values are normalised server-side. The <b>/account "Profile"</b> tab now loads the current
+      values and <b>saves here</b> (email made editable; <code>authService.updateAccountProfile</code>), with
+      inline success/error feedback and an <code>useRefreshAuth()</code> re-fetch so the header reflects the change.</td></tr>
+      <tr><td><b>Add / replace card via Stripe SetupIntent.</b> <code>POST /api/account/cards/setup-intent/</code>
+      ensures/reuses the customer's Stripe customer id and returns a SetupIntent <code>client_secret</code>
+      (<code>usage=off_session</code>; no charge) — reuses the checkout client/keys/customer pattern
+      (<code>gateway.create_setup_intent</code>, stale-customer retry like the PaymentIntent path).
+      <code>POST /api/account/cards/</code> (now GET+POST) records the card after the browser confirms, verifying the
+      PaymentMethod is attached to <b>this</b> user's customer before reading brand/last4/expiry back from Stripe
+      (<code>gateway.save_card_from_setup</code>). <code>POST /api/account/cards/{pk}/default/</code>
+      (<code>gateway.set_default_card</code>) sets a default and clears the others. <b>Frontend</b>:
+      <code>components/account/AddCard.tsx</code> — Stripe Elements <code>CardElement</code> →
+      <code>confirmCardSetup(client_secret)</code> → save → refresh the card list; the Payment-cards tab gains
+      an <b>Add card</b> form and a <b>Set default</b> action (delete already existed). Declines/errors surfaced inline.</td></tr>
+      <tr><td><b>Tests</b>: <code>api/tests/test_account.py</code> (profile update + email-uniqueness/format, partial PATCH,
+      setup-intent returns a secret &amp; reuses the customer, add-card saves/ownership-rejects, set-default,
+      self-only scoping on default/delete) and <code>payments/tests/test_gateway.py::TestCardsOnFile</code>
+      (SetupIntent creates/returns, foreign PaymentMethod rejected, display-bits-only, set-default). Stripe stubbed
+      via <code>payments.gateway._client</code> as the existing payment tests do. Scoped suites green
+      (<code>api payments accounts</code>, 255 passed); <code>frontend</code> build/typecheck clean.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-17 · Client booking-edit → staff approval workflow (backend foundation)</span><span class="tbl">backend · bookings · api · notifications</span></div>

@@ -32,7 +32,11 @@ urlpatterns = [
          name="amend_request"),
     path("account/profile/", views.account_profile, name="account_profile"),
     path("account/cards/", views.my_cards, name="my_cards"),
+    path("account/cards/setup-intent/", views.my_card_setup_intent,
+         name="my_card_setup_intent"),
     path("account/cards/<int:pk>/", views.my_card_delete, name="my_card_delete"),
+    path("account/cards/<int:pk>/default/", views.my_card_set_default,
+         name="my_card_set_default"),
 
     # Staff: booking change-request review queue (staff-only, is_staff).
     path("staff/amendment-requests/", views.staff_amendment_requests,

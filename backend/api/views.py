@@ -11,6 +11,7 @@ Two rules run through everything here:
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 
 from django.conf import settings
@@ -59,6 +60,7 @@ from pricing.models import BlackoutDate, PricingSettings, TimeSurcharge
 
 from . import quotes
 from .serializers import (
+    AddCardSerializer,
     AvailabilitySerializer,
     BookingAmendmentRequestSerializer,
     BookingAmendSerializer,
@@ -77,6 +79,7 @@ from .serializers import (
     RegisterRequestSerializer,
     SavedCardSerializer,
     SendCodeRequestSerializer,
+    SetupIntentResponseSerializer,
     SiteSettingsSerializer,
     UserSerializer,
     VehicleSerializer,
@@ -84,6 +87,8 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 
 def money(value) -> str:
@@ -610,14 +615,79 @@ def account_profile(request):
 
 @extend_schema(
     tags=["account"],
-    summary="The signed-in customer's cards on file",
-    responses={200: SavedCardSerializer(many=True), 403: DetailSerializer},
+    summary="List or add the signed-in customer's cards on file",
+    description="GET lists the cards. POST records a card the customer just "
+                "added with a SetupIntent -- the body carries the Stripe "
+                "PaymentMethod id; the card itself stays at Stripe.",
+    request=AddCardSerializer,
+    responses={200: SavedCardSerializer(many=True), 201: SavedCardSerializer,
+               400: DetailSerializer, 403: DetailSerializer, 502: DetailSerializer,
+               503: DetailSerializer},
 )
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def my_cards(request):
+    if request.method == "POST":
+        serializer = AddCardSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            card = payments_gateway.save_card_from_setup(
+                request.user, serializer.validated_data["payment_method_id"])
+        except payments_gateway.PaymentConfigurationError:
+            return Response(
+                {"detail": "Card payments are unavailable right now. Please contact us."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except payments_gateway.PaymentGatewayError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        return Response(SavedCardSerializer(card).data, status=status.HTTP_201_CREATED)
+
     cards = request.user.saved_cards.all()
     return Response(SavedCardSerializer(cards, many=True).data)
+
+
+@extend_schema(
+    tags=["account"],
+    summary="Start adding a card (Stripe SetupIntent)",
+    description="Returns a SetupIntent client secret and the publishable key so "
+                "the browser can confirm a new card with Stripe Elements. No "
+                "charge is made; the card is kept on file for future use.",
+    request=None,
+    responses={200: SetupIntentResponseSerializer, 403: DetailSerializer,
+               502: DetailSerializer, 503: DetailSerializer},
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def my_card_setup_intent(request):
+    try:
+        client_secret = payments_gateway.create_setup_intent(request.user)
+    except payments_gateway.PaymentConfigurationError as exc:
+        logger.error("SetupIntent configuration problem: %s", exc)
+        return Response(
+            {"detail": "Card payments are unavailable right now. Please contact us."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except payments_gateway.PaymentGatewayError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+    return Response({
+        "client_secret": client_secret,
+        "publishable_key": payments_gateway.publishable_key(),
+    })
+
+
+@extend_schema(
+    tags=["account"],
+    summary="Set a saved card as the default",
+    request=None,
+    responses={200: SavedCardSerializer, 403: DetailSerializer, 404: DetailSerializer},
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def my_card_set_default(request, pk):
+    card = request.user.saved_cards.filter(pk=pk).first()
+    if card is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    payments_gateway.set_default_card(card)
+    card.refresh_from_db()
+    return Response(SavedCardSerializer(card).data)
 
 
 @extend_schema(
