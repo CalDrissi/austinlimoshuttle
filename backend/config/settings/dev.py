@@ -18,7 +18,10 @@ INTERNAL_IPS = ["127.0.0.1"]
 # frontend must call http://localhost:8000 rather than http://127.0.0.1:8000 --
 # `localhost` and `127.0.0.1` are different sites to a browser, and a Lax
 # session cookie set by one is never sent to the other.
-CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
+CSRF_TRUSTED_ORIGINS = env.list(
+    "DJANGO_CSRF_TRUSTED_ORIGINS",
+    default=["http://localhost:3000", "http://127.0.0.1:3000"],
+)
 
 # Password hashing is deliberately NOT weakened here. Development accounts get
 # the same PBKDF2 treatment as production; the fast hasher lives in
