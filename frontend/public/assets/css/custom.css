@@ -515,6 +515,22 @@ img {
   }
 }
 
+/* Vehicle-page booking uses the same card, but belongs in the section's flow.
+   Hero overlay offsets otherwise pull the entire dock out of this section. */
+#book-vehicle .mm-search-dock {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+#book-vehicle .mm-search-dock .mm-search-error {
+  position: static;
+  flex-basis: 100%;
+  margin-top: 8px;
+}
+#book-vehicle .box-search-ride { flex-wrap: wrap; }
+
 /* Stretch carousel slides and grid columns to their row's tallest card. */
 .bg-our-fleet .swiper-wrapper { align-items: stretch; }
 .bg-our-fleet .swiper-slide { display: flex; height: auto; }
