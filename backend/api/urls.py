@@ -30,6 +30,7 @@ urlpatterns = [
          name="my_booking_detail"),
     path("account/bookings/<str:reference>/amend-request/", views.amend_request,
          name="amend_request"),
+    path("account/profile/", views.account_profile, name="account_profile"),
     path("account/cards/", views.my_cards, name="my_cards"),
     path("account/cards/<int:pk>/", views.my_card_delete, name="my_card_delete"),
 

@@ -437,6 +437,15 @@ class RegisterRequestSerializer(serializers.Serializer):
     phone = serializers.CharField(required=False, allow_blank=True)
 
 
+class ProfileUpdateSerializer(serializers.Serializer):
+    """Self-service profile edit. Every field optional (PATCH); email is
+    format-validated here, uniqueness is checked in the view against the row."""
+    first_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    last_name = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    email = serializers.EmailField(required=False)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=32)
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

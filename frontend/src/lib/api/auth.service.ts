@@ -14,6 +14,13 @@ export const authService = {
   me: () => apiGet<User>("/auth/me/"),
   updateProfile: (body: { first_name?: string; last_name?: string; phone?: string }) =>
     apiPatch<User>("/auth/me/", body),
+  /** Self-service profile edit (name, email, phone) via the account endpoint. */
+  updateAccountProfile: (body: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+  }) => apiPatch<User>("/account/profile/", body),
   requestPasswordReset: (email: string) =>
     apiPost<{ detail: string }>("/auth/password-reset/", { email }),
 };

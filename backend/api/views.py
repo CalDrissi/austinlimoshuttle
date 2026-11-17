@@ -71,6 +71,7 @@ from .serializers import (
     LoginRequestSerializer,
     PageSerializer,
     PasswordResetRequestSerializer,
+    ProfileUpdateSerializer,
     QuoteRequestSerializer,
     QuoteResponseSerializer,
     RegisterRequestSerializer,
@@ -554,6 +555,57 @@ def my_bookings(request):
         .order_by("-pickup_at")
     )
     return Response(BookingSerializer(bookings, many=True).data)
+
+
+@extend_schema(
+    tags=["account"],
+    summary="Update the signed-in customer's profile",
+    description="Self-service edit of first_name, last_name, email and phone. "
+                "Email must be a valid address and unique across accounts; it is "
+                "also the sign-in identity, so a change updates how you log in.",
+    request=ProfileUpdateSerializer,
+    responses={200: UserSerializer, 400: DetailSerializer, 403: DetailSerializer},
+)
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def account_profile(request):
+    serializer = ProfileUpdateSerializer(data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+
+    user = request.user
+    update_fields: list[str] = []
+
+    if "first_name" in data:
+        user.first_name = (data["first_name"] or "").strip()[:150]
+        update_fields.append("first_name")
+    if "last_name" in data:
+        user.last_name = (data["last_name"] or "").strip()[:150]
+        update_fields.append("last_name")
+    if "phone" in data:
+        user.phone = (data["phone"] or "").strip()[:32]
+        update_fields.append("phone")
+    if "email" in data:
+        # Emails are stored lowercase (User.save normalises too). Compare and
+        # check uniqueness against other rows -- the sign-in identity must stay
+        # one-to-one or two people could claim the same login.
+        new_email = (data["email"] or "").strip().lower()
+        if new_email and new_email != user.email:
+            if User.objects.filter(email=new_email).exclude(pk=user.pk).exists():
+                return Response({"email": ["That email address is already in use."]},
+                                status=status.HTTP_400_BAD_REQUEST)
+            user.email = new_email
+            update_fields.append("email")
+
+    if update_fields:
+        user.save(update_fields=update_fields)
+
+    return Response({
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+    })
 
 
 @extend_schema(

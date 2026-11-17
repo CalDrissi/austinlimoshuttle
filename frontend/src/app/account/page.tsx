@@ -151,8 +151,8 @@ function AccountDashboard() {
     const selected = params.get("tab");
     setTab(selected === "bookings" || selected === "cards" || selected === "profile" ? selected : "overview");
   }, [params]);
-  const [pf, setPf] = useState({ first_name: "", last_name: "", phone: "" });
-  const [pfMsg, setPfMsg] = useState("");
+  const [pf, setPf] = useState({ first_name: "", last_name: "", email: "", phone: "" });
+  const [pfMsg, setPfMsg] = useState({ text: "", ok: false });
   const [pfSaving, setPfSaving] = useState(false);
 
   useEffect(() => {
@@ -160,18 +160,28 @@ function AccountDashboard() {
   }, [isLoading, user, router]);
 
   useEffect(() => {
-    if (user) setPf({ first_name: user.first_name || "", last_name: user.last_name || "", phone: user.phone || "" });
+    if (user) setPf({ first_name: user.first_name || "", last_name: user.last_name || "", email: user.email || "", phone: user.phone || "" });
   }, [user]);
 
   const saveProfile = async () => {
+    const email = pf.email.trim();
+    if (!email) {
+      setPfMsg({ text: "An email address is required.", ok: false });
+      return;
+    }
     setPfSaving(true);
-    setPfMsg("");
+    setPfMsg({ text: "", ok: false });
     try {
-      await authService.updateProfile(pf);
+      await authService.updateAccountProfile({
+        first_name: pf.first_name.trim(),
+        last_name: pf.last_name.trim(),
+        email,
+        phone: pf.phone.trim(),
+      });
       await refreshAuth();
-      setPfMsg("Saved.");
+      setPfMsg({ text: "Saved.", ok: true });
     } catch (e) {
-      setPfMsg(e instanceof Error ? e.message : "Could not save.");
+      setPfMsg({ text: e instanceof Error ? e.message : "Could not save.", ok: false });
     }
     setPfSaving(false);
   };
@@ -333,15 +343,15 @@ function AccountDashboard() {
                       <input className="form-control" type="tel" value={pf.phone} onChange={(e) => setPf({ ...pf, phone: e.target.value })} />
                     </div>
                     <div className="col-6 mb-20">
-                      <label className="text-14 color-grey">Email <span className="color-grey">(sign-in, not editable)</span></label>
-                      <input className="form-control" value={user.email} readOnly disabled />
+                      <label className="text-14 color-grey">Email <span className="color-grey">(this is your sign-in)</span></label>
+                      <input className="form-control" type="email" value={pf.email} onChange={(e) => setPf({ ...pf, email: e.target.value })} />
                     </div>
                   </div>
                   <div className="d-flex align-items-center" style={{ gap: 14 }}>
                     <button className="btn btn-primary hover-up" onClick={saveProfile} disabled={pfSaving}>
                       {pfSaving ? "Saving…" : "Save changes"}
                     </button>
-                    {pfMsg && <span className="text-14" style={{ color: pfMsg === "Saved." ? "#1e7e34" : "#c0392b" }}>{pfMsg}</span>}
+                    {pfMsg.text && <span role={pfMsg.ok ? "status" : "alert"} className="text-14" style={{ color: pfMsg.ok ? "#1e7e34" : "#c0392b" }}>{pfMsg.text}</span>}
                   </div>
                 </div>
               </>
