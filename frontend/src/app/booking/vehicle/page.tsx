@@ -15,14 +15,15 @@ function money(amount: string, currency: string) {
   return `${symbol}${Number(amount).toFixed(2)}`;
 }
 
-function VehicleCard({ quote, vehicle, meetGreet, onSelect }: {
+function VehicleCard({ quote, vehicle, meetGreet, selected, onSelect }: {
   quote: QuoteResult;
   vehicle?: Vehicle;
   meetGreet: boolean;
+  selected: boolean;
   onSelect: (q: QuoteResult) => void;
 }) {
   return (
-    <div className="item-vehicle">
+    <div id={`vehicle-${quote.vehicle_id}`} className="item-vehicle" style={selected ? { outline: "3px solid #b89b5e", borderRadius: 12, scrollMarginTop: 100 } : undefined}>
       <div className="vehicle-left">
         <div className="vehicle-image"><img src={vehicle?.photo || VEHICLE_PLACEHOLDER} alt={quote.vehicle_name} /></div>
         <div className="vehicle-facilities">
@@ -34,6 +35,7 @@ function VehicleCard({ quote, vehicle, meetGreet, onSelect }: {
       </div>
       <div className="vehicle-right">
         <h5 className="text-20-medium color-text mb-10">{quote.vehicle_name}</h5>
+        {selected && <p role="status" className="text-14 mb-10">Selected for your trip — you can still choose any car below.</p>}
         {vehicle?.description && <p className="text-14 color-text mb-20">{vehicle.description}</p>}
         <div className="vehicle-passenger-luggage mb-10">
           <span className="passenger">Passengers {vehicle?.passenger_capacity ?? "-"}</span>
@@ -41,7 +43,7 @@ function VehicleCard({ quote, vehicle, meetGreet, onSelect }: {
         </div>
         <div className="vehicle-price"><h4 className="heading-30-medium color-text">{money(quote.total, quote.currency)}</h4></div>
         <div className="price-desc mb-20">All-inclusive — taxes &amp; fees included.</div>
-        <button className="btn btn-primary w-100" onClick={() => onSelect(quote)}>Select</button>
+        <button className="btn btn-primary w-100" onClick={() => onSelect(quote)}>{selected ? "Continue with this car" : "Select"}</button>
       </div>
     </div>
   );
@@ -51,6 +53,10 @@ export default function BookingVehiclePage() {
   const router = useRouter();
   const search = useBookingStore((s) => s.search);
   const setQuote = useBookingStore((s) => s.setQuote);
+  const selectedQuote = useBookingStore((s) => s.quote);
+  const preselectedVehicleId = useBookingStore((s) => s.preselectedVehicleId);
+  const setPreselectedVehicle = useBookingStore((s) => s.setPreselectedVehicle);
+
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["quotes", search],
@@ -58,6 +64,16 @@ export default function BookingVehiclePage() {
     retry: false,
     queryFn: () => quoteService.create(quoteRequest(search!)),
   });
+
+  useEffect(() => {
+    if (!data || preselectedVehicleId == null) return;
+    const preferred = data.quotes.find((q) => q.vehicle_id === preselectedVehicleId);
+    if (preferred) {
+      setQuote(preferred);
+      document.getElementById(`vehicle-${preferred.vehicle_id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    setPreselectedVehicle(null);
+  }, [data, preselectedVehicleId, setQuote, setPreselectedVehicle]);
 
   const setJourney = useBookingStore((s) => s.setJourney);
   useEffect(() => { if (data) setJourney(data.journey); }, [data, setJourney]);
@@ -101,6 +117,7 @@ export default function BookingVehiclePage() {
                     key={q.vehicle_id}
                     quote={q}
                     vehicle={byId.get(q.vehicle_id)}
+                    selected={selectedQuote?.vehicle_id === q.vehicle_id}
                     meetGreet={!!search?.meetGreet}
                     onSelect={handleSelect}
                   />

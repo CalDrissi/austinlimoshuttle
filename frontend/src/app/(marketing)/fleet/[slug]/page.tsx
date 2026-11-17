@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { catalogService } from "@/lib/api/catalog.service";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
+import BookingSearchWidget from "@/components/booking/BookingSearchWidget";
 import type { Vehicle } from "@/types/api";
 
 /** Marketing copy from the DB is newline-separated; render it as a tick list. */
@@ -127,7 +128,7 @@ export default function FleetDetailPage() {
                 </ul>
 
                 <div className="mt-30">
-                  <Link className="btn btn-primary btn-book hover-up" href="/">
+                  <Link className="btn btn-primary btn-book hover-up" href="#book-vehicle">
                     Book Now
                     <svg className="icon-16 ml-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
@@ -137,6 +138,13 @@ export default function FleetDetailPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="book-vehicle" className="section pt-60 pb-60">
+        <div className="container-sub">
+          <h2 className="heading-24-medium mb-30">Book this {vehicle.name}</h2>
+          <BookingSearchWidget preselectedVehicleId={vehicle.id} />
         </div>
       </section>
 

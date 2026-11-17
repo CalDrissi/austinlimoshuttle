@@ -162,7 +162,7 @@ const TABS: [TripType, string][] = [
 
 const HOUR_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-export default function BookingSearchWidget() {
+export default function BookingSearchWidget({ preselectedVehicleId = null }: { preselectedVehicleId?: number | null }) {
   const router = useRouter();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -208,13 +208,13 @@ export default function BookingSearchWidget() {
         tripType,
         pickupAddress: from.trim(), dropoffAddress: to.trim(),
         date, time, meetGreet,
-      });
+      }, preselectedVehicleId);
     } else {
       setSearch({
         tripType: "hourly",
         pickupAddress: from.trim(), dropoffAddress: "", hours: Number(hours),
         date, time, meetGreet,
-      });
+      }, preselectedVehicleId);
     }
     const search = useBookingStore.getState().search!;
     setBusy(true); setError("");

@@ -55,7 +55,9 @@ interface BookingState {
   /** Set once POST /bookings/ succeeds. */
   reference: string | null;
 
-  setSearch: (search: Search) => void;
+  preselectedVehicleId: number | null;
+  setPreselectedVehicle: (id: number | null) => void;
+  setSearch: (search: Search, preselectedVehicleId?: number | null) => void;
   setQuote: (quote: QuoteResult) => void;
   setTrip: (trip: Partial<Trip>) => void;
   setContact: (contact: Contact) => void;
@@ -67,6 +69,7 @@ interface BookingState {
 
 const initial = {
   search: null,
+  preselectedVehicleId: null,
   journey: null,
   quote: null,
   trip: { passengerCount: 1, luggageCount: 0 } as Trip,
@@ -80,7 +83,8 @@ export const useBookingStore = create<BookingState>()(
       ...initial,
       // A new search invalidates any vehicle chosen for the previous one --
       // otherwise the Ride Summary shows a stale price until a vehicle is picked.
-      setSearch: (search) => set({ search, quote: null, journey: null }),
+      setSearch: (search, preselectedVehicleId = null) => set({ search, preselectedVehicleId, quote: null, journey: null }),
+      setPreselectedVehicle: (preselectedVehicleId) => set({ preselectedVehicleId }),
       setJourney: (journey) => set({ journey }),
       applyRequote: (search, response) => set((s) => ({ search, journey: response.journey, quote: response.quotes.find((q) => q.vehicle_id === s.quote?.vehicle_id) ?? null })),
       setQuote: (quote) => set({ quote }),
@@ -88,7 +92,7 @@ export const useBookingStore = create<BookingState>()(
       setContact: (contact) => set({ contact }),
       setReference: (reference) => set({ reference }),
       clearDraft: () =>
-        set({ search: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
+        set({ search: null, preselectedVehicleId: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
       reset: () => set(initial),
     }),
     {
