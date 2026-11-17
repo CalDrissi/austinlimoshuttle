@@ -124,3 +124,23 @@ class TestManualBookingPersistsCityToCityMarker:
         assert booking.is_city_to_city is False
         assert booking.total == Decimal("120.00")  # 40 x $3.00 normal, not intercity
         assert booking.reprice().total == booking.total
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("hours", ["1", "2", "2.99"])
+def test_manual_hourly_quote_requires_three_hours(vehicle, hours):
+    from dashboard.views import _quote_manual
+
+    with pytest.raises(ValueError, match="at least 3 hours"):
+        _quote_manual("hourly", vehicle, pickup_at=NOON,
+                      pickup_address="Austin", dropoff_address="",
+                      hours=Decimal(hours), meet_and_greet=False)
+
+
+@pytest.mark.django_db
+def test_manual_hourly_form_requires_three_hours(vehicle):
+    from dashboard.forms import ManualBookingForm
+
+    form = ManualBookingForm(data={"trip_mode": "hourly", "hours": "2"})
+    assert not form.is_valid()
+    assert "at least 3 hours" in str(form.errors["hours"])

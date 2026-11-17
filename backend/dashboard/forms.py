@@ -122,6 +122,8 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["pickup_sign"].required = True
         self.fields["guest_phone"].required = True
         self.fields["hours"].required = False
+        self.fields["hours"].widget.attrs["min"] = 3
+        self.initial.setdefault("hours", 3)
         self.fields["dropoff_address"].required = False
         self.fields["driver"].required = False
         self.fields["driver"].queryset = Driver.objects.filter(is_active=True).order_by("full_name")
@@ -142,8 +144,8 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
                 self.add_error("dropoff_address",
                                f"A drop-off address is required for a {trip}.")
         elif mode == "hourly":
-            if not cleaned.get("hours") or cleaned["hours"] <= 0:
-                self.add_error("hours", "Enter how many hours for an hourly hire.")
+            if not cleaned.get("hours") or cleaned["hours"] < 3:
+                self.add_error("hours", "Hourly hire requires at least 3 hours.")
         _apply_capacity_errors(self, cleaned)
         return cleaned
 

@@ -127,6 +127,16 @@ class TestQuoting:
         response = get_quote(client, future, hours="3")
         assert response.status_code == 400
 
+    @pytest.mark.parametrize("hours", ["1", "2", "2.99"])
+    def test_hourly_hire_requires_three_hours(self, client, vehicle, future, hours):
+        response = client.post(
+            reverse("api:quotes"),
+            {"pickup_address": "Downtown Austin", "pickup_at": future.isoformat(), "hours": hours},
+            content_type="application/json",
+        )
+        assert response.status_code == 400
+        assert "hours" in response.json()
+
     def test_hourly_hire_needs_no_destination(self, client, vehicle, future):
         response = client.post(
             reverse("api:quotes"),

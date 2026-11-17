@@ -418,8 +418,8 @@ def _quote_manual(mode, vehicle, *, pickup_at, pickup_address, dropoff_address,
     distance = None
     city_to_city = mode == "city"
     if mode == "hourly":
-        if not hours or hours <= 0:
-            raise ValueError("Enter how many hours for the hourly hire.")
+        if not hours or hours < 3:
+            raise ValueError("Hourly hire requires at least 3 hours.")
     else:  # transfer or city -- both are free-form, distance-measured trips
         if not (dropoff_address or "").strip():
             raise ValueError(

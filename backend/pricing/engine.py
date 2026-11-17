@@ -223,8 +223,8 @@ def quote(
 
     # 1. base fare -------------------------------------------------------
     if hours is not None:
-        if hours <= 0:
-            raise QuoteError("Hourly hire needs a positive number of hours.")
+        if hours < 3:
+            raise QuoteError("Hourly hire requires at least 3 hours.")
         if vehicle.hourly_rate <= 0:
             raise QuoteError(f"{vehicle.name} has no hourly rate.")
         base = money(Decimal(hours) * vehicle.hourly_rate)

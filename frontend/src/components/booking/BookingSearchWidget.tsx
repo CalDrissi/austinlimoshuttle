@@ -160,7 +160,7 @@ const TABS: [TripType, string][] = [
   ["city", "City to City"],
 ];
 
-const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const HOUR_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function BookingSearchWidget() {
   const router = useRouter();

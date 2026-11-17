@@ -97,7 +97,7 @@ class QuoteRequestSerializer(serializers.Serializer):
     pickup_at = serializers.DateTimeField()
     hours = serializers.DecimalField(
         max_digits=5, decimal_places=2, required=False, allow_null=True,
-        min_value=Decimal("0.5"), max_value=MAX_HOURS,
+        min_value=Decimal("3"), max_value=MAX_HOURS,
         help_text="Hourly hire only. Omit for a point-to-point transfer.",
     )
     meet_and_greet = serializers.BooleanField(default=False)

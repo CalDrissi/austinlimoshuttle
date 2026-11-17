@@ -182,9 +182,10 @@ class TestHourlyHire:
         assert result.subtotal == Decimal("255.00")  # 3 x 85
 
     def test_hourly_respects_the_minimum_fare(self, business_class, settings_obj):
+        business_class.minimum_fare = Decimal("300")
         result = quote(business_class, pickup_at=austin(2026, 6, 1, 12),
-                       hours=Decimal("1"))
-        assert result.total == Decimal("95.00")  # 85 floored to 95
+                       hours=Decimal("3"))
+        assert result.total == Decimal("300.00")
 
     def test_hourly_gets_surcharges_too(self, business_class, settings_obj, late_night):
         result = quote(business_class, pickup_at=austin(2026, 6, 1, 23),
@@ -194,7 +195,7 @@ class TestHourlyHire:
     def test_vehicle_without_an_hourly_rate_cannot_be_quoted(self, settings_obj, db):
         v = Vehicle.objects.create(name="No rate", slug="nr", hourly_rate=0)
         with pytest.raises(QuoteError, match="no hourly rate"):
-            quote(v, pickup_at=austin(2026, 6, 1, 12), hours=Decimal("2"))
+            quote(v, pickup_at=austin(2026, 6, 1, 12), hours=Decimal("3"))
 
 
 @pytest.mark.django_db
@@ -263,9 +264,10 @@ class TestInputValidation:
             quote(business_class, pickup_at=austin(2026, 6, 1, 12),
                   distance_miles=Decimal("-5"))
 
-    def test_rejects_zero_hours(self, business_class, settings_obj):
-        with pytest.raises(QuoteError, match="positive"):
-            quote(business_class, pickup_at=austin(2026, 6, 1, 12), hours=Decimal("0"))
+    @pytest.mark.parametrize("hours", ["0", "1", "2", "2.99"])
+    def test_rejects_under_three_hours(self, business_class, settings_obj, hours):
+        with pytest.raises(QuoteError, match="at least 3 hours"):
+            quote(business_class, pickup_at=austin(2026, 6, 1, 12), hours=Decimal(hours))
 
     def test_vehicle_without_bands_cannot_be_quoted(self, settings_obj, db):
         v = Vehicle.objects.create(name="Bare", slug="bare")
