@@ -54,7 +54,7 @@ export default function OrderSummary({ journey: suppliedJourney }: { journey?: J
         {!contact.name && !contact.email && !contact.phone && <span className="color-grey">Add your details in the passenger step</span>}
         {trip.forSomeoneElse && <><Row label="Passenger">{trip.passengerName || "Not entered"}</Row>{trip.passengerPhone && <Row label="Passenger phone">{trip.passengerPhone}</Row>}</>}
       </Group>
-      <Group title="Price breakdown">{quote ? <>{quote.lines.map((line, i) => <Row key={i} label={line.label}>{money(line.amount, quote.currency)}</Row>)}<div style={{borderTop:"1px solid #e5e7eb", paddingTop:10, fontWeight:700}}><Row label="Total">{money(quote.total, quote.currency)}</Row></div></> : "Select a vehicle to see your fare"}</Group>
+      <Group title="Total">{quote ? <><p className="text-20-medium">{money(quote.total, quote.currency)}</p><p className="color-grey">Taxes &amp; fees included</p></> : "Select a vehicle to see your fare"}</Group>
     </div>
   </aside>;
 }

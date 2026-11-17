@@ -30,9 +30,9 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
   };
   return <fieldset disabled={busy} className="mm-trip-editor">
     <legend className="text-16-medium">Edit trip</legend>
-    <label>Trip type<select className="form-control" value={draft.tripType} onChange={(e) => update({ tripType: e.target.value as Search["tripType"] })}>
-      <option value="transfer">Transfer</option><option value="hourly">Hourly</option><option value="city">City-to-City</option>
-    </select></label>
+    <div role="radiogroup" aria-label="Trip type" style={{display:"flex", gap:12, flexWrap:"wrap"}}>
+      {([ ["transfer", "Transfer"], ["hourly", "Hourly"], ["city", "City-to-City"] ] as const).map(([value, label]) => <label key={value}><input type="radio" name="trip-type" value={value} checked={draft.tripType === value} onChange={() => update({ tripType: value })} /> {label}</label>)}
+    </div>
     <AddressField label="Pickup" value={draft.pickupAddress} onChange={(pickupAddress) => update({ pickupAddress })} placeholder="Pickup address" />
     {draft.tripType !== "hourly" ? <AddressField label="Drop-off" value={draft.dropoffAddress} onChange={(dropoffAddress) => update({ dropoffAddress })} placeholder="Drop-off address" /> :
       <label>Hours<select className="form-control" value={draft.hours ?? 3} onChange={(e) => update({ hours: Number(e.target.value) })}>{Array.from({length:12}, (_, i) => <option key={i} value={i+1}>{i+1}</option>)}</select></label>}
