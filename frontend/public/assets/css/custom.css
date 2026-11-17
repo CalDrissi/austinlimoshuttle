@@ -8,43 +8,6 @@
  * markup. See §11 "Porting gotcha" in the dev docs.
  * ------------------------------------------------------------------ */
 
-/* Keep the sign-in pill visible alongside the compact navigation. The template
-   hides .box-button-login below 450px; reserve a separate hamburger touch area. */
-@media (max-width: 1199.98px) {
-  .header .main-header .header-left .header-logo { flex: 0 0 150px; }
-  .header .main-header .header-left .header-nav { width: 0; padding-left: 0; }
-  .header .main-header .header-left .header-right {
-    width: auto;
-    min-width: 0;
-    margin-left: auto;
-    padding-right: 56px;
-  }
-  .header .box-button-login { display: inline-block !important; }
-  .header .box-button-login .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    max-width: 100%;
-    padding: 10px 16px;
-    overflow-wrap: anywhere;
-  }
-  .header .burger-icon,
-  .header .burger-icon.burger-close {
-    width: 44px;
-    height: 44px;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-  .header .burger-icon > span { left: 10px; width: 24px; }
-  .header .burger-icon > span.burger-icon-mid { top: 16px; }
-  .header .burger-icon > span.burger-icon-bottom { bottom: 16px; }
-}
-
 /* Keep every image inside its box. */
 img {
   max-width: 100%;
@@ -637,3 +600,40 @@ img {
 .mm-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 32px); width: max-content; padding: 16px 24px; color: #fff; background: #173d30; border-radius: 12px; box-shadow: 0 6px 24px #0003; z-index: 3000; }
 .mm-feedback { background: #edf5ef; color: #194832; border: 1px solid #81a88e; border-radius: 8px; padding: 12px 16px; }
 @media(max-width: 575px) { .mm-account-menu > button { font-size: 12px; padding: 8px; } .mm-account-avatar { display: none; } }
+
+/* React-owned header: isolated from the template's off-canvas stacking rules. */
+.mm-storefront-header { position: sticky; top: 0; z-index: 1000; background: #111; color: #fff; }
+.mm-header-row { display: flex; align-items: center; gap: 32px; min-height: 82px; }
+.mm-header-logo { display: flex; flex: 0 0 150px; }
+.mm-header-logo img { width: 150px; height: 66px; object-fit: contain; }
+.mm-desktop-nav, .mm-header-actions { display: flex; align-items: center; gap: 24px; }
+.mm-header-actions { margin-left: auto; gap: 12px; }
+.mm-desktop-nav a { color: #fff; padding: 12px 0; min-height: 44px; }
+.mm-desktop-nav a:hover, .mm-desktop-nav a[aria-current] { color: #e7cf9b; }
+.mm-header-call, .mm-header-account { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 44px; padding: 10px 16px; border: 1px solid #716449; border-radius: 8px; background: transparent; color: #fff; line-height: 24px; }
+.mm-header-call { background: #e7cf9b; color: #171717; border-color: #e7cf9b; }
+.mm-header-call:hover { background: #f3e3c3; color: #171717; }
+.mm-header-account:hover { color: #e7cf9b; }
+.mm-menu-toggle, .mm-menu-close { align-items: center; justify-content: center; width: 48px; height: 48px; padding: 0; border: 1px solid #615a4e; border-radius: 8px; color: #fff; background: transparent; flex-shrink: 0; }
+.mm-menu-toggle { display: none; margin-left: auto; }
+.mm-menu-close { display: inline-flex; }
+.mm-storefront-header :focus-visible, .mm-mobile-panel :focus-visible { outline: 3px solid #c39b53; outline-offset: 3px; }
+.mm-mobile-layer { position: fixed; inset: 0; z-index: 2000; }
+.mm-menu-backdrop { position: absolute; inset: 0; background: #0009; }
+.mm-mobile-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(360px, calc(100% - 32px)); padding: 20px 24px max(24px, env(safe-area-inset-bottom)); background: #171717; color: #fff; box-shadow: -12px 0 40px #0004; overflow-y: auto; overscroll-behavior: contain; animation: mm-menu-enter 180ms ease-out; }
+.mm-mobile-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; font-size: 22px; font-weight: 600; }
+.mm-mobile-panel nav, .mm-mobile-account { display: flex; flex-direction: column; gap: 4px; }
+.mm-mobile-panel nav a, .mm-mobile-account a, .mm-mobile-account button { display: flex; align-items: center; min-height: 48px; width: 100%; padding: 12px; border: 0; border-radius: 8px; background: transparent; color: #fff; text-align: left; line-height: 24px; }
+.mm-mobile-panel nav a:hover, .mm-mobile-account a:hover, .mm-mobile-account button:hover, .mm-mobile-panel a[aria-current] { background: #ffffff0e; color: #e7cf9b; }
+.mm-mobile-account { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ffffff26; }
+.mm-menu-section-label { color: #c5baa5; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; padding: 0 12px 8px; }
+.mm-mobile-contact { margin-top: 24px; }
+.mm-mobile-contact .mm-header-call { width: 100%; overflow-wrap: anywhere; }
+.mm-mobile-contact .mm-header-call span { min-width: 0; }
+@keyframes mm-menu-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .mm-mobile-panel { animation: none; } }
+@media (max-width: 1199.98px) {
+  .mm-header-row { min-height: 76px; gap: 16px; }
+  .mm-desktop-nav, .mm-header-actions { display: none; }
+  .mm-menu-toggle { display: inline-flex; }
+}
