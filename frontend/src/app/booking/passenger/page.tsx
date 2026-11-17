@@ -53,6 +53,13 @@ export default function BookingPassengerPage() {
     }
   }, [user]);
 
+  // Persist as the passenger types so the summary and back navigation stay live.
+  useEffect(() => {
+    if (!hydrated) return;
+    setContact({ name, email, phone });
+    setTrip({ forSomeoneElse: forElse, passengerName: paxName, passengerPhone: paxPhone });
+  }, [hydrated, name, email, phone, forElse, paxName, paxPhone, setContact, setTrip]);
+
   if (!hydrated || !quote) return null;
 
   const doLogin = async () => {
