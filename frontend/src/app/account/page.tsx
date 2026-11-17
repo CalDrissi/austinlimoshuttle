@@ -9,12 +9,10 @@ import { bookingService } from "@/lib/api/booking.service";
 import type { BookingAmendRequest } from "@/lib/api/booking.service";
 import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
-import { cardsService } from "@/lib/api/cards.service";
-import AddCard from "@/components/account/AddCard";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import type { Booking } from "@/types/api";
 
-type Tab = "overview" | "bookings" | "cards" | "profile";
+type Tab = "overview" | "bookings" | "profile";
 
 function money(a: string, c: string) {
   return `${c === "USD" ? "$" : c + " "}${Number(a).toFixed(2)}`;
@@ -181,11 +179,9 @@ function AccountDashboard() {
   const refreshAuth = useRefreshAuth();
   const [tab, setTab] = useState<Tab>("overview");
   const [actionError, setActionError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ kind: "card"; id: number | string } | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
   useEffect(() => {
     const selected = params.get("tab");
-    setTab(selected === "bookings" || selected === "cards" || selected === "profile" ? selected : "overview");
+    setTab(selected === "bookings" || selected === "profile" ? selected : "overview");
   }, [params]);
   const [pf, setPf] = useState({ first_name: "", last_name: "", email: "", phone: "" });
   const [pfMsg, setPfMsg] = useState({ text: "", ok: false });
@@ -229,32 +225,6 @@ function AccountDashboard() {
     refetchInterval: 30_000,
   });
 
-  const { data: cards = [], isLoading: loadingCards } = useQuery({
-    queryKey: ["my-cards"],
-    enabled: !!user,
-    queryFn: () => cardsService.list(),
-  });
-
-  const removeCard = async (id: number) => {
-    setActionError("");
-    try {
-      await cardsService.remove(id);
-      qc.invalidateQueries({ queryKey: ["my-cards"] });
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not remove the card.");
-    }
-  };
-
-  const makeDefaultCard = async (id: number) => {
-    setActionError("");
-    try {
-      await cardsService.setDefault(id);
-      qc.invalidateQueries({ queryKey: ["my-cards"] });
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not set the default card.");
-    }
-  };
-
   const cancel = async (ref: string) => {
     const request = await bookingService.cancelRequest(ref);
     qc.setQueryData<Booking[]>(["my-bookings"], (current) => current?.map((b) =>
@@ -276,7 +246,7 @@ function AccountDashboard() {
   const logout = async () => {
     try {
       await authService.logout(); qc.setQueryData(["me"], null);
-      qc.removeQueries({ queryKey: ["my-bookings"] }); qc.removeQueries({ queryKey: ["my-cards"] });
+      qc.removeQueries({ queryKey: ["my-bookings"] });
       notify("You've been signed out"); router.push("/");
     } catch { setActionError("Could not sign out — please try again."); }
   };
@@ -297,7 +267,6 @@ function AccountDashboard() {
         <h2 className="heading-36-medium mb-30">My account</h2>
         {bookingsFailed && <p role="alert">We couldn't load your bookings. Please refresh to try again.</p>}
         {actionError && <p role="alert">{actionError}</p>}
-        {pendingAction && <div className="mm-feedback mb-20" role="region" aria-label="Confirm action"><p>Remove this saved card?</p><button className="btn btn-primary" disabled={actionBusy} onClick={async () => { setActionBusy(true); await removeCard(Number(pendingAction.id)); setPendingAction(null); setActionBusy(false); }}>{actionBusy ? "Saving…" : "Confirm"}</button> <button className="btn btn-border" disabled={actionBusy} onClick={() => setPendingAction(null)}>Keep it</button></div>}
         <div className="mm-acct">
           <aside className="mm-acct-side">
             <div className="mm-acct-user">
@@ -310,7 +279,6 @@ function AccountDashboard() {
             <div className="mm-acct-nav">
               {navBtn("overview", "Overview")}
               {navBtn("bookings", "My bookings")}
-              {navBtn("cards", "Payment cards")}
               {navBtn("profile", "Profile")}
               <button className="signout" onClick={logout}>Sign out</button>
             </div>
@@ -342,39 +310,6 @@ function AccountDashboard() {
                   <div><p className="text-16 color-grey">No bookings yet.</p><Link href="/" className="btn btn-primary hover-up">New booking</Link></div>
                 )}
                 {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={cancel} onAmend={amend} userPhone={user.phone || ""} />)}
-              </>
-            )}
-
-            {tab === "cards" && (
-              <>
-                <h5 className="text-18-medium mb-15">Payment cards</h5>
-                {loadingCards && <p className="color-grey">Loading…</p>}
-                {!loadingCards && cards.length === 0 && (
-                  <p className="text-16 color-grey">
-                    No cards saved yet. When you pay for a booking by card, tick &ldquo;save this card&rdquo;
-                    and it&rsquo;ll be here for faster booking next time.
-                  </p>
-                )}
-                {cards.map((c) => (
-                  <div key={c.id} className="mm-ride" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                    <div>
-                      <b>{c.label}</b>
-                      {c.is_default && <span className="text-14 color-grey"> · default</span>}
-                      {c.expiry && <div className="text-14 color-grey">Expires {c.expiry}</div>}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {!c.is_default && (
-                        <button className="btn btn-border btn-sm hover-up" onClick={() => makeDefaultCard(c.id)}>
-                          Set default
-                        </button>
-                      )}
-                      <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => setPendingAction({ kind: "card", id: c.id })}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <AddCard onAdded={() => qc.invalidateQueries({ queryKey: ["my-cards"] })} />
               </>
             )}
 
