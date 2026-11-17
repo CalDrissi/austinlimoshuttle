@@ -26,7 +26,7 @@ const MIN_QUERY = 3;
  * one session token for billing; if Places can't load (missing/blocked key) the
  * field degrades to a plain text input with no dropdown.
  */
-function AddressField({ label, value, onChange, placeholder }: {
+export function AddressField({ label, value, onChange, placeholder }: {
   label: string;
   value: string;
   onChange: (v: string) => void;

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { QuoteResult } from "@/types/api";
+import type { Journey, QuoteResponse, QuoteResult } from "@/types/api";
 
 /** Raw search inputs — kept for display and to (re)request a quote. */
 export interface Search {
@@ -45,6 +45,9 @@ export interface Contact {
 
 interface BookingState {
   search: Search | null;
+  journey: Journey | null;
+  applyRequote: (search: Search, response: QuoteResponse) => void;
+  setJourney: (journey: Journey | null) => void;
   /** The vehicle the customer chose, with its signed quote_token. */
   quote: QuoteResult | null;
   trip: Trip;
@@ -64,6 +67,7 @@ interface BookingState {
 
 const initial = {
   search: null,
+  journey: null,
   quote: null,
   trip: { passengerCount: 1, luggageCount: 0 } as Trip,
   contact: {} as Contact,
@@ -76,13 +80,15 @@ export const useBookingStore = create<BookingState>()(
       ...initial,
       // A new search invalidates any vehicle chosen for the previous one --
       // otherwise the Ride Summary shows a stale price until a vehicle is picked.
-      setSearch: (search) => set({ search, quote: null }),
+      setSearch: (search) => set({ search, quote: null, journey: null }),
+      setJourney: (journey) => set({ journey }),
+      applyRequote: (search, response) => set((s) => ({ search, journey: response.journey, quote: response.quotes.find((q) => q.vehicle_id === s.quote?.vehicle_id) ?? response.quotes[0] ?? null })),
       setQuote: (quote) => set({ quote }),
       setTrip: (trip) => set((s) => ({ trip: { ...s.trip, ...trip } })),
       setContact: (contact) => set({ contact }),
       setReference: (reference) => set({ reference }),
       clearDraft: () =>
-        set({ search: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
+        set({ search: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
       reset: () => set(initial),
     }),
     {

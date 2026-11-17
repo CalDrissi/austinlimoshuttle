@@ -1,10 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { quoteService } from "@/lib/api/quote.service";
+import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { catalogService } from "@/lib/api/catalog.service";
-import { useBookingStore, pickupIso } from "@/lib/booking/store";
+import { useBookingStore } from "@/lib/booking/store";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
 import OrderSummary from "@/components/booking/OrderSummary";
 import type { QuoteResult, Vehicle } from "@/types/api";
@@ -55,24 +56,11 @@ export default function BookingVehiclePage() {
     queryKey: ["quotes", search],
     enabled: !!search,
     retry: false,
-    queryFn: () => {
-      if (search!.tripType === "hourly") {
-        return quoteService.create({
-          pickup_address: search!.pickupAddress,
-          hours: String(search!.hours ?? ""),
-          pickup_at: pickupIso(search!),
-          meet_and_greet: search!.meetGreet,
-        });
-      }
-      return quoteService.create({
-        pickup_address: search!.pickupAddress,
-        dropoff_address: search!.dropoffAddress,
-        pickup_at: pickupIso(search!),
-        meet_and_greet: search!.meetGreet,
-        ...(search!.tripType === "city" ? { city_to_city: true } : {}),
-      });
-    },
+    queryFn: () => quoteService.create(quoteRequest(search!)),
   });
+
+  const setJourney = useBookingStore((s) => s.setJourney);
+  useEffect(() => { if (data) setJourney(data.journey); }, [data, setJourney]);
 
   const { data: vehicles } = useQuery({
     queryKey: ["vehicles"],
