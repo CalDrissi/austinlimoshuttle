@@ -31,6 +31,14 @@ export default function BookingPassengerPage() {
   const [paxName, setPaxName] = useState(trip.passengerName ?? "");
   const [paxPhone, setPaxPhone] = useState(trip.passengerPhone ?? "");
   const [error, setError] = useState("");
+  const [detailsReady, setDetailsReady] = useState(false);
+  useEffect(() => {
+    if (!hydrated) return;
+    const saved = useBookingStore.getState();
+    setName(saved.contact.name ?? ""); setEmail(saved.contact.email ?? ""); setPhone(saved.contact.phone ?? "");
+    setForElse(!!saved.trip.forSomeoneElse); setPaxName(saved.trip.passengerName ?? ""); setPaxPhone(saved.trip.passengerPhone ?? "");
+    setDetailsReady(true);
+  }, [hydrated]);
 
   // Inline auth accordion
   const [panel, setPanel] = useState<Panel>(null);
@@ -48,19 +56,19 @@ export default function BookingPassengerPage() {
   }, [hydrated, quote, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && detailsReady) {
       setName((n) => n || `${user.first_name} ${user.last_name}`.trim());
       setEmail((e) => e || user.email);
       setPhone((p) => p || user.phone || "");
     }
-  }, [user]);
+  }, [user, detailsReady]);
 
   // Persist as the passenger types so the summary and back navigation stay live.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!detailsReady) return;
     setContact({ name, email, phone });
     setTrip({ forSomeoneElse: forElse, passengerName: paxName, passengerPhone: paxPhone });
-  }, [hydrated, name, email, phone, forElse, paxName, paxPhone, setContact, setTrip]);
+  }, [detailsReady, name, email, phone, forElse, paxName, paxPhone, setContact, setTrip]);
 
   useEffect(() => {
     if (hydrated && capacity.over) router.replace("/booking/extra");

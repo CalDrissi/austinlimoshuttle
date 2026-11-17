@@ -82,7 +82,7 @@ export const useBookingStore = create<BookingState>()(
       // otherwise the Ride Summary shows a stale price until a vehicle is picked.
       setSearch: (search) => set({ search, quote: null, journey: null }),
       setJourney: (journey) => set({ journey }),
-      applyRequote: (search, response) => set((s) => ({ search, journey: response.journey, quote: response.quotes.find((q) => q.vehicle_id === s.quote?.vehicle_id) ?? response.quotes[0] ?? null })),
+      applyRequote: (search, response) => set((s) => ({ search, journey: response.journey, quote: response.quotes.find((q) => q.vehicle_id === s.quote?.vehicle_id) ?? null })),
       setQuote: (quote) => set({ quote }),
       setTrip: (trip) => set((s) => ({ trip: { ...s.trip, ...trip } })),
       setContact: (contact) => set({ contact }),
