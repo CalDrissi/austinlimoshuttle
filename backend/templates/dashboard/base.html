@@ -195,6 +195,11 @@
         <i class="bi bi-envelope"></i><span>Enquiries</span>
         {% if nav_unread_enquiries %}<span class="badge rounded-pill text-bg-warning">{{ nav_unread_enquiries }}</span>{% endif %}
       </a>
+      <a class="nav-link {% if request.resolver_match.url_name in 'amendments amendment_detail' %}active{% endif %}"
+         href="{% url 'dashboard:amendments' %}">
+        <i class="bi bi-pencil-square"></i><span>Change requests</span>
+        {% if nav_pending_amendments %}<span class="badge rounded-pill text-bg-warning">{{ nav_pending_amendments }}</span>{% endif %}
+      </a>
       {% if is_manager %}
       <a class="nav-link {% if request.resolver_match.url_name == 'driver_access' %}active{% endif %}"
          href="{% url 'dashboard:driver_access' %}">

@@ -48,6 +48,10 @@ urlpatterns = [
     path("enquiries/", views.enquiry_inbox, name="enquiries"),
     path("enquiries/<int:pk>/", views.enquiry_detail, name="enquiry_detail"),
 
+    # Customer booking-change requests awaiting back-office review.
+    path("amendments/", views.amendment_list, name="amendments"),
+    path("amendments/<int:pk>/", views.amendment_detail, name="amendment_detail"),
+
     # Give drivers a login for the mobile driver app.
     path("drivers/access/", views.driver_access, name="driver_access"),
 

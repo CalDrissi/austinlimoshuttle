@@ -1,0 +1,71 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Change requests{% endblock %}
+{% block page_title %}Change requests{% endblock %}
+{% block lede %}
+  <p class="lede">{{ counts.pending }} pending · {{ counts.approved }} approved · {{ counts.declined }} declined · {{ counts.all }} total{% if page.paginator.num_pages > 1 %} · page {{ page.number }} of {{ page.paginator.num_pages }}{% endif %}</p>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-3">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-6 col-lg-3">
+      <label class="form-label small fw-semibold mb-1">Show</label>
+      <select name="state" class="form-select form-select-sm">
+        <option value="pending" {% if state == 'pending' %}selected{% endif %}>Pending review</option>
+        <option value="resolved" {% if state == 'resolved' %}selected{% endif %}>Approved &amp; declined</option>
+        <option value="all" {% if state == 'all' %}selected{% endif %}>All</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-brand btn-sm"><i class="bi bi-funnel"></i> Filter</button>
+    </div>
+  </form>
+</div></div>
+
+{% if amendments %}
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th>Requested</th><th>Booking</th><th>Customer</th><th>Changes</th><th class="text-end">Price delta</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for amendment in amendments %}
+          <tr>
+            <td class="small text-nowrap">{{ amendment.requested_at|date:"j M Y, H:i" }}</td>
+            <td>
+              <a href="{% url 'dashboard:amendment_detail' amendment.pk %}"
+                 class="fw-semibold">{{ amendment.booking.reference }}</a>
+              <div class="small text-secondary">{{ amendment.booking.pickup_at|date:"j M, H:i" }}</div>
+            </td>
+            <td class="small">{{ amendment.booking.customer_name|default:"—" }}</td>
+            <td class="small text-secondary">{{ amendment.requested_changes.keys|join:", "|truncatechars:48 }}</td>
+            <td class="text-end small text-nowrap">
+              {% if amendment.price_delta > 0 %}
+                <span class="text-danger-emphasis fw-semibold">+{{ amendment.currency }} {{ amendment.price_delta|floatformat:2 }}</span>
+              {% elif amendment.price_delta < 0 %}
+                <span class="text-success-emphasis fw-semibold">{{ amendment.currency }} {{ amendment.price_delta|floatformat:2 }}</span>
+              {% else %}
+                <span class="text-secondary">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if amendment.status == 'pending' %}
+                <span class="badge text-bg-warning-subtle text-warning-emphasis badge-status">Pending</span>
+              {% elif amendment.status == 'approved' %}
+                <span class="badge text-bg-success-subtle text-success-emphasis badge-status">Approved</span>
+              {% else %}
+                <span class="badge text-bg-secondary-subtle text-secondary-emphasis badge-status">Declined</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "dashboard/_pagination.html" %}
+  </div>
+{% else %}
+  <div class="card"><div class="empty-state">
+    <i class="bi bi-check2-circle"></i><div class="fw-semibold">No change requests to review</div>
+  </div></div>
+{% endif %}
+{% endblock %}

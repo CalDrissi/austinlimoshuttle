@@ -34,6 +34,7 @@ from django.views.decorators.http import require_POST
 
 from bookings.models import (
     Booking,
+    BookingAmendmentRequest,
     BookingPriceLine,
     BookingStatusChange,
     Driver,
@@ -73,6 +74,7 @@ logger = logging.getLogger(__name__)
 BOOKINGS_PER_PAGE = 50
 ENQUIRIES_PER_PAGE = 50
 TRIP_EVENTS_PER_PAGE = 50
+AMENDMENTS_PER_PAGE = 50
 
 
 def admin_login_redirect(request):
@@ -954,6 +956,121 @@ def enquiry_detail(request, pk):
 
     return render(request, "dashboard/enquiry_detail.html",
                   {"enquiry": enquiry, "roles": role_names(request.user)})
+
+
+@staff_required
+def amendment_list(request):
+    """
+    Customer booking-change requests awaiting staff review.
+
+    Pending first and newest-first -- the model's own ordering -- because a
+    pending request holds a confirmed journey in limbo until the office acts on
+    it. The `state` filter widens the view to recently approved/declined so staff
+    can audit what was decided.
+    """
+    requests = BookingAmendmentRequest.objects.select_related(
+        "booking", "booking__customer", "requested_by", "reviewed_by",
+    )
+
+    state = request.GET.get("state", "pending")
+    if state == "pending":
+        requests = requests.filter(status=BookingAmendmentRequest.Status.PENDING)
+    elif state == "resolved":
+        requests = requests.exclude(status=BookingAmendmentRequest.Status.PENDING)
+
+    paginator = Paginator(requests, AMENDMENTS_PER_PAGE)
+    page = paginator.get_page(request.GET.get("page"))
+
+    params = request.GET.copy()
+    params.pop("page", None)
+    querystring = params.urlencode()
+
+    context = {
+        "querystring": f"&{querystring}" if querystring else "",
+        "amendments": page.object_list,
+        "page": page,
+        "paginator": paginator,
+        "page_range": paginator.get_elided_page_range(
+            page.number, on_each_side=2, on_ends=1,
+        ),
+        "counts": BookingAmendmentRequest.objects.aggregate(
+            all=Count("id"),
+            pending=Count("id", filter=Q(status=BookingAmendmentRequest.Status.PENDING)),
+            approved=Count("id", filter=Q(status=BookingAmendmentRequest.Status.APPROVED)),
+            declined=Count("id", filter=Q(status=BookingAmendmentRequest.Status.DECLINED)),
+        ),
+        "state": state,
+        "roles": role_names(request.user),
+    }
+    return render(request, "dashboard/amendments.html", context)
+
+
+@staff_required
+def amendment_detail(request, pk):
+    """
+    Review one change request: OLD vs NEW, the price delta, approve or decline.
+
+    Approving calls the model's `approve()` (applies the change + re-prices) and
+    emails the customer; declining records a required reason and emails them.
+    Both guard against double-processing an already-resolved request, and the
+    acting staff user is recorded as `reviewed_by`.
+    """
+    amendment = get_object_or_404(
+        BookingAmendmentRequest.objects.select_related(
+            "booking", "booking__customer", "requested_by", "reviewed_by",
+        ),
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        # Reviewing a request mutates a confirmed booking (and its fare), so it
+        # needs change rights, not merely the view access the list screen allows.
+        if not request.user.has_perm("bookings.change_booking"):
+            raise PermissionDenied
+
+        if not amendment.is_pending:
+            messages.warning(request, "This request has already been resolved.")
+            return redirect("dashboard:amendment_detail", pk=pk)
+
+        action = request.POST.get("action")
+        if action == "approve":
+            try:
+                amendment.approve(reviewed_by=request.user)
+            except QuoteError:
+                messages.error(
+                    request,
+                    "We couldn't re-price that change. Please review the booking "
+                    "manually before approving.",
+                )
+                return redirect("dashboard:amendment_detail", pk=pk)
+            mailer.send_amendment_approved(amendment)
+            messages.success(
+                request,
+                f"Approved. Booking {amendment.booking.reference} was updated and "
+                "the customer emailed.",
+            )
+            return redirect("dashboard:amendments")
+
+        if action == "decline":
+            reason = (request.POST.get("reason") or "").strip()
+            if not reason:
+                messages.error(request, "Give a reason before declining.")
+                return redirect("dashboard:amendment_detail", pk=pk)
+            amendment.decline(reviewed_by=request.user, reason=reason)
+            mailer.send_amendment_declined(amendment)
+            messages.success(request, "Declined. The customer was emailed the reason.")
+            return redirect("dashboard:amendments")
+
+        messages.error(request, "Unknown action.")
+        return redirect("dashboard:amendment_detail", pk=pk)
+
+    return render(request, "dashboard/amendment_detail.html", {
+        "amendment": amendment,
+        "changes": amendment.changed_fields(),
+        "can_review": request.user.has_perm("bookings.change_booking"),
+        "roles": role_names(request.user),
+        "is_manager": is_manager(request.user),
+    })
 
 
 def _export_csv(bookings) -> HttpResponse:

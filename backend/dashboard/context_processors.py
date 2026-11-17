@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from bookings.models import Booking
+from bookings.models import Booking, BookingAmendmentRequest
 from enquiries.models import ContactMessage
 
 from .crud import REGISTRY, visible_to
@@ -41,6 +41,9 @@ def staff_context(request):
         .count()
     )
     context["nav_unread_enquiries"] = ContactMessage.objects.filter(is_read=False).count()
+    context["nav_pending_amendments"] = BookingAmendmentRequest.objects.filter(
+        status=BookingAmendmentRequest.Status.PENDING,
+    ).count()
 
     # The manageable records this user may see, grouped for the sidebar. Built
     # from the registry and their permissions, so a Dispatcher is never shown a
