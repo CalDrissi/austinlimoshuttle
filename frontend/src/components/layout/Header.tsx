@@ -7,6 +7,8 @@ import { authService } from "@/lib/api/auth.service";
 import { notify } from "@/lib/feedback";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { telHref } from "@/lib/api/site.service";
 
 // Ported from the template header (design-reference/index.html): a services
 // dropdown, a "For business" dropdown, and two flat links, with a sign-in
@@ -28,6 +30,7 @@ const MENU: MenuItem[] = [
 
 export default function Header() {
   const { user } = useAuth();
+  const site = useSiteSettings();
   const qc = useQueryClient();
   const [accountOpen, setAccountOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -98,6 +101,14 @@ export default function Header() {
               </div>
 
               <div className="header-right">
+                {/* A blank number renders nothing rather than a dead tel: link. */}
+                {site?.contact_phone && (
+                  <a className="btn btn-default hover-up d-none d-md-inline-flex align-items-center align-middle mr-10"
+                     href={telHref(site.contact_phone)} aria-label={`Call us at ${site.contact_phone}`}>
+                    <PhoneIcon />
+                    <span className="ms-2">{site.contact_phone}</span>
+                  </a>
+                )}
                 <div className="box-button-login d-inline-block align-middle">
                   {user ? <div className="mm-account-menu" ref={accountRef} onKeyDown={(e) => { if (e.key === "Escape") { setAccountOpen(false); accountRef.current?.querySelector("button")?.focus(); } }}>
                     <button className="btn btn-default" aria-expanded={accountOpen} aria-controls="account-links" onClick={() => setAccountOpen(!accountOpen)}>
@@ -149,6 +160,14 @@ export default function Header() {
                 </nav>
               </div>
               <div className="site-copyright mt-30">
+                {site?.contact_phone && (
+                  <a className="btn btn-default hover-up w-100 d-inline-flex align-items-center justify-content-center mb-10"
+                     href={telHref(site.contact_phone)} onClick={close}
+                     aria-label={`Call us at ${site.contact_phone}`}>
+                    <PhoneIcon />
+                    <span className="ms-2">Call us · {site.contact_phone}</span>
+                  </a>
+                )}
                 <Link href={user ? "/account" : "/login"} onClick={close}
                       className="btn btn-default hover-up w-100">
                   {user ? "My account" : "Sign in"}
@@ -160,5 +179,18 @@ export default function Header() {
         </div>
       </div>
     </>
+  );
+}
+
+// Inline so the icon inherits the button's text colour (currentColor) and flips
+// correctly on the btn-default hover state (white → dark), which a static
+// background SVG could not do.
+function PhoneIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+         style={{ flexShrink: 0 }}>
+      <path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"
+            fill="currentColor" />
+    </svg>
   );
 }

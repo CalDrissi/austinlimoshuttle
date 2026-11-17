@@ -709,10 +709,11 @@ class SiteSettingsForm(BootstrapFormMixin, forms.ModelForm):
             "google_maps_api_key",
         ]
         labels = {
+            "contact_phone": "Call-us phone number",
             "google_maps_api_key": "Google Maps API key",
         }
         help_texts = {
-            "contact_phone": "Shown in the header and footer of the public site.",
+            "contact_phone": "Shown as the Call us button in the website header (and the footer). Leave blank to hide the button.",
             "ops_notification_email": "Where new-booking alerts go. Never shown publicly.",
             "google_maps_api_key": (
                 "Powers address autocomplete and distance-based pricing. Needs "
