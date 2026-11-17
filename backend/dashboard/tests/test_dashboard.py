@@ -1013,6 +1013,52 @@ class TestSingletonSettingsScreens:
         client.login(username="dispatcher@example.com", password="DashLocal!2026")
         assert client.get(reverse("dashboard:pricing_settings")).status_code == 403
 
+    def test_pricing_settings_render_window_fields(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+        body = client.get(reverse("dashboard:pricing_settings")).content.decode()
+        for name in ("min_booking_lead_hours", "amendment_window_hours",
+                     "cancellation_window_hours"):
+            assert f'name="{name}"' in body
+        assert "Last-minute limit" in body
+        assert "Edit window" in body
+        assert "Cancellation window" in body
+
+    def test_pricing_settings_save_window_fields(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+        response = client.post(reverse("dashboard:pricing_settings"), {
+            "tax_rate": "0.00", "currency": "USD",
+            "cancellation_window_hours": "2",
+            "amendment_window_hours": "12",
+            "min_booking_lead_hours": "3",
+            "quote_ttl_minutes": "30",
+        })
+        assert response.status_code == 302
+
+        from pricing.models import PricingSettings
+        s = PricingSettings.load()
+        assert s.cancellation_window_hours == 2
+        assert s.amendment_window_hours == 12
+        assert s.min_booking_lead_hours == 3
+
+    def test_pricing_settings_reject_negative_window(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+        response = client.post(reverse("dashboard:pricing_settings"), {
+            "tax_rate": "0.00", "currency": "USD",
+            "cancellation_window_hours": "1",
+            "amendment_window_hours": "24",
+            "min_booking_lead_hours": "-5",
+            "quote_ttl_minutes": "30",
+        })
+        assert response.status_code == 200  # re-rendered with errors, not saved
+
+        from pricing.models import PricingSettings
+        assert PricingSettings.load().min_booking_lead_hours != -5
+
 
 @pytest.mark.django_db
 class TestManualBooking:
