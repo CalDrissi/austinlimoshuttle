@@ -9,6 +9,7 @@ import DayPicker from "@/components/ui/DayPicker";
 import TimePicker from "@/components/ui/TimePicker";
 import { useBookingStore } from "@/lib/booking/store";
 import {
+  loadGoogleMaps,
   fetchPlaceSuggestions,
   newSessionToken,
   type PlaceSuggestion,
@@ -41,7 +42,7 @@ export function AddressField({ label, value, onChange, placeholder }: {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const tokenRef = useRef<unknown>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mapsReady, setMapsReady] = useState(false);
   const reqRef = useRef(0); // guards against out-of-order responses
 
   useEffect(() => {
@@ -51,33 +52,58 @@ export function AddressField({ label, value, onChange, placeholder }: {
     document.addEventListener("mousedown", handler);
     return () => {
       document.removeEventListener("mousedown", handler);
-      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
 
-  const runSearch = (raw: string) => {
-    const q = raw.trim();
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (q.length < MIN_QUERY) {
-      setSuggestions([]);
+  // Start the shared loader before the first keystroke. Readiness is a search
+  // dependency so a query entered while Maps was cold is automatically replayed.
+  useEffect(() => {
+    let cancelled = false;
+    loadGoogleMaps().then(() => {
+      if (!cancelled) setMapsReady(true);
+    }).catch((error: unknown) => {
+      console.warn("Google Maps pre-warm failed; address search will retry.", error);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const reqId = ++reqRef.current;
+    const q = value.trim();
+    setSuggestions([]);
+    if (!open || q.length < MIN_QUERY) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      const reqId = ++reqRef.current;
-      try {
-        if (!tokenRef.current) tokenRef.current = await newSessionToken();
-        const results = await fetchPlaceSuggestions(q, tokenRef.current);
-        if (reqId === reqRef.current) setSuggestions(results);
-      } catch {
-        // Missing/blocked key or API error — fall back to plain free text.
-        if (reqId === reqRef.current) setSuggestions([]);
-      } finally {
-        if (reqId === reqRef.current) setLoading(false);
+    const search = async () => {
+      // A rejected loader is retryable. Give a transient cold-start failure one
+      // more attempt while retaining the same query and its loading indicator.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await loadGoogleMaps();
+          if (reqId !== reqRef.current) return;
+          if (!tokenRef.current) tokenRef.current = await newSessionToken();
+          const results = await fetchPlaceSuggestions(q, tokenRef.current);
+          if (reqId === reqRef.current) {
+            setSuggestions(results);
+            setLoading(false);
+          }
+          return;
+        } catch (error) {
+          if (reqId !== reqRef.current) return;
+          console.warn("Address autocomplete attempt failed.", error);
+          if (attempt === 1) setLoading(false);
+        }
       }
-    }, 250);
-  };
+    };
+    const timeout = setTimeout(() => { void search(); }, 250);
+    return () => {
+      clearTimeout(timeout);
+      // Also invalidate requests on edits, selection, blur, and unmount.
+      ++reqRef.current;
+    };
+  }, [value, open, mapsReady]);
 
   const pick = (s: PlaceSuggestion) => {
     onChange(s.full);
@@ -96,8 +122,8 @@ export function AddressField({ label, value, onChange, placeholder }: {
         autoComplete="off"
         placeholder={placeholder}
         value={value}
-        onChange={(e) => { onChange(e.target.value); setOpen(true); runSearch(e.target.value); }}
-        onFocus={() => { setOpen(true); if (!suggestions.length) runSearch(value); }}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => { setOpen(true); }}
       />
       {open && (value.trim().length >= MIN_QUERY) && (
         <div className="mm-dropdown mm-loc-list">

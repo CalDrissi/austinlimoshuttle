@@ -46,10 +46,13 @@ async function resolveApiKey(): Promise<string> {
 export function loadGoogleMaps(): Promise<any> {
   if (typeof window === "undefined") return Promise.reject(new Error("not in browser"));
   const w = window as any;
-  if (w.google?.maps?.importLibrary) return Promise.resolve(w.google);
   if (loader) return loader;
 
   loader = (async () => {
+    if (w.google?.maps?.importLibrary) {
+      await w.google.maps.importLibrary("places");
+      return w.google;
+    }
     const key = await resolveApiKey();
     if (!key) throw new Error("No Google Maps API key configured.");
     return await new Promise((resolve, reject) => {
@@ -77,7 +80,13 @@ export function loadGoogleMaps(): Promise<any> {
     s.onerror = () => reject(new Error("Google Maps failed to load"));
     document.head.appendChild(s);
     });
-  })();
+  })().catch((error: unknown) => {
+    // A failed script must not leave a rejected promise (or a dead script tag)
+    // cached forever. A later call can inject a fresh script and try again.
+    loader = null;
+    document.getElementById(SCRIPT_ID)?.remove();
+    throw error;
+  });
   return loader;
 }
 
