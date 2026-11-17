@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { useBookingStore } from "@/lib/booking/store";
 import { bookingService } from "@/lib/api/booking.service";
 import { API_BASE_URL } from "@/lib/api/config";
@@ -16,6 +17,7 @@ function money(amount: string, currency: string) {
 // box-info-book-border tiles → box-booking-border list-prices), wired to the
 // real booking: reference, polled status, and the trip snapshot.
 export default function BookingConfirmationPage() {
+  const { user, isLoading } = useAuth();
   const reference = useBookingStore((s) => s.reference);
   const clearDraft = useBookingStore((s) => s.clearDraft);
 
@@ -65,11 +67,13 @@ export default function BookingConfirmationPage() {
             <h4 className="heading-24-medium color-text mb-10">Your booking was submitted successfully!</h4>
             <p className="text-14 color-grey mb-40">
               {snap.contact.email
-                ? `A receipt has been sent to: ${snap.contact.email}`
-                : "Your booking is confirmed."}
+                ? `A confirmation email is on its way to ${snap.contact.email}.`
+                : "A confirmation email is on its way."}
             </p>
           </div>
 
+          {!isLoading && !user && <div className="mm-feedback mb-20"><p>Create an account to track this ride</p><Link className="btn btn-primary" href={`/register?email=${encodeURIComponent(snap.contact.email || "")}&next=${encodeURIComponent("/account?tab=bookings")}`}>Create an account</Link></div>}
+          {user && <p className="text-center mb-20"><Link href="/account?tab=bookings">View My bookings</Link></p>}
           <div className="box-info-book-border">
             <div className="info-1"><span className="color-text text-14">Order Number</span><br /><span className="color-text text-14-medium">#{reference}</span></div>
             <div className="info-1"><span className="color-text text-14">Date</span><br /><span className="color-text text-14-medium">{snap.search?.date ?? "-"}</span></div>

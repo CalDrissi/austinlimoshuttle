@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import Image from "next/image";
 import DayPicker from "@/components/ui/DayPicker";
 import TimePicker from "@/components/ui/TimePicker";
@@ -136,6 +138,8 @@ const HOUR_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function BookingSearchWidget() {
   const router = useRouter();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
   const setSearch = useBookingStore((s) => s.setSearch);
 
   const [tripType, setTripType] = useState<TripType>("transfer");
@@ -157,7 +161,8 @@ export default function BookingSearchWidget() {
     setTripType(value);
   };
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
+    if (busy) return;
     if (!from.trim() || !date || !time) {
       setError("Please fill in date, time and pickup.");
       return;
@@ -185,7 +190,13 @@ export default function BookingSearchWidget() {
         date, time, meetGreet,
       });
     }
-    router.push("/booking/vehicle");
+    const search = useBookingStore.getState().search!;
+    setBusy(true); setError("");
+    try {
+      await qc.fetchQuery({ queryKey: ["quotes", search], queryFn: () => quoteService.create(quoteRequest(search)), staleTime: 0, retry: false });
+      router.push("/booking/vehicle");
+    } catch { setError("We couldn't price that trip — check your addresses"); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -270,13 +281,13 @@ export default function BookingSearchWidget() {
         )}
 
         <div className="search-item search-button">
-          <button className="btn btn-search" type="button" onClick={handleSearch}>
+          <button className="btn btn-search" type="button" disabled={busy} aria-busy={busy} onClick={handleSearch}>
             <Image src="/assets/imgs/template/icons/search.svg" alt="" width={16} height={16} />
-            Search
+            {busy ? "Finding your cars…" : "Search"}
           </button>
         </div>
 
-        {error && <div className="mm-search-error">{error}</div>}
+        {error && <div role="alert" className="mm-search-error">{error}</div>}
       </div>
     </div>
   );

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE_URL } from "@/lib/api/config";
 import { bookingService } from "@/lib/api/booking.service";
 import type { BookingAmendRequest } from "@/lib/api/booking.service";
+import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { cardsService } from "@/lib/api/cards.service";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
@@ -119,12 +120,20 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
   );
 }
 
-export default function AccountDashboard() {
+function AccountDashboard() {
+  const params = useSearchParams();
   const router = useRouter();
   const qc = useQueryClient();
   const { user, isLoading } = useAuth();
   const refreshAuth = useRefreshAuth();
   const [tab, setTab] = useState<Tab>("overview");
+  const [actionError, setActionError] = useState("");
+  const [pendingAction, setPendingAction] = useState<{ kind: "card" | "booking"; id: number | string } | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  useEffect(() => {
+    const selected = params.get("tab");
+    setTab(selected === "bookings" || selected === "cards" || selected === "profile" ? selected : "overview");
+  }, [params]);
   const [pf, setPf] = useState({ first_name: "", last_name: "", phone: "" });
   const [pfMsg, setPfMsg] = useState("");
   const [pfSaving, setPfSaving] = useState(false);
@@ -150,7 +159,7 @@ export default function AccountDashboard() {
     setPfSaving(false);
   };
 
-  const { data: bookings = [], isLoading: loadingBookings } = useQuery({
+  const { data: bookings = [], isLoading: loadingBookings, isError: bookingsFailed } = useQuery({
     queryKey: ["my-bookings"],
     enabled: !!user,
     queryFn: () => bookingService.mine(),
@@ -163,22 +172,22 @@ export default function AccountDashboard() {
   });
 
   const removeCard = async (id: number) => {
-    if (!confirm("Remove this card?")) return;
+    setActionError("");
     try {
       await cardsService.remove(id);
       qc.invalidateQueries({ queryKey: ["my-cards"] });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not remove the card.");
+      setActionError(e instanceof Error ? e.message : "Could not remove the card.");
     }
   };
 
   const cancel = async (ref: string) => {
-    if (!confirm("Cancel this booking?")) return;
+    setActionError("");
     try {
       await bookingService.cancel(ref);
       qc.invalidateQueries({ queryKey: ["my-bookings"] });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Could not cancel.");
+      setActionError(e instanceof Error ? e.message : "Could not cancel.");
     }
   };
 
@@ -189,9 +198,11 @@ export default function AccountDashboard() {
   };
 
   const logout = async () => {
-    await authService.logout();
-    await refreshAuth();
-    router.push("/");
+    try {
+      await authService.logout(); qc.setQueryData(["me"], null);
+      qc.removeQueries({ queryKey: ["my-bookings"] }); qc.removeQueries({ queryKey: ["my-cards"] });
+      notify("You've been signed out"); router.push("/");
+    } catch { setActionError("Could not sign out — please try again."); }
   };
 
   if (isLoading || !user) return null;
@@ -201,13 +212,16 @@ export default function AccountDashboard() {
   const initials = (user.first_name?.[0] || user.email[0] || "?").toUpperCase();
 
   const navBtn = (id: Tab, label: string) => (
-    <button className={tab === id ? "on" : ""} onClick={() => setTab(id)}>{label}</button>
+    <button className={tab === id ? "on" : ""} onClick={() => { setTab(id); window.history.replaceState(null, "", id === "overview" ? "/account" : `/account?tab=${id}`); }}>{label}</button>
   );
 
   return (
     <section className="section pt-60 pb-80">
       <div className="container">
         <h2 className="heading-36-medium mb-30">My account</h2>
+        {bookingsFailed && <p role="alert">We couldn't load your bookings. Please refresh to try again.</p>}
+        {actionError && <p role="alert">{actionError}</p>}
+        {pendingAction && <div className="mm-feedback mb-20" role="region" aria-label="Confirm action"><p>{pendingAction.kind === "card" ? "Remove this saved card?" : "Cancel this booking?"}</p><button className="btn btn-primary" disabled={actionBusy} onClick={async () => { setActionBusy(true); if (pendingAction.kind === "card") await removeCard(Number(pendingAction.id)); else await cancel(String(pendingAction.id)); setPendingAction(null); setActionBusy(false); }}>{actionBusy ? "Saving…" : "Confirm"}</button> <button className="btn btn-border" disabled={actionBusy} onClick={() => setPendingAction(null)}>Keep it</button></div>}
         <div className="mm-acct">
           <aside className="mm-acct-side">
             <div className="mm-acct-user">
@@ -236,10 +250,10 @@ export default function AccountDashboard() {
                 </div>
                 <h5 className="text-18-medium mb-15">Next ride</h5>
                 {loadingBookings && <p className="color-grey">Loading…</p>}
-                {!loadingBookings && upcoming.length === 0 && (
-                  <p className="text-16 color-grey">No upcoming rides. <Link href="/booking/vehicle">Book one</Link>.</p>
+                {!loadingBookings && !bookingsFailed && upcoming.length === 0 && (
+                  <p className="text-16 color-grey">No upcoming rides — <Link href="/">Book one</Link>.</p>
                 )}
-                {upcoming.slice(0, 1).map((b) => <RideCard key={b.reference} b={b} onCancel={cancel} onAmend={amend} userPhone={user.phone || ""} />)}
+                {upcoming.slice(0, 1).map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
               </>
             )}
 
@@ -247,10 +261,10 @@ export default function AccountDashboard() {
               <>
                 <h5 className="text-18-medium mb-15">All bookings</h5>
                 {loadingBookings && <p className="color-grey">Loading…</p>}
-                {!loadingBookings && bookings.length === 0 && (
-                  <p className="text-16 color-grey">No bookings yet. <Link href="/booking/vehicle">Book a ride</Link>.</p>
+                {!loadingBookings && !bookingsFailed && bookings.length === 0 && (
+                  <p className="text-16 color-grey">No bookings yet. <Link href="/">Book a ride</Link>.</p>
                 )}
-                {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={cancel} onAmend={amend} userPhone={user.phone || ""} />)}
+                {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
               </>
             )}
 
@@ -271,7 +285,7 @@ export default function AccountDashboard() {
                       {c.is_default && <span className="text-14 color-grey"> · default</span>}
                       {c.expiry && <div className="text-14 color-grey">Expires {c.expiry}</div>}
                     </div>
-                    <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => removeCard(c.id)}>
+                    <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => setPendingAction({ kind: "card", id: c.id })}>
                       Remove
                     </button>
                   </div>
@@ -316,3 +330,5 @@ export default function AccountDashboard() {
     </section>
   );
 }
+
+export default function AccountPage() { return <Suspense fallback={<p role="status">Loading your account…</p>}><AccountDashboard /></Suspense>; }

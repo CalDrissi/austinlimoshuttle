@@ -87,13 +87,14 @@ export default function BookingVehiclePage() {
               {!search && (
                 <p className="text-16 color-grey">Start with a search from the <a href="/">home page</a>.</p>
               )}
-              {isLoading && <p className="text-16 color-grey">Pricing vehicles for your journey…</p>}
+              {search && isLoading && <p role="status" className="text-16 color-grey">Pricing vehicles for your journey…</p>}
               {error && (
                 <p className="text-16" style={{ color: "#c0392b" }}>
-                  {(error as Error).message || "Could not price that journey. Check the addresses and try again."}
+                  We couldn't price that trip — check your addresses. <a href="/">Edit your search</a>
                 </p>
               )}
 
+              {data && data.quotes.length === 0 && <p role="status" className="mm-feedback">No vehicles fit this trip. <a href="/">Try different addresses or a different time</a>.</p>}
               <div className="list-vehicles">
                 {data?.quotes.map((q) => (
                   <VehicleCard

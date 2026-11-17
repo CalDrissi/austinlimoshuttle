@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -54,6 +55,7 @@ export default function BookingPaymentPage() {
 
 function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const stripe = useStripe();
   const elements = useElements();
   const { user } = useAuth();
@@ -71,6 +73,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
     if (!methodTouched && cardEnabled) setMethod("card");
   }, [methodTouched, cardEnabled]);
 
+  const submissionLock = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [cardComplete, setCardComplete] = useState(false);
@@ -90,7 +93,9 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   if (!hydrated || !quote) return null;
 
   const confirm = async () => {
+    if (submissionLock.current) return;
     if (capacity.blocked) { setError("Check vehicle capacity before payment."); return; }
+    submissionLock.current = true;
     setSubmitting(true);
     setError("");
     try {
@@ -145,11 +150,12 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           },
         });
         if (result.error) {
-          throw new Error(result.error.message || "The card could not be charged.");
+          throw new Error(result.error.type === "card_error" ? "Card declined — try another card" : result.error.message || "The card could not be charged.");
         }
         // succeeded / processing — the webhook is what actually confirms the booking.
       }
 
+      void qc.invalidateQueries({ queryKey: ["my-bookings"] });
       router.push("/booking/confirmation");
     } catch (e) {
       if (e instanceof ApiRequestError && e.status === 503) {
@@ -157,6 +163,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
       } else {
         setError(e instanceof Error ? e.message : "Something went wrong creating your booking.");
       }
+      submissionLock.current = false;
       setSubmitting(false);
     }
   };
@@ -171,7 +178,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
     >
       <input
         type="radio" name="method" style={{ marginRight: 8 }}
-        checked={method === m} disabled={disabled}
+        checked={method === m} disabled={disabled || submitting}
         onChange={() => { setMethod(m); setMethodTouched(true); }}
       />
       <b>{title}</b>
@@ -230,14 +237,14 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           </div>
         )}
 
-              {error && <p className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
+              {error && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
               <button
                 className="btn btn-primary hover-up mt-10"
                 onClick={confirm}
                 disabled={submitting || cardDisabledSubmit || capacity.blocked}
               >
                 {submitting
-                  ? "Processing…"
+                  ? "Processing payment…"
                   : method === "cash"
                     ? "Confirm booking (cash)"
                     : `Pay ${money(quote.total, quote.currency)}`}
