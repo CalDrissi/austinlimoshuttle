@@ -19,9 +19,11 @@ Deliberate differences from the legacy schema:
 from __future__ import annotations
 
 import secrets
+from datetime import datetime
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -236,6 +238,18 @@ class Booking(models.Model):
         if self.status in {self.Status.CANCELLED, self.Status.COMPLETED}:
             return False
         return timezone.now() < self.amendment_deadline
+
+    @property
+    def pending_amendment(self):
+        """
+        The customer's outstanding change request awaiting staff review, if any.
+
+        At most one is allowed open at a time (the amend-request endpoint rejects
+        a second), so the newest pending row is the one the client is waiting on.
+        """
+        return self.amendment_requests.filter(
+            status=BookingAmendmentRequest.Status.PENDING
+        ).first()
 
     @property
     def contact_email(self) -> str:
@@ -453,3 +467,239 @@ class DriverTripEvent(models.Model):
             return
         booking.status = Booking.Status.COMPLETED
         booking.save(update_fields=["status", "updated_at"])
+
+
+# The booking details a customer may ask to change. `pickup_at` is the only one
+# that moves the fare (night/event surcharges are time-based); `phone` lives on
+# the account, not the booking, so it is applied there. Addresses and the
+# vehicle stay office-only -- changing them is effectively a new trip. This is
+# the single source of truth for both the amend serializer and the amendment
+# request below.
+AMENDABLE_FIELDS = (
+    "passenger_count", "luggage_count", "flight_number",
+    "pickup_sign", "notes", "phone", "pickup_at",
+)
+
+# Human labels for the fields above, used in the staff/customer emails so the
+# OLD -> NEW diff reads in plain English rather than ORM attribute names.
+AMENDMENT_FIELD_LABELS = {
+    "passenger_count": "Passengers",
+    "luggage_count": "Luggage",
+    "flight_number": "Flight number",
+    "pickup_sign": "Pickup sign",
+    "notes": "Notes",
+    "phone": "Contact phone",
+    "pickup_at": "Pickup time",
+}
+
+
+class BookingAmendmentRequest(models.Model):
+    """
+    A customer's proposed change to an upcoming booking, awaiting staff review.
+
+    The booking itself is NOT touched while a request is pending -- the proposed
+    values live here as `requested_changes` (field -> new value) alongside the
+    re-priced fare the change would produce. Staff `approve()` applies the change
+    to the booking and re-prices; `decline()` records a reason. Either way the
+    customer is emailed. Both transitions are guarded so an already-resolved
+    request can never be approved or declined twice.
+
+    Why a separate model rather than editing the booking in place: a change to a
+    confirmed, paid journey has money and dispatch consequences, so the office
+    gets to see and accept it first. The audit trail (who requested, who
+    reviewed, when) is impossible if the edit just overwrites the booking.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        DECLINED = "declined", "Declined"
+
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="amendment_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="booking_amendment_requests",
+        help_text="The customer who asked for the change.",
+    )
+
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+
+    # The proposed new values, keyed by Booking field name (plus the virtual
+    # `phone`). Only fields that actually differ from the booking are stored, so
+    # this doubles as the OLD->NEW diff. `pickup_at` is held as an ISO-8601
+    # string (DjangoJSONEncoder serialises datetimes that way); `apply()` parses
+    # it back. Addresses/vehicle are never present -- they are office-only.
+    requested_changes = models.JSONField(
+        default=dict, encoder=DjangoJSONEncoder,
+        help_text="Proposed {field: new_value}. Only changed fields appear.",
+    )
+
+    # The fare the change would produce, computed from the pricing engine at
+    # request time and recomputed authoritatively on approval. `new_*` mirror the
+    # booking's own money columns; `old_total` snapshots the fare at request time
+    # so the price delta survives even if the booking is later re-priced.
+    old_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    new_subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    new_surcharge_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    new_tax = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    new_total = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    currency = models.CharField(max_length=3, default="USD")
+
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_amendment_requests",
+        help_text="The staff member who approved or declined the request.",
+    )
+    decline_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["status", "requested_at"]),
+        ]
+
+    def __str__(self):
+        return f"Amendment {self.pk} for {self.booking.reference} ({self.status})"
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == self.Status.PENDING
+
+    @property
+    def price_delta(self) -> Decimal:
+        """How much the fare moves if approved. Positive = more expensive."""
+        return self.new_total - self.old_total
+
+    def changed_fields(self) -> list[dict]:
+        """
+        The OLD -> NEW diff, resolved to display values, for the emails/serializer.
+
+        While the request is pending the booking still holds the OLD values, so
+        they are read straight off it. `phone` is read from the account.
+        """
+        rows = []
+        for field in AMENDABLE_FIELDS:
+            if field not in self.requested_changes:
+                continue
+            new_value = self.requested_changes[field]
+            if field == "phone":
+                old_value = getattr(self.booking.customer, "phone", "") if self.booking.customer else ""
+            elif field == "pickup_at":
+                old_value = self._format_pickup(self.booking.pickup_at)
+                new_value = self._format_pickup(new_value)
+            else:
+                old_value = getattr(self.booking, field)
+            rows.append({
+                "field": field,
+                "label": AMENDMENT_FIELD_LABELS.get(field, field),
+                "old": old_value,
+                "new": new_value,
+            })
+        return rows
+
+    @staticmethod
+    def _format_pickup(value) -> str:
+        """Render a pickup time (datetime or ISO string) for display in an email."""
+        if not value:
+            return ""
+        if isinstance(value, str):
+            try:
+                value = datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        value = timezone.localtime(value) if timezone.is_aware(value) else value
+        return value.strftime("%a %d %b %Y, %H:%M")
+
+    @transaction.atomic
+    def approve(self, reviewed_by):
+        """
+        Apply the requested change to the booking, re-price, and mark approved.
+
+        Idempotent by guard: a request that is not pending is returned untouched,
+        so a double-click or a retried request never re-applies the change. The
+        booking is mutated only here, never while the request sits pending.
+        """
+        if not self.is_pending:
+            return self
+
+        booking = self.booking
+        changes = dict(self.requested_changes)
+        applied = []
+        recomputed = None
+
+        # `phone` lives on the account, not the booking.
+        if "phone" in changes and booking.customer_id:
+            booking.customer.phone = (changes.pop("phone") or "").strip()
+            booking.customer.save(update_fields=["phone"])
+            applied.append("phone")
+
+        new_pickup = changes.pop("pickup_at", None)
+        for field in ("passenger_count", "luggage_count", "flight_number",
+                      "pickup_sign", "notes"):
+            if field in changes:
+                setattr(booking, field, changes[field])
+                applied.append(field)
+
+        if new_pickup is not None:
+            pickup_at = (
+                datetime.fromisoformat(new_pickup)
+                if isinstance(new_pickup, str) else new_pickup
+            )
+            booking.pickup_at = pickup_at
+            applied.append("pickup_at")
+            # Re-price through the booking's own entry point so an amended
+            # intercity trip keeps its intercity card (see Booking.reprice).
+            recomputed = booking.reprice(pickup_at=pickup_at)
+            booking.subtotal = recomputed.subtotal
+            booking.surcharge_total = recomputed.surcharge_total
+            booking.tax = recomputed.tax
+            booking.total = recomputed.total
+
+        booking.save()
+        if recomputed is not None:
+            booking.price_lines.all().delete()
+            for line in recomputed.as_price_lines(booking):
+                line.save()
+            # Record the authoritative fare we actually charged.
+            self.new_subtotal = booking.subtotal
+            self.new_surcharge_total = booking.surcharge_total
+            self.new_tax = booking.tax
+            self.new_total = booking.total
+
+        BookingStatusChange.objects.create(
+            booking=booking, from_status=booking.status, to_status=booking.status,
+            changed_by=reviewed_by,
+            note="Amendment approved by staff"
+                 + (": " + ", ".join(applied) if applied else ""),
+        )
+
+        self.status = self.Status.APPROVED
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.save(update_fields=[
+            "status", "reviewed_by", "reviewed_at",
+            "new_subtotal", "new_surcharge_total", "new_tax", "new_total",
+        ])
+        return self
+
+    def decline(self, reviewed_by, reason=""):
+        """
+        Mark the request declined with an optional reason. Leaves the booking
+        untouched. Idempotent by guard, like `approve()`.
+        """
+        if not self.is_pending:
+            return self
+        self.status = self.Status.DECLINED
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.decline_reason = reason or ""
+        self.save(update_fields=[
+            "status", "reviewed_by", "reviewed_at", "decline_reason",
+        ])
+        return self

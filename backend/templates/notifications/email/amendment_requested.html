@@ -1,0 +1,37 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Change requested — {{ booking.reference }}</h1>
+<p style="margin:0 0 16px;color:#5b636d">
+  {{ booking.customer_name }}{% if booking.contact_email %} ({{ booking.contact_email }}){% endif %}
+  has asked to change booking {{ booking.reference }}. It has
+  <strong>not</strong> been changed yet — review it below.
+</p>
+
+<table style="width:100%;border-collapse:collapse;margin:0 0 20px">
+  <tr style="text-align:left;color:#5b636d;font-size:13px">
+    <th style="padding:6px 8px;border-bottom:1px solid #e2e7ec">Field</th>
+    <th style="padding:6px 8px;border-bottom:1px solid #e2e7ec">Current</th>
+    <th style="padding:6px 8px;border-bottom:1px solid #e2e7ec">Requested</th>
+  </tr>
+  {% for row in changes %}
+  <tr>
+    <td style="padding:6px 8px;border-bottom:1px solid #f0f3f6">{{ row.label }}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid #f0f3f6;color:#9aa1ab">{{ row.old|default:"—" }}</td>
+    <td style="padding:6px 8px;border-bottom:1px solid #f0f3f6;font-weight:600">{{ row.new|default:"—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<div style="background:#f4f6f8;border-radius:8px;padding:16px;margin:0 0 20px">
+  Current total: <strong>${{ amendment.old_total }} {{ amendment.currency }}</strong><br>
+  New total: <strong>${{ amendment.new_total }} {{ amendment.currency }}</strong>
+  (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta }})
+</div>
+
+<p style="margin:0 0 8px">
+  <a href="{{ review_url }}" style="display:inline-block;background:#0f6b4f;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">
+    Review in the back office
+  </a>
+</p>
+<p style="margin:12px 0 0;color:#9aa1ab;font-size:13px">{{ review_url }}</p>
+{% endblock %}

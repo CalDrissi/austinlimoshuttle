@@ -152,6 +152,142 @@ def send_pickup_reminder(booking) -> bool:
     )
 
 
+# -- amendment requests ------------------------------------------------------
+
+
+def _amendment_recipients() -> list[str]:
+    """
+    Who reviews a customer's change request: every active staff account plus a
+    single configured admin/contact address.
+
+    Staff accounts (`is_staff=True`) are the people who can actually act on the
+    request in the back office. The extra admin address is a catch-all for the
+    operator's own inbox: the first of SiteSettings.ops_notification_email, the
+    public contact address, the SMTP ops address, or -- as a last resort -- the
+    superuser's own email, so the alert is never silently addressed to nobody.
+    Deduplicated, order preserved; `_send` drops any blanks.
+    """
+    from django.contrib.auth import get_user_model
+
+    recipients: list[str] = []
+
+    User = get_user_model()
+    staff_emails = (
+        User.objects.filter(is_staff=True, is_active=True)
+        .exclude(email="")
+        .values_list("email", flat=True)
+    )
+    recipients.extend(staff_emails)
+
+    admin_email = ""
+    try:
+        from content.models import SiteSettings
+
+        site = SiteSettings.load()
+        admin_email = site.ops_notification_email or site.contact_email
+    except Exception:  # SiteSettings is optional; never block the alert on it
+        admin_email = ""
+    if not admin_email:
+        admin_email = EmailSettings.load().ops_notification_email
+    if not admin_email:
+        superuser = (
+            User.objects.filter(is_superuser=True, is_active=True)
+            .exclude(email="")
+            .values_list("email", flat=True)
+            .first()
+        )
+        admin_email = superuser or ""
+    if admin_email:
+        recipients.append(admin_email)
+
+    # Preserve order, drop duplicates (a staff member who is also the admin).
+    seen: set[str] = set()
+    unique = []
+    for address in recipients:
+        key = address.lower()
+        if address and key not in seen:
+            seen.add(key)
+            unique.append(address)
+    return unique
+
+
+def _review_url(booking) -> str:
+    """Link staff follow to review the request. Absolute in prod, relative in dev."""
+    from django.conf import settings as django_settings
+
+    base = getattr(django_settings, "DASHBOARD_BASE_URL", "") or ""
+    return f"{base}/dashboard/bookings/{booking.reference}/"
+
+
+def send_amendment_requested(amendment) -> bool:
+    """
+    Alert staff + the admin address that a customer wants to change a booking.
+
+    Shows the booking reference, the customer, the OLD -> NEW diff and the price
+    delta, plus a link into the back office to approve or decline it. Never
+    raises -- a mail failure must not lose the pending request.
+    """
+    booking = amendment.booking
+    return _send(
+        kind=EmailLog.Kind.AMENDMENT_REQUESTED,
+        to=_amendment_recipients(),
+        subject=f"Change requested — {booking.reference}",
+        template="amendment_requested",
+        context={
+            "booking": booking,
+            "amendment": amendment,
+            "changes": amendment.changed_fields(),
+            "price_delta": amendment.price_delta,
+            "review_url": _review_url(booking),
+        },
+        booking=booking,
+    )
+
+
+def send_amendment_approved(amendment) -> bool:
+    """Tell the customer their requested change is confirmed, with the new fare."""
+    booking = amendment.booking
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    return _send(
+        kind=EmailLog.Kind.AMENDMENT_APPROVED,
+        to=[email],
+        subject=f"Your change is confirmed — {booking.reference}",
+        template="amendment_approved",
+        context={
+            "booking": booking,
+            "amendment": amendment,
+            "lines": booking.price_lines.all(),
+            "price_delta": amendment.price_delta,
+        },
+        booking=booking,
+    )
+
+
+def send_amendment_declined(amendment) -> bool:
+    """Tell the customer their requested change was declined, with the reason."""
+    booking = amendment.booking
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    return _send(
+        kind=EmailLog.Kind.AMENDMENT_DECLINED,
+        to=[email],
+        subject=f"About your requested change — {booking.reference}",
+        template="amendment_declined",
+        context={
+            "booking": booking,
+            "amendment": amendment,
+            "changes": amendment.changed_fields(),
+            "reason": amendment.decline_reason,
+        },
+        booking=booking,
+    )
+
+
 # -- operations --------------------------------------------------------------
 
 

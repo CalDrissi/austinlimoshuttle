@@ -1,0 +1,26 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Your change is confirmed</h1>
+<p style="margin:0 0 20px;color:#5b636d">
+  The change you requested to booking {{ booking.reference }} has been approved
+  and applied. Here are the updated details.
+</p>
+
+<table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
+  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+  <tr><td style="padding:4px 0;color:#5b636d">From</td><td style="padding:4px 0">{{ booking.pickup_address }}</td></tr>
+  {% if booking.dropoff_address %}<tr><td style="padding:4px 0;color:#5b636d">To</td><td style="padding:4px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
+  <tr><td style="padding:4px 0;color:#5b636d">Passengers</td><td style="padding:4px 0">{{ booking.passenger_count }}</td></tr>
+  {% if booking.flight_number %}<tr><td style="padding:4px 0;color:#5b636d">Flight</td><td style="padding:4px 0">{{ booking.flight_number }}</td></tr>{% endif %}
+  <tr><td style="padding:4px 0;color:#5b636d">Vehicle</td><td style="padding:4px 0">{{ booking.vehicle_name_snapshot }}</td></tr>
+</table>
+
+<div style="background:#e8f4ef;border-radius:8px;padding:16px;margin:0 0 20px">
+  New total: <strong>${{ booking.total }} {{ booking.currency }}</strong>{% if price_delta %}
+  <span style="color:#5b636d">({% if price_delta >= 0 %}+{% endif %}${{ price_delta }} vs before)</span>{% endif %}
+</div>
+
+<p style="margin:0;color:#5b636d;font-size:14px">
+  If anything here looks wrong, reply to this email and we'll sort it out.
+</p>
+{% endblock %}

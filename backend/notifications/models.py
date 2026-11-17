@@ -143,6 +143,9 @@ class EmailLog(models.Model):
         OPS_NEW_BOOKING = "ops_new_booking", "Operations: new booking"
         PICKUP_REMINDER = "pickup_reminder", "Pickup reminder"
         TRIP_STATUS = "trip_status", "Trip status update"
+        AMENDMENT_REQUESTED = "amendment_requested", "Amendment requested (staff)"
+        AMENDMENT_APPROVED = "amendment_approved", "Amendment approved"
+        AMENDMENT_DECLINED = "amendment_declined", "Amendment declined"
         TEST = "test", "Test message"
         OTHER = "other", "Other"
 

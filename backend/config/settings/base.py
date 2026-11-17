@@ -198,6 +198,12 @@ EMAIL_BACKEND = env("DJANGO_EMAIL_BACKEND",
 DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL",
                          default="bookings@austinlimoshuttle.com")
 
+# Absolute base URL for links staff follow from an email back into the
+# back-office dashboard (e.g. an amendment-review notification). Blank in dev,
+# where the email renders the relative /dashboard/... path; set in prod to the
+# dashboard's public origin so the link is clickable from a mail client.
+DASHBOARD_BASE_URL = env("DJANGO_DASHBOARD_BASE_URL", default="").rstrip("/")
+
 # --------------------------------------------------------------------------
 # REST framework
 # --------------------------------------------------------------------------
@@ -260,6 +266,7 @@ SPECTACULAR_SETTINGS = {
         {"name": "content", "description": "Pages, vehicles and availability."},
         {"name": "quotes", "description": "Fare quoting. Returns signed tokens."},
         {"name": "bookings", "description": "Creating and managing bookings."},
+        {"name": "staff", "description": "Back-office review (staff only)."},
         {"name": "payments", "description": "Stripe checkout and webhooks."},
         {"name": "auth", "description": "Sign in, register, password reset."},
         {"name": "enquiries", "description": "Contact form."},

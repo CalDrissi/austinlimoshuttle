@@ -33,13 +33,18 @@ from drf_spectacular.utils import (
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle, ScopedRateThrottle
 
 from accounts.forms import MigrationPasswordResetForm
 from accounts.models import LoginCode
-from bookings.models import Booking, BookingStatusChange
+from bookings.models import (
+    AMENDABLE_FIELDS,
+    Booking,
+    BookingAmendmentRequest,
+    BookingStatusChange,
+)
 from content.models import Page, SiteSettings
 from enquiries.models import ContactMessage
 from fleet.models import Vehicle
@@ -50,11 +55,12 @@ from payments.models import SavedCard
 from pricing.distance import DistanceLookupError
 from pricing.distance import lookup as measure_journey
 from pricing.engine import QuoteError, priced_city_to_city, quote_all
-from pricing.models import BlackoutDate, TimeSurcharge
+from pricing.models import BlackoutDate, PricingSettings, TimeSurcharge
 
 from . import quotes
 from .serializers import (
     AvailabilitySerializer,
+    BookingAmendmentRequestSerializer,
     BookingAmendSerializer,
     BookingCreateSerializer,
     BookingSerializer,
@@ -696,6 +702,250 @@ def my_booking_detail(request, reference):
             raise ValidationError({"action": "Only 'cancel' or 'amend' is supported."})
 
     return Response(BookingSerializer(booking).data)
+
+
+# -- amendment requests (client submits, staff review) ----------------------
+
+
+@extend_schema(
+    tags=["bookings"],
+    summary="Request a change to one of your bookings (staff must approve)",
+    description=(
+        "Owner-only. Unlike a direct amend, this does **not** change the "
+        "booking: it files a pending request that staff review. The pickup/"
+        "drop-off addresses and vehicle stay office-only; changing the pickup "
+        "time re-prices and the new fare is returned on the request.\n\n"
+        "Rejected (400) when the pickup is already inside the office-set "
+        "amendment window, when the booking is cancelled/completed, or when a "
+        "request is already awaiting review."
+    ),
+    parameters=[OpenApiParameter("reference", str, OpenApiParameter.PATH)],
+    request=BookingAmendSerializer,
+    responses={
+        201: BookingAmendmentRequestSerializer,
+        400: DetailSerializer,
+        404: DetailSerializer,
+    },
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def amend_request(request, reference):
+    """
+    File a pending change request against the caller's own booking.
+
+    Scoped to `customer=request.user`, so an unknown or someone else's reference
+    is a 404 (never 403), matching `my_booking_detail`. The booking is left
+    untouched; the proposed values and the re-priced fare live on the request
+    until staff approve it.
+    """
+    booking = (
+        Booking.objects.filter(reference=reference, customer=request.user)
+        .prefetch_related("price_lines")
+        .first()
+    )
+    if booking is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Terminal bookings can never be amended.
+    if booking.status in {Booking.Status.CANCELLED, Booking.Status.COMPLETED}:
+        raise ValidationError({
+            "detail": "This booking can no longer be changed online. "
+                      "Please contact us."
+        })
+
+    # Enforce the office-set amendment window. The deadline is `window_hours`
+    # before pickup; past it, changes must go through the office.
+    window_hours = PricingSettings.load().amendment_window_hours
+    if timezone.now() >= booking.amendment_deadline:
+        raise ValidationError({
+            "detail": (
+                f"This booking can no longer be changed online within "
+                f"{window_hours} hour{'' if window_hours == 1 else 's'} of pickup."
+            )
+        })
+
+    # One open request at a time -- otherwise staff see competing proposals.
+    if booking.amendment_requests.filter(
+        status=BookingAmendmentRequest.Status.PENDING
+    ).exists():
+        raise ValidationError({
+            "detail": "A change request for this booking is already awaiting review."
+        })
+
+    amend = BookingAmendSerializer(data=request.data)
+    amend.is_valid(raise_exception=True)
+    data = amend.validated_data
+
+    # Honour the vehicle's seat/bag limits at request time (the vehicle cannot
+    # change), so approval never has to re-validate capacity.
+    _enforce_capacity(
+        booking.vehicle,
+        data.get("passenger_count", booking.passenger_count),
+        data.get("luggage_count", booking.luggage_count),
+    )
+
+    # Keep only the fields that actually differ from the booking -- the request
+    # doubles as the OLD->NEW diff.
+    changes = {}
+    for field in AMENDABLE_FIELDS:
+        if field not in data:
+            continue
+        if field == "phone":
+            current = (request.user.phone or "").strip()
+            if (data["phone"] or "").strip() != current:
+                changes["phone"] = (data["phone"] or "").strip()
+        elif field == "pickup_at":
+            if data["pickup_at"] != booking.pickup_at:
+                # Stored as ISO-8601; DjangoJSONEncoder would do the same.
+                changes["pickup_at"] = data["pickup_at"].isoformat()
+        elif data[field] != getattr(booking, field):
+            changes[field] = data[field]
+
+    if not changes:
+        raise ValidationError({"detail": "Nothing to change."})
+
+    # Price the proposed booking. Only a new pickup time moves the fare; every
+    # other field leaves it where it is.
+    new_subtotal = booking.subtotal
+    new_surcharge = booking.surcharge_total
+    new_tax = booking.tax
+    new_total = booking.total
+    if "pickup_at" in changes:
+        try:
+            recomputed = booking.reprice(pickup_at=data["pickup_at"])
+        except QuoteError as exc:
+            raise ValidationError({
+                "detail": "We couldn't re-price that time. Please contact us."
+            }) from exc
+        new_subtotal = recomputed.subtotal
+        new_surcharge = recomputed.surcharge_total
+        new_tax = recomputed.tax
+        new_total = recomputed.total
+
+    amendment = BookingAmendmentRequest.objects.create(
+        booking=booking,
+        requested_by=request.user,
+        requested_changes=changes,
+        old_total=booking.total,
+        new_subtotal=new_subtotal,
+        new_surcharge_total=new_surcharge,
+        new_tax=new_tax,
+        new_total=new_total,
+        currency=booking.currency,
+    )
+
+    mailer.send_amendment_requested(amendment)
+
+    return Response(
+        BookingAmendmentRequestSerializer(amendment).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@extend_schema(
+    tags=["staff"],
+    summary="List booking change requests (staff)",
+    description="Staff-only. Defaults to the pending queue; pass "
+                "`?status=approved|declined|all` to widen it.",
+    parameters=[OpenApiParameter("status", str, OpenApiParameter.QUERY)],
+    responses={200: BookingAmendmentRequestSerializer(many=True)},
+)
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def staff_amendment_requests(request):
+    """The back-office review queue. Pending first, newest first."""
+    requested = request.query_params.get("status", "pending")
+    qs = BookingAmendmentRequest.objects.select_related(
+        "booking", "booking__customer", "reviewed_by"
+    )
+    valid = {s.value for s in BookingAmendmentRequest.Status}
+    if requested in valid:
+        qs = qs.filter(status=requested)
+    elif requested != "all":
+        qs = qs.filter(status=BookingAmendmentRequest.Status.PENDING)
+    return Response(BookingAmendmentRequestSerializer(qs, many=True).data)
+
+
+@extend_schema(
+    tags=["staff"],
+    summary="Approve a booking change request (staff)",
+    description=(
+        "Staff-only. Applies the requested change to the booking, re-prices, "
+        "marks the request approved and emails the customer. Idempotent: a "
+        "request that is already approved or declined returns **409**."
+    ),
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    request=None,
+    responses={
+        200: BookingAmendmentRequestSerializer,
+        404: DetailSerializer,
+        409: DetailSerializer,
+    },
+)
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def staff_amendment_approve(request, pk):
+    amendment = (
+        BookingAmendmentRequest.objects.select_related("booking")
+        .filter(pk=pk)
+        .first()
+    )
+    if amendment is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    if not amendment.is_pending:
+        return Response(
+            {"detail": "This request has already been resolved."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    try:
+        amendment.approve(reviewed_by=request.user)
+    except QuoteError as exc:
+        raise ValidationError({
+            "detail": "We couldn't re-price that change. Please review it manually."
+        }) from exc
+
+    mailer.send_amendment_approved(amendment)
+    return Response(BookingAmendmentRequestSerializer(amendment).data)
+
+
+@extend_schema(
+    tags=["staff"],
+    summary="Decline a booking change request (staff)",
+    description=(
+        "Staff-only. Marks the request declined (the booking is untouched) and "
+        "emails the customer with the reason. Idempotent: an already-resolved "
+        "request returns **409**."
+    ),
+    parameters=[OpenApiParameter("pk", int, OpenApiParameter.PATH)],
+    request=DetailSerializer,
+    responses={
+        200: BookingAmendmentRequestSerializer,
+        404: DetailSerializer,
+        409: DetailSerializer,
+    },
+)
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def staff_amendment_decline(request, pk):
+    amendment = (
+        BookingAmendmentRequest.objects.select_related("booking")
+        .filter(pk=pk)
+        .first()
+    )
+    if amendment is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+    if not amendment.is_pending:
+        return Response(
+            {"detail": "This request has already been resolved."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    reason = (request.data.get("reason") or request.data.get("detail") or "").strip()
+    amendment.decline(reviewed_by=request.user, reason=reason)
+
+    mailer.send_amendment_declined(amendment)
+    return Response(BookingAmendmentRequestSerializer(amendment).data)
 
 
 # -- auth -------------------------------------------------------------------

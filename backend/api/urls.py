@@ -28,8 +28,18 @@ urlpatterns = [
     path("account/bookings/", views.my_bookings, name="my_bookings"),
     path("account/bookings/<str:reference>/", views.my_booking_detail,
          name="my_booking_detail"),
+    path("account/bookings/<str:reference>/amend-request/", views.amend_request,
+         name="amend_request"),
     path("account/cards/", views.my_cards, name="my_cards"),
     path("account/cards/<int:pk>/", views.my_card_delete, name="my_card_delete"),
+
+    # Staff: booking change-request review queue (staff-only, is_staff).
+    path("staff/amendment-requests/", views.staff_amendment_requests,
+         name="staff_amendment_requests"),
+    path("staff/amendment-requests/<int:pk>/approve/",
+         views.staff_amendment_approve, name="staff_amendment_approve"),
+    path("staff/amendment-requests/<int:pk>/decline/",
+         views.staff_amendment_decline, name="staff_amendment_decline"),
 
     # Auth
     path("auth/csrf/", views.auth_csrf, name="csrf"),

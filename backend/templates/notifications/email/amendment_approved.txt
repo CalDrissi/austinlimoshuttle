@@ -1,0 +1,18 @@
+{% autoescape off %}Your change is confirmed
+
+Good news -- the change you requested to booking {{ booking.reference }} has been
+approved and applied.
+
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}Passengers: {{ booking.passenger_count }}
+{% if booking.flight_number %}Flight    : {{ booking.flight_number }}
+{% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
+
+New total : ${{ booking.total }} {{ booking.currency }}{% if price_delta %} ({% if price_delta >= 0 %}+{% endif %}${{ price_delta }} vs before){% endif %}
+
+If anything here looks wrong, reply to this email and we'll sort it out.
+
+Austin Limo Shuttle
+{% endautoescape %}

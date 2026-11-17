@@ -6,7 +6,8 @@ from django.utils.html import format_html
 from payments.models import Payment
 
 from .models import (
-    Booking, BookingPriceLine, BookingStatusChange, DriverTripEvent, Driver,
+    Booking, BookingAmendmentRequest, BookingPriceLine, BookingStatusChange,
+    DriverTripEvent, Driver,
 )
 
 
@@ -137,6 +138,39 @@ class BookingAdmin(admin.ModelAdmin):
     @admin.display(description="Customer")
     def customer_name(self, obj):
         return obj.customer_name
+
+
+@admin.register(BookingAmendmentRequest)
+class BookingAmendmentRequestAdmin(admin.ModelAdmin):
+    """
+    The review queue, mirrored into Django admin until the dashboard page lands.
+
+    Read-only: approving/declining must go through the model's guarded
+    transitions (which re-price and email), never a raw field edit here.
+    """
+
+    list_display = [
+        "id", "booking", "status", "requested_by", "old_total", "new_total",
+        "requested_at", "reviewed_by", "reviewed_at",
+    ]
+    list_filter = ["status", "requested_at"]
+    search_fields = ["booking__reference", "requested_by__email"]
+    date_hierarchy = "requested_at"
+    autocomplete_fields = ["booking", "requested_by", "reviewed_by"]
+    readonly_fields = [
+        "booking", "requested_by", "requested_changes", "old_total",
+        "new_subtotal", "new_surcharge_total", "new_tax", "new_total",
+        "currency", "requested_at", "reviewed_at", "reviewed_by", "status",
+        "decline_reason",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "booking", "requested_by", "reviewed_by",
+        )
 
 
 @admin.register(Driver)

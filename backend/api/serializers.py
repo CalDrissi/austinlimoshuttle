@@ -8,7 +8,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from bookings.models import Booking
+from bookings.models import Booking, BookingAmendmentRequest
 from content.models import Page, SiteSettings
 from payments.models import SavedCard
 from enquiries.models import ContactMessage
@@ -170,12 +170,56 @@ class BookingCreateSerializer(serializers.Serializer):
     guest_phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
 
 
+class BookingAmendmentRequestSerializer(serializers.ModelSerializer):
+    """
+    A customer's proposed change to a booking, awaiting (or past) staff review.
+
+    Read-only: the client never writes this shape directly -- it POSTs the fields
+    to amend (via `BookingAmendSerializer`) and receives this back. `changes` is
+    the resolved OLD -> NEW diff; the `new_*` figures are the fare the change
+    would produce (authoritative once approved).
+    """
+
+    # Plain CharField (not the inferred ChoiceField) so this does not mint a
+    # second `status` enum component that collides with Booking.status in the
+    # OpenAPI schema. The machine value is here; `status_display` is the label.
+    status = serializers.CharField(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    changes = serializers.SerializerMethodField()
+    price_delta = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True,
+    )
+    reviewed_by = serializers.EmailField(
+        source="reviewed_by.email", read_only=True, default=None,
+    )
+    booking_reference = serializers.CharField(
+        source="booking.reference", read_only=True,
+    )
+
+    class Meta:
+        model = BookingAmendmentRequest
+        fields = [
+            "id", "booking_reference", "status", "status_display",
+            "requested_changes", "changes",
+            "old_total", "new_subtotal", "new_surcharge_total", "new_tax",
+            "new_total", "currency", "price_delta",
+            "requested_at", "reviewed_at", "reviewed_by", "decline_reason",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_changes(self, obj):
+        """The OLD -> NEW diff, resolved to display values."""
+        return obj.changed_fields()
+
+
 class BookingSerializer(serializers.ModelSerializer):
     vehicle_name = serializers.CharField(source="vehicle_name_snapshot", read_only=True)
     price_lines = serializers.SerializerMethodField()
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_amendable = serializers.BooleanField(read_only=True)
     amendment_deadline = serializers.DateTimeField(read_only=True)
+    pending_amendment = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -187,6 +231,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "meet_and_greet", "notes", "vehicle_name",
             "subtotal", "surcharge_total", "tax", "total", "currency",
             "price_lines", "created_at", "is_amendable", "amendment_deadline",
+            "pending_amendment",
         ]
         read_only_fields = fields
 
@@ -197,6 +242,15 @@ class BookingSerializer(serializers.ModelSerializer):
             {"kind": line.kind, "label": line.label, "amount": f"{line.amount:.2f}"}
             for line in obj.price_lines.all()
         ]
+
+    @extend_schema_field(BookingAmendmentRequestSerializer(allow_null=True))
+    def get_pending_amendment(self, obj):
+        """
+        The outstanding change request awaiting staff review, so the client can
+        show "pending approval". Null when there is none.
+        """
+        pending = obj.pending_amendment
+        return BookingAmendmentRequestSerializer(pending).data if pending else None
 
 
 class BookingAmendSerializer(serializers.Serializer):

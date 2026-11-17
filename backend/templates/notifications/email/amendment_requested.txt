@@ -1,0 +1,19 @@
+{% autoescape off %}CHANGE REQUESTED - {{ booking.reference }}
+
+A customer has asked to change this booking. It is NOT changed yet -- please
+review and approve or decline it in the back office:
+
+  {{ review_url }}
+
+Customer  : {{ booking.customer_name }}{% if booking.contact_email %} ({{ booking.contact_email }}){% endif %}
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}
+Requested changes:
+{% for row in changes %}  {{ row.label }}: {{ row.old|default:"—" }} -> {{ row.new|default:"—" }}
+{% endfor %}
+Current total : ${{ amendment.old_total }} {{ amendment.currency }}
+New total     : ${{ amendment.new_total }} {{ amendment.currency }}
+Price change  : {% if price_delta >= 0 %}+{% endif %}${{ price_delta }}
+{% endautoescape %}

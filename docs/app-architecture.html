@@ -329,8 +329,8 @@
 
   <div class="grid">
     <div class="card"><h4>2</h4><div class="k">UI surfaces (client + back office)</div></div>
-    <div class="card"><h4>25</h4><div class="k">application models · 9 apps</div></div>
-    <div class="card"><h4>19</h4><div class="k">public API endpoints</div></div>
+    <div class="card"><h4>26</h4><div class="k">application models · 9 apps</div></div>
+    <div class="card"><h4>20</h4><div class="k">public API endpoints</div></div>
     <div class="card"><h4>25+</h4><div class="k">back-office screens</div></div>
     <div class="card"><h4>2,217</h4><div class="k">bookings imported (local)</div></div>
     <div class="card"><h4>1,251</h4><div class="k">customers imported</div></div>
@@ -668,6 +668,26 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
     <div class="ep-b"><p class="sm">Cancel one of your bookings.</p>
       <div class="lab">Request · PatchedCancelBooking</div><div class="fieldgrid"><span>action<span class="ty"> enum (cancel)</span></span></div>
       <div class="lab">Response 200 · Booking</div><div class="codes"><span class="code ok">200</span><span class="code">400</span><span class="code">404</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/amend-request/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending change request</b> — the booking is <b>not</b> modified. Enforces the office-set amendment window (rejects once pickup is inside <code>PricingSettings.amendment_window_hours</code>), rejects a second open request, and re-prices when the pickup time moves. Emails all active staff + a configured admin/contact address. The pending request also appears on the booking's own detail/list via <code>pending_amendment</code>.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
+      <div class="lab">Request · BookingAmend (all optional)</div><div class="fieldgrid"><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>flight_number<span class="ty"> str</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span><span>pickup_at<span class="ty"> datetime</span></span></div>
+      <div class="lab">Response 201 · BookingAmendmentRequest {id, booking_reference, status, status_display, requested_changes, changes[], old_total, new_subtotal, new_surcharge_total, new_tax, new_total, currency, price_delta, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
+      <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
+
+  <h3>Staff — booking change requests <span class="muted" style="font-weight:400;font-size:13px">— require a staff session (<code>is_staff</code>)</span></h3>
+  <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/staff/amendment-requests/</span><span class="au session">staff</span></div>
+    <div class="ep-b"><p class="sm">The back-office review queue. Defaults to <code>pending</code>; <code>?status=approved|declined|all</code> widens it.</p>
+      <div class="lab">Response 200 · BookingAmendmentRequest[]</div><div class="codes"><span class="code ok">200</span><span class="code">403</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/staff/amendment-requests/{id}/approve/</span><span class="au session">staff</span></div>
+    <div class="ep-b"><p class="sm"><b>Applies</b> the requested change to the booking, <b>re-prices</b> (regenerates price lines when the pickup time moved), marks the request approved + records <code>reviewed_by/at</code>, and emails the customer their change is confirmed. Idempotent — an already-resolved request returns <b>409</b>.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">id<span class="ty"> int</span></span></div>
+      <div class="lab">Response 200 · BookingAmendmentRequest</div><div class="codes"><span class="code ok">200</span><span class="code">404</span><span class="code">409</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/staff/amendment-requests/{id}/decline/</span><span class="au session">staff</span></div>
+    <div class="ep-b"><p class="sm">Marks the request <b>declined</b> (booking untouched) and emails the customer with the reason. Idempotent — an already-resolved request returns <b>409</b>.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">id<span class="ty"> int</span></span></div>
+      <div class="lab">Request · {reason: str}</div>
+      <div class="lab">Response 200 · BookingAmendmentRequest</div><div class="codes"><span class="code ok">200</span><span class="code">404</span><span class="code">409</span></div></div></div>
 
   <h3>Auth</h3>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/auth/login/</span><span class="au">public</span></div>
@@ -869,6 +889,36 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-17 · Client booking-edit → staff approval workflow (backend foundation)</span><span class="tbl">backend · bookings · api · notifications</span></div>
+    <table>
+      <tr><td>A customer editing an upcoming booking no longer mutates it directly — the edit now becomes a
+      <b>pending request staff must approve</b>. <b>New model</b> <code>bookings.BookingAmendmentRequest</code>
+      (FK booking + requested_by, <code>status</code> pending/approved/declined, <code>requested_changes</code> JSON
+      diff of only the changed fields, re-priced <code>new_subtotal/surcharge/tax/total</code> + <code>old_total</code>,
+      <code>requested_at/reviewed_at/reviewed_by/decline_reason</code>; migration
+      <code>bookings/0008</code>). The <b>original booking is never touched while pending</b>; its
+      guarded, idempotent <code>approve()</code> applies the change + re-prices through
+      <code>Booking.reprice()</code> (regenerating price lines when the pickup time moves) and <code>decline()</code>
+      records a reason. <b>Client endpoint</b> <code>POST /api/account/bookings/{ref}/amend-request/</code> (owner-only,
+      404 for non-owners) validates via <code>BookingAmendSerializer</code>, enforces the office amendment window
+      (<i>"This booking can no longer be changed online within X hours of pickup."</i>), enforces vehicle capacity,
+      rejects a second open request, computes the new fare and files the request — and <code>BookingSerializer</code>
+      now exposes <code>pending_amendment</code> so the client shows "pending approval". <b>Staff endpoints</b>
+      (<code>IsAdminUser</code>): <code>GET /api/staff/amendment-requests/</code> (review queue),
+      <code>POST …/{id}/approve/</code>, <code>POST …/{id}/decline/</code> (both idempotent → 409 once resolved).
+      <b>Notifications</b> (<code>notifications/0004</code> adds three <code>EmailLog.Kind</code> values + six templates):
+      on request, all active <code>is_staff</code> accounts <b>plus</b> one admin address
+      (<code>SiteSettings.ops_notification_email</code> → <code>SiteSettings.contact_email</code> →
+      <code>EmailSettings.ops_notification_email</code> → superuser email, deduped) get the OLD→NEW diff, price delta and a
+      back-office review link (<code>DASHBOARD_BASE_URL</code> + <code>/dashboard/bookings/{ref}/</code>); on approve/decline
+      the customer is emailed. Also registered read-only in Django admin. <b>Frontend out of scope</b> (client UI + a
+      dedicated back-office page are later tasks; the Django-admin/dashboard link covers review meanwhile).
+      <b>Verified:</b> 32 new tests (api + bookings + notifications) green; full api+bookings+notifications = 218 passed;
+      <code>makemigrations --check</code> clean; stack boots (200). <b>Not merged / not deployed — local trunk only.</b></td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-03 · Persist <code>is_city_to_city</code> at booking creation (api + dashboard)</span><span class="tbl">backend · api · dashboard</span></div>
