@@ -40,7 +40,7 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     <label>Time<input className="form-control" type="time" value={normalTime(draft.time)} required onChange={(e) => update({ time: e.target.value })} /></label>
     <label><input type="checkbox" checked={draft.meetGreet} onChange={(e) => update({ meetGreet: e.target.checked })} /> Meet &amp; Greet</label>
     {error && <p role="alert" style={{color:"#b42318"}}>{error}</p>}
-    <div style={{display:"flex", gap:12, flexWrap:"wrap"}}><button type="button" className="btn btn-primary" onClick={save}>{busy ? "Updating prices…" : "Save & reprice"}</button><button type="button" className="btn btn-default" onClick={onClose}>Cancel</button></div>
+    <div style={{display:"flex", gap:12, flexWrap:"wrap"}}><button type="button" className="btn btn-primary" onClick={save}>{busy ? "Updating prices…" : "Save & reprice"}</button><button type="button" className="btn btn-link" onClick={onClose}>Cancel</button></div>
   </fieldset>;
 }
 function normalTime(time: string) {
