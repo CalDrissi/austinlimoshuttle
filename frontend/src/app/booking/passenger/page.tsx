@@ -222,9 +222,9 @@ export default function BookingPassengerPage() {
                           disabled={authBusy || (loginMethod === "code" && (!li.email.trim() || (codeSent && code.length !== 6)))}>
                           {authBusy ? (loginMethod === "code" && !codeSent ? "Sending code…" : "Signing in…") : loginMethod === "password" ? "Sign in" : codeSent ? "Sign in with code" : "Send code"}
                         </button>
-                        <button type="button" className="btn btn-default hover-up" disabled={authBusy}
+                        <button type="button" className="btn btn-border hover-up" disabled={authBusy}
                           onClick={() => { setLoginMethod(loginMethod === "password" ? "code" : "password"); setAuthErr(""); setAuthMsg(""); setCodeSent(false); setCode(""); }}>
-                          {loginMethod === "password" ? "Email me a code" : "Use password"}
+                          {loginMethod === "password" ? "Email me a sign-in code instead" : "Use password instead"}
                         </button>
                         {loginMethod === "code" && codeSent && <button type="button" className="btn btn-default hover-up" disabled={authBusy} onClick={doSendCode}>Resend code</button>}
                       </div>
