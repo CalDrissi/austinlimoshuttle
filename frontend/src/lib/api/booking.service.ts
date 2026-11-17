@@ -1,5 +1,5 @@
-import { apiGet, apiPost, apiPatch } from "./client";
-import type { Booking, BookingStatus, BookingCreateRequest, BookingAmendment } from "@/types/api";
+import { apiGet, apiPost } from "./client";
+import type { Booking, BookingStatus, BookingCreateRequest, BookingAmendment, BookingCancellationRequest } from "@/types/api";
 
 /**
  * Bookings. A booking is created from a signed `quote_token` (never a price);
@@ -19,8 +19,9 @@ export const bookingService = {
   mineDetail: (reference: string) =>
     apiGet<Booking>(`/account/bookings/${reference}/`),
 
-  cancel: (reference: string) =>
-    apiPatch<Booking>(`/account/bookings/${reference}/`, { action: "cancel" }),
+  /** Request cancellation; staff approve and decide any refund. */
+  cancelRequest: (reference: string) =>
+    apiPost<BookingCancellationRequest>(`/account/bookings/${reference}/cancel-request/`),
 
   /** Submit proposed changes for staff approval within the edit window. */
   amendRequest: (reference: string, changes: BookingAmendRequest) =>

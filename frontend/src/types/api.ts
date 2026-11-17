@@ -142,6 +142,14 @@ export interface BookingAmendment {
   decline_reason?: string;
 }
 
+export interface BookingCancellationRequest {
+  id: number;
+  status: "pending" | "approved" | "declined";
+  decline_reason?: string;
+  refund_amount: string | null;
+  currency: string;
+}
+
 export interface Booking {
   reference: string;
   status: BookingStatusValue;
@@ -171,6 +179,8 @@ export interface Booking {
   is_amendable: boolean;
   pending_amendment?: BookingAmendment | null;
   last_amendment?: BookingAmendment | null;
+  pending_cancellation?: BookingCancellationRequest | null;
+  last_cancellation?: BookingCancellationRequest | null;
   /** The cutoff after which online edits are blocked. */
   amendment_deadline: string;
 }

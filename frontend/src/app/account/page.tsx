@@ -41,10 +41,13 @@ function toAustinLocalInput(iso: string): string {
 
 function RideCard({ b, onCancel, onAmend, userPhone }: {
   b: Booking;
-  onCancel: (ref: string) => void;
+  onCancel: (ref: string) => Promise<void>;
   onAmend: (ref: string, changes: BookingAmendRequest) => Promise<void>;
   userPhone: string;
 }) {
+  const [confirmCancellation, setConfirmCancellation] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -57,6 +60,22 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
     phone: userPhone || "",
     pickup_at: toAustinLocalInput(b.pickup_at),
   });
+
+  const cancellation = b.pending_cancellation ?? b.last_cancellation;
+  const cancellationPending = cancellation?.status === "pending";
+
+  const submitCancellation = async () => {
+    if (cancelling || cancellationPending) return;
+    setCancelling(true); setCancelError("");
+    try {
+      await onCancel(b.reference);
+      setConfirmCancellation(false);
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : "Could not submit your cancellation request.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const amendment = b.pending_amendment ?? b.last_amendment;
   const requestPending = amendment?.status === "pending";
@@ -91,6 +110,22 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
         </div>
         <span className={`mm-badge ${b.status}`}>{b.status_display}</span>
       </div>
+
+      {cancellation && (
+        <div className="mm-feedback" role="status" style={{ marginTop: 14 }}>
+          {cancellationPending ? "Cancellation requested — pending staff approval" : cancellation.status === "approved" ? "Cancellation request approved — booking cancelled" : "Cancellation request declined"}
+          {cancellation.status === "declined" && cancellation.decline_reason && <p style={{ marginBottom: 0 }}>{cancellation.decline_reason}</p>}
+        </div>
+      )}
+
+      {confirmCancellation && isUpcoming(b) && !cancellationPending && (
+        <div className="mm-feedback" role="region" aria-label="Confirm cancellation request" style={{ marginTop: 14 }}>
+          <p>Request cancellation? Staff will review it and issue any refund.</p>
+          {cancelError && <p role="alert" style={{ color: "#c0392b" }}>{cancelError}</p>}
+          <button className="btn btn-primary btn-sm hover-up" disabled={cancelling} onClick={submitCancellation}>{cancelling ? "Submitting…" : "Submit cancellation request"}</button>{" "}
+          <button className="btn btn-border btn-sm hover-up" disabled={cancelling} onClick={() => setConfirmCancellation(false)}>Keep booking</button>
+        </div>
+      )}
 
       {amendment && (
         <div className="mm-feedback" role="status" style={{ marginTop: 14 }}>
@@ -127,8 +162,8 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
             setErr(""); setEditing(true);
           }}>Request changes</button>
         )}
-        {isUpcoming(b) && (
-          <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => onCancel(b.reference)}>Cancel</button>
+        {isUpcoming(b) && !cancellationPending && !confirmCancellation && (
+          <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => { setCancelError(""); setConfirmCancellation(true); }}>Request cancellation</button>
         )}
       </div>
       {!b.is_amendable && isUpcoming(b) && (
@@ -146,7 +181,7 @@ function AccountDashboard() {
   const refreshAuth = useRefreshAuth();
   const [tab, setTab] = useState<Tab>("overview");
   const [actionError, setActionError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ kind: "card" | "booking"; id: number | string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ kind: "card"; id: number | string } | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   useEffect(() => {
     const selected = params.get("tab");
@@ -221,13 +256,12 @@ function AccountDashboard() {
   };
 
   const cancel = async (ref: string) => {
-    setActionError("");
-    try {
-      await bookingService.cancel(ref);
-      qc.invalidateQueries({ queryKey: ["my-bookings"] });
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not cancel.");
-    }
+    const request = await bookingService.cancelRequest(ref);
+    qc.setQueryData<Booking[]>(["my-bookings"], (current) => current?.map((b) =>
+      b.reference === ref ? { ...b, pending_cancellation: request } : b
+    ));
+    notify("Cancellation requested — pending staff approval");
+    void qc.invalidateQueries({ queryKey: ["my-bookings"] });
   };
 
   const amend = async (ref: string, changes: BookingAmendRequest) => {
@@ -263,7 +297,7 @@ function AccountDashboard() {
         <h2 className="heading-36-medium mb-30">My account</h2>
         {bookingsFailed && <p role="alert">We couldn't load your bookings. Please refresh to try again.</p>}
         {actionError && <p role="alert">{actionError}</p>}
-        {pendingAction && <div className="mm-feedback mb-20" role="region" aria-label="Confirm action"><p>{pendingAction.kind === "card" ? "Remove this saved card?" : "Cancel this booking?"}</p><button className="btn btn-primary" disabled={actionBusy} onClick={async () => { setActionBusy(true); if (pendingAction.kind === "card") await removeCard(Number(pendingAction.id)); else await cancel(String(pendingAction.id)); setPendingAction(null); setActionBusy(false); }}>{actionBusy ? "Saving…" : "Confirm"}</button> <button className="btn btn-border" disabled={actionBusy} onClick={() => setPendingAction(null)}>Keep it</button></div>}
+        {pendingAction && <div className="mm-feedback mb-20" role="region" aria-label="Confirm action"><p>Remove this saved card?</p><button className="btn btn-primary" disabled={actionBusy} onClick={async () => { setActionBusy(true); await removeCard(Number(pendingAction.id)); setPendingAction(null); setActionBusy(false); }}>{actionBusy ? "Saving…" : "Confirm"}</button> <button className="btn btn-border" disabled={actionBusy} onClick={() => setPendingAction(null)}>Keep it</button></div>}
         <div className="mm-acct">
           <aside className="mm-acct-side">
             <div className="mm-acct-user">
@@ -296,7 +330,7 @@ function AccountDashboard() {
                 {!loadingBookings && !bookingsFailed && upcoming.length === 0 && (
                   <div><p className="text-16 color-grey">No upcoming rides.</p><Link href="/" className="btn btn-primary hover-up">New booking</Link></div>
                 )}
-                {upcoming.slice(0, 1).map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
+                {upcoming.slice(0, 1).map((b) => <RideCard key={b.reference} b={b} onCancel={cancel} onAmend={amend} userPhone={user.phone || ""} />)}
               </>
             )}
 
@@ -307,7 +341,7 @@ function AccountDashboard() {
                 {!loadingBookings && !bookingsFailed && bookings.length === 0 && (
                   <div><p className="text-16 color-grey">No bookings yet.</p><Link href="/" className="btn btn-primary hover-up">New booking</Link></div>
                 )}
-                {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
+                {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={cancel} onAmend={amend} userPhone={user.phone || ""} />)}
               </>
             )}
 
