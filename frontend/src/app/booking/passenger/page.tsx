@@ -7,6 +7,7 @@ import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import { authService } from "@/lib/api/auth.service";
 import { ApiRequestError } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
+import { useCapacity } from "@/lib/booking/useCapacity";
 import OrderSummary from "@/components/booking/OrderSummary";
 
 type Panel = "signin" | "register" | null;
@@ -21,6 +22,7 @@ export default function BookingPassengerPage() {
   const trip = useBookingStore((s) => s.trip);
   const setTrip = useBookingStore((s) => s.setTrip);
   const hydrated = useHydrated();
+  const capacity = useCapacity();
 
   const [name, setName] = useState(contact.name ?? "");
   const [email, setEmail] = useState(contact.email ?? "");
@@ -60,6 +62,9 @@ export default function BookingPassengerPage() {
     setTrip({ forSomeoneElse: forElse, passengerName: paxName, passengerPhone: paxPhone });
   }, [hydrated, name, email, phone, forElse, paxName, paxPhone, setContact, setTrip]);
 
+  useEffect(() => {
+    if (hydrated && capacity.over) router.replace("/booking/extra");
+  }, [hydrated, capacity.over, router]);
   if (!hydrated || !quote) return null;
 
   const doLogin = async () => {
@@ -114,6 +119,7 @@ export default function BookingPassengerPage() {
   };
 
   const next = async () => {
+    if (capacity.blocked) { setError("Check passengers and luggage against your vehicle capacity before payment."); return; }
     if (!user && (!name.trim() || !email.includes("@"))) {
       setError("Please enter your name and a valid email.");
       return;
@@ -292,7 +298,7 @@ export default function BookingPassengerPage() {
               )}
 
               {error && <p className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
-              <button className="btn btn-primary hover-up mt-10" onClick={next}>Continue to payment</button>
+              <button className="btn btn-primary hover-up mt-10" onClick={next} disabled={capacity.blocked}>Continue to payment</button>
             </div>
           </div>
           <OrderSummary />

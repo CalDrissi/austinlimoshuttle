@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { catalogService } from "@/lib/api/catalog.service";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
+import { useCapacity } from "@/lib/booking/useCapacity";
 import OrderSummary from "@/components/booking/OrderSummary";
 
 export default function BookingExtraPage() {
@@ -13,6 +14,7 @@ export default function BookingExtraPage() {
   const trip = useBookingStore((s) => s.trip);
   const setTrip = useBookingStore((s) => s.setTrip);
   const hydrated = useHydrated();
+  const capacity = useCapacity();
 
   const { data: vehicles } = useQuery({
     queryKey: ["vehicles"],
@@ -33,7 +35,7 @@ export default function BookingExtraPage() {
   const lugOver = maxLug != null && trip.luggageCount > maxLug;
   const over = paxOver || lugOver;
 
-  const next = () => { if (!over) router.push("/booking/passenger"); };
+  const next = () => { if (!capacity.blocked) router.push("/booking/passenger"); };
 
   return (
     <section className="section">
@@ -83,7 +85,7 @@ export default function BookingExtraPage() {
           </div>
         </div>
 
-              <button className="btn btn-primary hover-up mt-10" onClick={next}>Continue</button>
+              <button className="btn btn-primary hover-up mt-10" onClick={next} disabled={capacity.blocked}>Continue</button>
             </div>
           </div>
           <OrderSummary />

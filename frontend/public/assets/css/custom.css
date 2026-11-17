@@ -607,3 +607,11 @@ img {
     );
   }
 }
+
+/* Compact trip editing stays inside the summary at every screen width. */
+.mm-trip-editor { min-width: 0; margin-top: 16px; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; }
+.mm-trip-editor > label { display: block; margin-bottom: 12px; }
+.mm-trip-editor .search-inputs { position: relative; margin-bottom: 12px; }
+.mm-trip-editor .search-input { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; }
+.mm-trip-editor .mm-dropdown { z-index: 20; width: 100%; min-width: 0; }
+.mm-trip-editor .form-control { min-width: 0; width: 100%; }

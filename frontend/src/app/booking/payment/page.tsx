@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { bookingService } from "@/lib/api/booking.service";
 import { paymentService } from "@/lib/api/payment.service";
 import { ApiRequestError } from "@/lib/api/client";
+import { useCapacity } from "@/lib/booking/useCapacity";
 import OrderSummary from "@/components/booking/OrderSummary";
 import type { PaymentConfig } from "@/types/api";
 
@@ -76,14 +77,20 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   // The booking is created on the first confirm and reused on retry, so a
   // declined card doesn't leave a trail of duplicate pending bookings.
   const [createdRef, setCreatedRef] = useState("");
+  useEffect(() => { setCreatedRef(""); }, [quote?.quote_token, trip, contact]);
   const hydrated = useHydrated();
+  const capacity = useCapacity();
 
   useEffect(() => {
     if (hydrated && !quote) router.replace("/booking/vehicle");
   }, [hydrated, quote, router]);
+  useEffect(() => {
+    if (hydrated && capacity.over) router.replace("/booking/extra");
+  }, [hydrated, capacity.over, router]);
   if (!hydrated || !quote) return null;
 
   const confirm = async () => {
+    if (capacity.blocked) { setError("Check vehicle capacity before payment."); return; }
     setSubmitting(true);
     setError("");
     try {
@@ -227,7 +234,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
               <button
                 className="btn btn-primary hover-up mt-10"
                 onClick={confirm}
-                disabled={submitting || cardDisabledSubmit}
+                disabled={submitting || cardDisabledSubmit || capacity.blocked}
               >
                 {submitting
                   ? "Processing…"
