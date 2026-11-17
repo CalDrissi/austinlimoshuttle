@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
+import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { ApiRequestError } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/api/config";
@@ -76,22 +77,25 @@ export default function BookingPassengerPage() {
   if (!hydrated || !quote) return null;
 
   const doLogin = async () => {
+    if (authBusy) return;
     setAuthBusy(true); setAuthErr(""); setAuthMsg("");
     try {
-      await authService.login({ email: li.email.trim(), password: li.password });
+      const signedIn = await authService.login({ email: li.email.trim(), password: li.password });
+      notify(`Welcome back, ${signedIn.first_name || "traveler"}`);
       await refreshAuth();
     } catch (e) {
-      setAuthErr(e instanceof Error ? e.message : "Sign in failed.");
+      setAuthErr("Email or password is incorrect");
     }
     setAuthBusy(false);
   };
 
   const doSendCode = async () => {
+    if (authBusy) return;
     setAuthBusy(true); setAuthErr(""); setAuthMsg("");
     try {
       await authService.sendCode(li.email.trim());
       setCodeSent(true);
-      setAuthMsg("If that address has an account, a code is on its way.");
+      setAuthMsg("Code sent — check your inbox.");
     } catch (e) {
       setAuthErr(e instanceof Error ? e.message : "Unable to send a code. Please try again.");
     }
@@ -99,9 +103,11 @@ export default function BookingPassengerPage() {
   };
 
   const doVerifyCode = async () => {
+    if (authBusy) return;
     setAuthBusy(true); setAuthErr("");
     try {
-      await authService.verifyCode({ email: li.email.trim(), code });
+      const signedIn = await authService.verifyCode({ email: li.email.trim(), code });
+      notify(`Welcome back, ${signedIn.first_name || "traveler"}`);
       await refreshAuth();
     } catch (e) {
       setAuthErr(e instanceof ApiRequestError && e.status === 400
@@ -112,6 +118,7 @@ export default function BookingPassengerPage() {
   };
 
   const doRegister = async () => {
+    if (authBusy) return;
     setAuthBusy(true); setAuthErr(""); setAuthMsg("");
     try {
       const r = (await authService.register({
@@ -172,7 +179,13 @@ export default function BookingPassengerPage() {
               <h3 className="heading-24-medium color-text mb-20">Your details</h3>
 
               {!isLoading && !user && (
-                <div className="mm-auth-gate mb-25">
+                <div className="mm-auth-gate mm-signin-form mb-25">
+                  <p className="text-16-medium">How would you like to continue?</p>
+                  <div className="mm-auth-choices">
+                    <button type="button" className={`btn ${panel === "signin" ? "btn-primary" : "btn-border"}`} aria-pressed={panel === "signin"} onClick={() => setPanel("signin")}>Sign in</button>
+                    <button type="button" className={`btn ${panel === "register" ? "btn-primary" : "btn-border"}`} aria-pressed={panel === "register"} onClick={() => setPanel("register")}>Register</button>
+                    <button type="button" className={`btn ${panel === null ? "btn-primary" : "btn-border"}`} aria-pressed={panel === null} onClick={() => { setPanel(null); document.getElementById("guest-name")?.focus(); }}>Continue as guest</button>
+                  </div>
                   {/* Sign in */}
                   <div className="mm-auth-row" onClick={() => toggle("signin")}>
                     <div>
@@ -207,7 +220,7 @@ export default function BookingPassengerPage() {
                         <button type="button" className="btn btn-primary hover-up"
                           onClick={loginMethod === "password" ? doLogin : codeSent ? doVerifyCode : doSendCode}
                           disabled={authBusy || (loginMethod === "code" && (!li.email.trim() || (codeSent && code.length !== 6)))}>
-                          {authBusy ? "Please wait…" : loginMethod === "password" ? "Sign in" : codeSent ? "Sign in with code" : "Send code"}
+                          {authBusy ? (loginMethod === "code" && !codeSent ? "Sending code…" : "Signing in…") : loginMethod === "password" ? "Sign in" : codeSent ? "Sign in with code" : "Send code"}
                         </button>
                         <button type="button" className="btn btn-default hover-up" disabled={authBusy}
                           onClick={() => { setLoginMethod(loginMethod === "password" ? "code" : "password"); setAuthErr(""); setAuthMsg(""); setCodeSent(false); setCode(""); }}>
@@ -251,7 +264,7 @@ export default function BookingPassengerPage() {
               )}
               {user && (
                 <div className="mm-auth-signedin mb-25">
-                  Signed in as <b>{user.email}</b> — this booking will be saved to your account.
+                  Welcome back, {user.first_name || "traveler"}. Signed in as <b>{user.email}</b> — this booking will be saved to your account.
                 </div>
               )}
 
@@ -259,7 +272,7 @@ export default function BookingPassengerPage() {
                 <div className="row">
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your full name</label>
-                    <input type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} />
+                    <input id="guest-name" type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} />
                   </div>
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your email <span className="color-grey">(receipt goes here)</span></label>

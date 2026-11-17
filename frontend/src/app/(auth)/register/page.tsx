@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { clientDestination, notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { useRefreshAuth } from "@/hooks/useAuth";
 
@@ -10,9 +11,9 @@ function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
   const refreshAuth = useRefreshAuth();
-  const next = params.get("next") || "/account";
+  const next = clientDestination(params.get("next"));
 
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", password: "" });
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: params.get("email") || "", phone: "", password: "" });
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,6 +36,7 @@ function RegisterForm() {
       // 201 returns the new User (and signs them in); 202 is the neutral
       // "if that address can be registered…" response for an existing email.
       if (result?.email) {
+        notify("Your account is ready — welcome!");
         await refreshAuth();
         router.push(next);
       } else {
@@ -54,7 +56,7 @@ function RegisterForm() {
         <p className="text-14 color-grey mb-30">
           Already have one? <Link href={`/login?next=${encodeURIComponent(next)}`}>Sign in</Link>
         </p>
-        <form onSubmit={submit}>
+        <form className="mm-signin-form" onSubmit={submit}>
           <div className="row">
             <div className="col-6 mb-20">
               <label className="text-14 color-grey">First name</label>

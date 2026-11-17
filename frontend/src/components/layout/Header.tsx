@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { authService } from "@/lib/api/auth.service";
+import { notify } from "@/lib/feedback";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 
 // Ported from the template header (design-reference/index.html): a services
@@ -25,6 +28,25 @@ const MENU: MenuItem[] = [
 
 export default function Header() {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const outside = (e: MouseEvent) => { if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false); };
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
+  }, []);
+  const logout = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await authService.logout(); qc.setQueryData(["me"], null);
+      qc.removeQueries({ queryKey: ["my-bookings"] }); qc.removeQueries({ queryKey: ["my-cards"] });
+      setAccountOpen(false); setMobileOpen(false); notify("You've been signed out");
+    } catch { notify("Could not sign out — please try again."); }
+    finally { setSigningOut(false); }
+  };
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const close = () => setMobileOpen(false);
@@ -77,9 +99,17 @@ export default function Header() {
 
               <div className="header-right">
                 <div className="box-button-login d-inline-block align-middle">
-                  <Link className="btn btn-default hover-up" href={user ? "/account" : "/login"}>
-                    {user ? (user.first_name || "My account") : "Sign in"}
-                  </Link>
+                  {user ? <div className="mm-account-menu" ref={accountRef} onKeyDown={(e) => { if (e.key === "Escape") { setAccountOpen(false); accountRef.current?.querySelector("button")?.focus(); } }}>
+                    <button className="btn btn-default" aria-expanded={accountOpen} aria-controls="account-links" onClick={() => setAccountOpen(!accountOpen)}>
+                      <span className="mm-account-avatar" aria-hidden="true">{(user.first_name || user.email)[0].toUpperCase()}</span>
+                      Account · {user.first_name || "My account"} ▾
+                    </button>
+                    {accountOpen && <div id="account-links" className="mm-account-links">
+                      <Link href="/account" onClick={() => setAccountOpen(false)}>My account</Link>
+                      <Link href="/account?tab=bookings" onClick={() => setAccountOpen(false)}>My bookings</Link>
+                      <button onClick={logout} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>
+                    </div>}
+                  </div> : <Link className="btn btn-default hover-up" href="/login">Sign in</Link>}
                 </div>
               </div>
             </div>
@@ -121,8 +151,9 @@ export default function Header() {
               <div className="site-copyright mt-30">
                 <Link href={user ? "/account" : "/login"} onClick={close}
                       className="btn btn-default hover-up w-100">
-                  {user ? (user.first_name || "My account") : "Sign in"}
+                  {user ? "My account" : "Sign in"}
                 </Link>
+                {user && <><Link className="btn btn-default w-100 mt-10" href="/account?tab=bookings" onClick={close}>My bookings</Link><button className="btn btn-default w-100 mt-10" onClick={logout} disabled={signingOut}>Sign out</button></>}
               </div>
             </div>
           </div>

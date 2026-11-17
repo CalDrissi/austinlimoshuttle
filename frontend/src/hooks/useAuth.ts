@@ -29,5 +29,9 @@ export function useAuth() {
 /** Invalidate the cached user after login/register/logout. */
 export function useRefreshAuth() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: ["me"] });
+  return async () => {
+    qc.removeQueries({ queryKey: ["my-bookings"] });
+    qc.removeQueries({ queryKey: ["my-cards"] });
+    await qc.invalidateQueries({ queryKey: ["me"] });
+  };
 }
