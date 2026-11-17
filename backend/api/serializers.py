@@ -220,6 +220,7 @@ class BookingSerializer(serializers.ModelSerializer):
     is_amendable = serializers.BooleanField(read_only=True)
     amendment_deadline = serializers.DateTimeField(read_only=True)
     pending_amendment = serializers.SerializerMethodField()
+    last_amendment = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -231,7 +232,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "meet_and_greet", "notes", "vehicle_name",
             "subtotal", "surcharge_total", "tax", "total", "currency",
             "price_lines", "created_at", "is_amendable", "amendment_deadline",
-            "pending_amendment",
+            "pending_amendment", "last_amendment",
         ]
         read_only_fields = fields
 
@@ -251,6 +252,11 @@ class BookingSerializer(serializers.ModelSerializer):
         """
         pending = obj.pending_amendment
         return BookingAmendmentRequestSerializer(pending).data if pending else None
+
+    @extend_schema_field(BookingAmendmentRequestSerializer(allow_null=True))
+    def get_last_amendment(self, obj):
+        latest = obj.amendment_requests.order_by("-requested_at", "-pk").first()
+        return BookingAmendmentRequestSerializer(latest).data if latest else None
 
 
 class BookingAmendSerializer(serializers.Serializer):

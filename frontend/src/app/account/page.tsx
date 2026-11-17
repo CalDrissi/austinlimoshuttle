@@ -57,7 +57,11 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
     pickup_at: toAustinLocalInput(b.pickup_at),
   });
 
+  const amendment = b.pending_amendment ?? b.last_amendment;
+  const requestPending = amendment?.status === "pending";
+
   const save = async () => {
+    if (saving || requestPending) return;
     setSaving(true); setErr("");
     try {
       await onAmend(b.reference, {
@@ -71,7 +75,7 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       });
       setEditing(false);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not save your changes.");
+      setErr(e instanceof Error ? e.message : "Could not submit your change request.");
     }
     setSaving(false);
   };
@@ -87,8 +91,16 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
         <span className={`mm-badge ${b.status}`}>{b.status_display}</span>
       </div>
 
-      {editing && (
+      {amendment && (
+        <div className="mm-feedback" role="status" style={{ marginTop: 14 }}>
+          {requestPending ? "Change requested — pending staff approval" : amendment.status === "approved" ? "Change request approved" : "Change request declined"}
+          {amendment.status === "declined" && amendment.decline_reason && <p style={{ marginBottom: 0 }}>{amendment.decline_reason}</p>}
+        </div>
+      )}
+
+      {editing && !requestPending && (
         <div className="row" style={{ marginTop: 14 }}>
+          <div className="col-12 mb-15"><p>Submit your proposed changes for staff approval. Your booking stays unchanged until approved.</p></div>
           <div className="col-12 mb-15"><label className="text-14 color-grey">Pickup date &amp; time</label><input type="datetime-local" className="form-control" value={f.pickup_at} onChange={(e) => setF({ ...f, pickup_at: e.target.value })} /><span className="text-13 color-grey">Changing the time may change the fare (night/event rates).</span></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Passengers</label><input type="number" min={1} className="form-control" value={f.passenger_count} onChange={(e) => setF({ ...f, passenger_count: Math.max(1, Number(e.target.value)) })} /></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Luggage</label><input type="number" min={0} className="form-control" value={f.luggage_count} onChange={(e) => setF({ ...f, luggage_count: Math.max(0, Number(e.target.value)) })} /></div>
@@ -96,18 +108,23 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
           <div className="col-6 mb-15"><label className="text-14 color-grey">Contact phone</label><input type="tel" className="form-control" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           <div className="col-12 mb-15"><label className="text-14 color-grey">Name on pickup sign</label><input className="form-control" value={f.pickup_sign} onChange={(e) => setF({ ...f, pickup_sign: e.target.value })} /></div>
           <div className="col-12 mb-15"><label className="text-14 color-grey">Notes for the driver</label><textarea className="form-control" rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-          {err && <div className="col-12"><p className="text-14" style={{ color: "#c0392b" }}>{err}</p></div>}
+          {err && <div className="col-12"><p role="alert" className="text-14" style={{ color: "#c0392b" }}>{err}</p></div>}
           <div className="col-12" style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary btn-sm hover-up" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
-            <button className="btn btn-border btn-sm hover-up" onClick={() => setEditing(false)}>Cancel</button>
+            <button className="btn btn-primary btn-sm hover-up" onClick={save} disabled={saving}>{saving ? "Submitting…" : "Submit change request"}</button>
+            <button className="btn btn-border btn-sm hover-up" disabled={saving} onClick={() => setEditing(false)}>Cancel</button>
           </div>
         </div>
       )}
 
       <div className="mm-ride-actions">
-        <a className="btn btn-border btn-sm hover-up" href={`${API_BASE_URL}/bookings/${b.reference}/receipt/`} target="_blank" rel="noopener noreferrer">Receipt PDF</a>
-        {b.is_amendable && !editing && (
-          <button className="btn btn-border btn-sm hover-up" onClick={() => setEditing(true)}>Edit details</button>
+        <a className="btn btn-primary btn-sm hover-up" href={`${API_BASE_URL}/bookings/${b.reference}/receipt/`} target="_blank" rel="noopener noreferrer">Receipt PDF</a>
+        {b.is_amendable && !requestPending && !editing && (
+          <button className="btn btn-border btn-sm hover-up" onClick={() => {
+            setF({ passenger_count: b.passenger_count, luggage_count: b.luggage_count,
+              flight_number: b.flight_number || "", pickup_sign: b.pickup_sign || "",
+              notes: b.notes || "", phone: userPhone || "", pickup_at: toAustinLocalInput(b.pickup_at) });
+            setErr(""); setEditing(true);
+          }}>Request changes</button>
         )}
         {isUpcoming(b) && (
           <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => onCancel(b.reference)}>Cancel</button>
@@ -163,6 +180,7 @@ function AccountDashboard() {
     queryKey: ["my-bookings"],
     enabled: !!user,
     queryFn: () => bookingService.mine(),
+    refetchInterval: 30_000,
   });
 
   const { data: cards = [], isLoading: loadingCards } = useQuery({
@@ -192,9 +210,12 @@ function AccountDashboard() {
   };
 
   const amend = async (ref: string, changes: BookingAmendRequest) => {
-    await bookingService.amend(ref, changes);
-    qc.invalidateQueries({ queryKey: ["my-bookings"] });
-    await refreshAuth(); // the contact phone may have changed on the account
+    const request = await bookingService.amendRequest(ref, changes);
+    qc.setQueryData<Booking[]>(["my-bookings"], (current) => current?.map((b) =>
+      b.reference === ref ? { ...b, pending_amendment: request } : b
+    ));
+    notify("Change requested — pending staff approval");
+    void qc.invalidateQueries({ queryKey: ["my-bookings"] });
   };
 
   const logout = async () => {
@@ -243,6 +264,7 @@ function AccountDashboard() {
           <div>
             {tab === "overview" && (
               <>
+                <Link href="/" className="btn btn-primary hover-up mb-20">New booking</Link>
                 <div className="mm-acct-kpis">
                   <div className="mm-acct-kpi"><div className="v">{upcoming.length}</div><div className="l">Upcoming rides</div></div>
                   <div className="mm-acct-kpi"><div className="v">{bookings.length}</div><div className="l">Total bookings</div></div>
@@ -251,7 +273,7 @@ function AccountDashboard() {
                 <h5 className="text-18-medium mb-15">Next ride</h5>
                 {loadingBookings && <p className="color-grey">Loading…</p>}
                 {!loadingBookings && !bookingsFailed && upcoming.length === 0 && (
-                  <p className="text-16 color-grey">No upcoming rides — <Link href="/">Book one</Link>.</p>
+                  <div><p className="text-16 color-grey">No upcoming rides.</p><Link href="/" className="btn btn-primary hover-up">New booking</Link></div>
                 )}
                 {upcoming.slice(0, 1).map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
               </>
@@ -262,7 +284,7 @@ function AccountDashboard() {
                 <h5 className="text-18-medium mb-15">All bookings</h5>
                 {loadingBookings && <p className="color-grey">Loading…</p>}
                 {!loadingBookings && !bookingsFailed && bookings.length === 0 && (
-                  <p className="text-16 color-grey">No bookings yet. <Link href="/">Book a ride</Link>.</p>
+                  <div><p className="text-16 color-grey">No bookings yet.</p><Link href="/" className="btn btn-primary hover-up">New booking</Link></div>
                 )}
                 {[...upcoming, ...past].map((b) => <RideCard key={b.reference} b={b} onCancel={(ref) => setPendingAction({ kind: "booking", id: ref })} onAmend={amend} userPhone={user.phone || ""} />)}
               </>

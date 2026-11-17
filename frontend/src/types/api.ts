@@ -136,6 +136,12 @@ export interface BookingPriceLine {
   amount: string;
 }
 
+export interface BookingAmendment {
+  id: number;
+  status: "pending" | "approved" | "declined";
+  decline_reason?: string;
+}
+
 export interface Booking {
   reference: string;
   status: BookingStatusValue;
@@ -163,6 +169,8 @@ export interface Booking {
   created_at: string;
   /** Whether the customer may still edit non-price details (within the window). */
   is_amendable: boolean;
+  pending_amendment?: BookingAmendment | null;
+  last_amendment?: BookingAmendment | null;
   /** The cutoff after which online edits are blocked. */
   amendment_deadline: string;
 }

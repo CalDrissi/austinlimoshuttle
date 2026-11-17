@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPatch } from "./client";
-import type { Booking, BookingStatus, BookingCreateRequest } from "@/types/api";
+import type { Booking, BookingStatus, BookingCreateRequest, BookingAmendment } from "@/types/api";
 
 /**
  * Bookings. A booking is created from a signed `quote_token` (never a price);
@@ -22,9 +22,9 @@ export const bookingService = {
   cancel: (reference: string) =>
     apiPatch<Booking>(`/account/bookings/${reference}/`, { action: "cancel" }),
 
-  /** Edit non-price details (within the office-set window). */
-  amend: (reference: string, changes: BookingAmendRequest) =>
-    apiPatch<Booking>(`/account/bookings/${reference}/`, { action: "amend", ...changes }),
+  /** Submit proposed changes for staff approval within the edit window. */
+  amendRequest: (reference: string, changes: BookingAmendRequest) =>
+    apiPost<BookingAmendment>(`/account/bookings/${reference}/amend-request/`, changes),
 };
 
 /** Customer-editable fields within the amendment window. */

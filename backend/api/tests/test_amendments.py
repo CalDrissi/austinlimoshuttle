@@ -436,3 +436,22 @@ class TestStaffReview:
         pending = response.json()["pending_amendment"]
         assert pending is not None
         assert pending["status"] == "pending"
+
+
+    @pytest.mark.parametrize("review_status", ["approved", "declined"])
+    def test_booking_exposes_last_reviewed_request(self, client, vehicle, review_status):
+        owner = make_owner()
+        req = self._pending(owner, vehicle)
+        req.status = review_status
+        req.decline_reason = "Please contact the office" if review_status == "declined" else ""
+        req.reviewed_at = timezone.now()
+        req.save()
+        client.login(username=owner.email, password=PASSWORD)
+        for url in [reverse("api:my_booking_detail", args=[req.booking.reference]),
+                    reverse("api:my_bookings")]:
+            response = client.get(url)
+            assert response.status_code == 200
+            booking = response.json()[0] if isinstance(response.json(), list) else response.json()
+            assert booking["pending_amendment"] is None
+            assert booking["last_amendment"]["status"] == review_status
+            assert booking["last_amendment"]["decline_reason"] == req.decline_reason
