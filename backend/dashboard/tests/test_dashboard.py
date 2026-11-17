@@ -1152,21 +1152,21 @@ class TestManualBooking:
     def test_new_customer_created_from_email(self, client, roles, vehicle):
         self._login(client, roles)
         client.post(reverse("dashboard:booking_create"),
-                    self._payload(vehicle, hours="2", guest_email="fresh@example.com"))
+                    self._payload(vehicle, hours="3", guest_email="fresh@example.com"))
         b = Booking.objects.get()
         assert b.customer and b.customer.email == "fresh@example.com"
 
     def test_no_email_is_a_guest(self, client, roles, vehicle):
         self._login(client, roles)
         client.post(reverse("dashboard:booking_create"),
-                    self._payload(vehicle, hours="2", guest_email=""))
+                    self._payload(vehicle, hours="3", guest_email=""))
         assert Booking.objects.get().customer is None
 
     def test_cash_records_awaiting_collection(self, client, roles, vehicle):
         from payments.models import Payment
         self._login(client, roles)
         client.post(reverse("dashboard:booking_create"),
-                    self._payload(vehicle, hours="2", payment_method="cash"))
+                    self._payload(vehicle, hours="3", payment_method="cash"))
         p = Booking.objects.get().payments.get()
         assert p.provider == Payment.Provider.CASH
         assert p.status == Payment.Status.PROCESSING
@@ -1174,7 +1174,7 @@ class TestManualBooking:
     def test_mark_cash_collected(self, client, roles, vehicle):
         from payments.models import Payment
         self._login(client, roles)
-        client.post(reverse("dashboard:booking_create"), self._payload(vehicle, hours="2"))
+        client.post(reverse("dashboard:booking_create"), self._payload(vehicle, hours="3"))
         b = Booking.objects.get()
         client.post(reverse("dashboard:booking_mark_cash_collected", args=[b.reference]))
         assert b.payments.get().status == Payment.Status.SUCCEEDED
