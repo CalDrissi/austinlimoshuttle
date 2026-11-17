@@ -4,7 +4,11 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from bookings.models import Booking, BookingAmendmentRequest
+from bookings.models import (
+    Booking,
+    BookingAmendmentRequest,
+    BookingCancellationRequest,
+)
 from enquiries.models import ContactMessage
 
 from .crud import REGISTRY, visible_to
@@ -43,6 +47,9 @@ def staff_context(request):
     context["nav_unread_enquiries"] = ContactMessage.objects.filter(is_read=False).count()
     context["nav_pending_amendments"] = BookingAmendmentRequest.objects.filter(
         status=BookingAmendmentRequest.Status.PENDING,
+    ).count()
+    context["nav_pending_cancellations"] = BookingCancellationRequest.objects.filter(
+        status=BookingCancellationRequest.Status.PENDING,
     ).count()
 
     # The manageable records this user may see, grouped for the sidebar. Built

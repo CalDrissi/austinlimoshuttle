@@ -1,0 +1,25 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">About your cancellation request</h1>
+<p style="margin:0 0 16px;color:#5b636d">
+  We're sorry — your request to cancel booking {{ booking.reference }} could not
+  be accepted, so your booking stands exactly as it was.
+</p>
+
+{% if reason %}
+<div style="background:#fdf1ef;border-radius:8px;padding:16px;margin:0 0 20px">
+  Reason: {{ reason }}
+</div>
+{% endif %}
+
+<table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
+  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+  <tr><td style="padding:4px 0;color:#5b636d">From</td><td style="padding:4px 0">{{ booking.pickup_address }}</td></tr>
+  {% if booking.dropoff_address %}<tr><td style="padding:4px 0;color:#5b636d">To</td><td style="padding:4px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
+  <tr><td style="padding:4px 0;color:#5b636d">Total</td><td style="padding:4px 0">${{ booking.total }} {{ booking.currency }}</td></tr>
+</table>
+
+<p style="margin:0;color:#5b636d;font-size:14px">
+  If you still need to cancel, reply to this email or call us and we'll help.
+</p>
+{% endblock %}

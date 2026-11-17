@@ -288,6 +288,51 @@ def send_amendment_declined(amendment) -> bool:
     )
 
 
+def send_cancellation_requested(cancellation) -> bool:
+    """
+    Alert staff + the admin address that a customer wants to cancel a booking.
+
+    Shows the booking, the customer and what they had paid (the default refund),
+    plus a link into the back office to approve (with a staff-set refund) or
+    decline. Shares the amendment recipient logic -- every active staff account
+    plus the configured admin/contact address. Never raises.
+    """
+    booking = cancellation.booking
+    return _send(
+        kind=EmailLog.Kind.CANCELLATION_REQUESTED,
+        to=_amendment_recipients(),
+        subject=f"Cancellation requested — {booking.reference}",
+        template="cancellation_requested",
+        context={
+            "booking": booking,
+            "cancellation": cancellation,
+            "review_url": _review_url(booking),
+        },
+        booking=booking,
+    )
+
+
+def send_cancellation_declined(cancellation) -> bool:
+    """Tell the customer their cancellation request was declined; booking stands."""
+    booking = cancellation.booking
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    return _send(
+        kind=EmailLog.Kind.CANCELLATION_DECLINED,
+        to=[email],
+        subject=f"About your cancellation request — {booking.reference}",
+        template="cancellation_declined",
+        context={
+            "booking": booking,
+            "cancellation": cancellation,
+            "reason": cancellation.decline_reason,
+        },
+        booking=booking,
+    )
+
+
 # -- operations --------------------------------------------------------------
 
 

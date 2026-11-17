@@ -1,0 +1,18 @@
+{% autoescape off %}About your cancellation request
+
+We're sorry -- your request to cancel booking {{ booking.reference }} could not
+be accepted, so your booking stands as it is.
+{% if reason %}
+Reason: {{ reason }}
+{% endif %}
+Your booking is unchanged:
+
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}Total     : ${{ booking.total }} {{ booking.currency }}
+
+If you still need to cancel, reply to this email or call us and we'll help.
+
+Austin Limo Shuttle
+{% endautoescape %}

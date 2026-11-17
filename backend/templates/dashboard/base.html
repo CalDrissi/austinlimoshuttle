@@ -200,6 +200,11 @@
         <i class="bi bi-pencil-square"></i><span>Change requests</span>
         {% if nav_pending_amendments %}<span class="badge rounded-pill text-bg-warning">{{ nav_pending_amendments }}</span>{% endif %}
       </a>
+      <a class="nav-link {% if request.resolver_match.url_name in 'cancellations cancellation_detail' %}active{% endif %}"
+         href="{% url 'dashboard:cancellations' %}">
+        <i class="bi bi-x-octagon"></i><span>Cancellations</span>
+        {% if nav_pending_cancellations %}<span class="badge rounded-pill text-bg-warning">{{ nav_pending_cancellations }}</span>{% endif %}
+      </a>
       {% if is_manager %}
       <a class="nav-link {% if request.resolver_match.url_name == 'driver_access' %}active{% endif %}"
          href="{% url 'dashboard:driver_access' %}">

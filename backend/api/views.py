@@ -44,6 +44,7 @@ from bookings.models import (
     AMENDABLE_FIELDS,
     Booking,
     BookingAmendmentRequest,
+    BookingCancellationRequest,
     BookingStatusChange,
 )
 from content.models import Page, SiteSettings
@@ -52,7 +53,7 @@ from fleet.models import Vehicle
 from notifications import mailer
 from notifications.pdf import render_booking_pdf
 from payments import gateway as payments_gateway
-from payments.models import SavedCard
+from payments.models import Payment, SavedCard
 from pricing.distance import DistanceLookupError
 from pricing.distance import lookup as measure_journey
 from pricing.engine import QuoteError, priced_city_to_city, quote_all
@@ -64,6 +65,7 @@ from .serializers import (
     AvailabilitySerializer,
     BookingAmendmentRequestSerializer,
     BookingAmendSerializer,
+    BookingCancellationRequestSerializer,
     BookingCreateSerializer,
     BookingSerializer,
     BookingStatusSerializer,
@@ -960,6 +962,90 @@ def amend_request(request, reference):
 
     return Response(
         BookingAmendmentRequestSerializer(amendment).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@extend_schema(
+    tags=["bookings"],
+    summary="Request to cancel one of your bookings (staff must approve)",
+    description=(
+        "Owner-only. Unlike the direct `PATCH {action: cancel}`, this does **not** "
+        "cancel the booking: it files a pending cancellation request that staff "
+        "review. Approval cancels the booking and issues a staff-set refund; the "
+        "refund is **not** automatic.\n\n"
+        "Rejected (400) when the pickup is already inside the office-set "
+        "cancellation window, when the booking is cancelled/completed, or when a "
+        "cancellation request is already awaiting review."
+    ),
+    parameters=[OpenApiParameter("reference", str, OpenApiParameter.PATH)],
+    request=None,
+    responses={
+        201: BookingCancellationRequestSerializer,
+        400: DetailSerializer,
+        404: DetailSerializer,
+    },
+)
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def cancel_request(request, reference):
+    """
+    File a pending cancellation request against the caller's own booking.
+
+    Scoped to `customer=request.user`, so an unknown or someone else's reference
+    is a 404 (never 403), matching `my_booking_detail`. The booking is left
+    confirmed; staff decide whether to cancel it and how much to refund.
+    """
+    booking = (
+        Booking.objects.filter(reference=reference, customer=request.user)
+        .prefetch_related("price_lines")
+        .first()
+    )
+    if booking is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Terminal bookings can never be cancelled again.
+    if booking.status in {Booking.Status.CANCELLED, Booking.Status.COMPLETED}:
+        raise ValidationError({
+            "detail": "This booking can no longer be cancelled online. "
+                      "Please contact us."
+        })
+
+    # Enforce the office-set cancellation window: inside it, cancellation must go
+    # through the office (the same copy the legacy fleet page advertised).
+    window_hours = PricingSettings.load().cancellation_window_hours
+    if timezone.now() >= booking.cancellation_deadline:
+        raise ValidationError({
+            "detail": (
+                f"This booking can no longer be cancelled online within "
+                f"{window_hours} hour{'' if window_hours == 1 else 's'} of pickup."
+            )
+        })
+
+    # One open cancellation request at a time -- otherwise staff see duplicates.
+    if booking.cancellation_requests.filter(
+        status=BookingCancellationRequest.Status.PENDING
+    ).exists():
+        raise ValidationError({
+            "detail": "A cancellation request for this booking is already "
+                      "awaiting review."
+        })
+
+    # Snapshot what was paid: the default and ceiling for the staff-set refund.
+    payment = booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
+    paid_amount = payment.amount if payment else Decimal("0.00")
+
+    cancellation = BookingCancellationRequest.objects.create(
+        booking=booking,
+        requested_by=request.user,
+        paid_amount=paid_amount,
+        currency=booking.currency,
+    )
+
+    mailer.send_cancellation_requested(cancellation)
+
+    return Response(
+        BookingCancellationRequestSerializer(cancellation).data,
         status=status.HTTP_201_CREATED,
     )
 

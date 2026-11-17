@@ -146,6 +146,8 @@ class EmailLog(models.Model):
         AMENDMENT_REQUESTED = "amendment_requested", "Amendment requested (staff)"
         AMENDMENT_APPROVED = "amendment_approved", "Amendment approved"
         AMENDMENT_DECLINED = "amendment_declined", "Amendment declined"
+        CANCELLATION_REQUESTED = "cancellation_requested", "Cancellation requested (staff)"
+        CANCELLATION_DECLINED = "cancellation_declined", "Cancellation declined"
         TEST = "test", "Test message"
         OTHER = "other", "Other"
 

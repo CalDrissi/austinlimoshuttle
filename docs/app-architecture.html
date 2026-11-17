@@ -674,6 +674,12 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Request · BookingAmend (all optional)</div><div class="fieldgrid"><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>flight_number<span class="ty"> str</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span><span>pickup_at<span class="ty"> datetime</span></span></div>
       <div class="lab">Response 201 · BookingAmendmentRequest {id, booking_reference, status, status_display, requested_changes, changes[], old_total, new_subtotal, new_surcharge_total, new_tax, new_total, currency, price_delta, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
       <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
+  <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/cancel-request/</span><span class="au session">session</span></div>
+    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending cancellation request</b> — the booking is <b>not</b> cancelled. Enforces the office-set cancellation window (rejects once pickup is inside <code>PricingSettings.cancellation_window_hours</code>: "…within X hours of pickup."), rejects a terminal (cancelled/completed) booking, and rejects a second open request. Snapshots the amount paid (the succeeded payment, else 0) as <code>paid_amount</code> — the default & ceiling for the staff-set refund. Emails all active staff + a configured admin/contact address. The pending request also appears on the booking's own detail/list via <code>pending_cancellation</code>. Approval + the staff-set refund are back-office only (<b>Dashboard → Cancellations</b>); the refund is <b>not</b> automatic.</p>
+      <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
+      <div class="lab">Request · (no body)</div>
+      <div class="lab">Response 201 · BookingCancellationRequest {id, booking_reference, status, status_display, paid_amount, refund_amount, currency, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
+      <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
 
   <div class="ep"><div class="ep-h"><span class="m patch">PATCH</span><span class="sig">/api/account/profile/</span><span class="au session">session</span></div>
     <div class="ep-b"><p class="sm">Self-service profile edit. All fields optional (partial PATCH). <code>email</code> is format-validated and must be <b>unique</b> across accounts (case-insensitive, excluding your own row) — it is also the sign-in identity, so a change updates how you log in. Values are normalised server-side (email lowercased, trimmed/length-capped). The <b>Profile</b> tab on <code>/account</code> loads the current values and saves here.</p>
@@ -912,6 +918,52 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-17 · Client cancellation → staff approval + staff-set refund (backend)</span><span class="tbl">bookings · api · dashboard · notifications · payments</span></div>
+    <table>
+      <tr><td><b>Why.</b> Cancelling a confirmed, paid journey has money consequences, so — mirroring the edit-approval
+      flow (<code>BookingAmendmentRequest</code>) — a customer no longer cancels directly: they file a request staff
+      review. <b>Approval is required and the refund is NOT automatic</b> — the amount is <b>set by staff</b> at approval
+      (defaulting to the amount paid; a partial amount or 0 is allowed).</td></tr>
+      <tr><td><b>Model.</b> New <code>bookings.BookingCancellationRequest</code> (migration
+      <code>0009</code>): FK <code>booking</code> (<code>related_name="cancellation_requests"</code>), <code>requested_by</code>,
+      <code>status</code> (pending/approved/declined), <code>paid_amount</code> (snapshot; default &amp; ceiling for the
+      refund), <code>refund_amount</code> (null until staff set it; 0 allowed), <code>currency</code>, <code>requested_at /
+      reviewed_at / reviewed_by / decline_reason</code>. Single open request enforced at the endpoint; the booking stays
+      <b>confirmed</b> while pending. <code>approve(reviewed_by, refund_amount)</code> cancels the booking (status →
+      cancelled, <code>cancelled_at</code>, <code>BookingStatusChange</code> audit row) and records the staff-set refund;
+      <code>decline(reviewed_by, reason)</code> leaves the booking untouched. Both idempotent by guard. New
+      <code>Booking.cancellation_deadline</code> + <code>Booking.pending_cancellation</code> helpers.</td></tr>
+      <tr><td><b>Client endpoint.</b> <code>POST /api/account/bookings/{ref}/cancel-request/</code> (owner-scoped, 404 for
+      non-owners) — enforces <code>PricingSettings.cancellation_window_hours</code> (rejects "…within X hours of pickup."),
+      rejects terminal bookings &amp; a second open request, snapshots <code>paid_amount</code> from the succeeded payment,
+      creates a <b>pending</b> request (does <b>not</b> cancel), and emails staff + admin. <code>BookingSerializer</code>
+      now exposes <code>pending_cancellation</code> / <code>last_cancellation</code> so the client can show "Cancellation
+      requested — pending staff approval".</td></tr>
+      <tr><td><b>Staff approve/decline (back office).</b> <b>Dashboard → Cancellations</b>
+      (<code>/dashboard/cancellations/</code>, <code>…/{pk}/</code>). <b>Approve</b> requires refund rights
+      (<code>payments.add_refund</code>, Manager): staff enter a <code>refund_amount</code> (validated 0..paid_amount),
+      the <b>existing refund path</b> (<code>gateway.refund</code>) issues the Stripe refund <b>first</b> when &gt; 0 (so a
+      gateway failure aborts before cancelling), then <code>approve()</code> cancels the booking and records the amount, and
+      the client is emailed via the existing <code>booking_cancelled</code> email (with the refund). <b>Decline</b>
+      (<code>bookings.change_booking</code>) records a reason + emails the client. Resolved requests are not re-processed.
+      Sidebar badge <code>nav_pending_cancellations</code>.</td></tr>
+      <tr><td><b>Notifications.</b> New <code>send_cancellation_requested</code> (staff + admin, reuses the amendment
+      recipient rule) and <code>send_cancellation_declined</code> (client, with reason); approval reuses
+      <code>send_booking_cancelled(refund_amount=…)</code>. New <code>EmailLog.Kind</code>
+      <code>cancellation_requested</code> / <code>cancellation_declined</code> (migration <code>0005</code>); templates
+      <code>cancellation_requested.{txt,html}</code>, <code>cancellation_declined.{txt,html}</code>.</td></tr>
+      <tr><td><b>Tests</b>: <code>bookings/tests/test_cancellation_request.py</code> (pending leaves booking; approve
+      cancels + records full/partial/zero refund + audit row; idempotency; decline), <code>api/tests/test_cancellations.py</code>
+      (creation, window rejection, terminal/second-request rejection, owner/anon permissions, staff+admin emails,
+      pending/last surfaced), <code>dashboard/tests/test_cancellation_review.py</code> (manager approve <b>full + partial</b>
+      refund via mocked Stripe → <code>Refund</code> rows; zero-refund skips Stripe; over-paid rejected; dispatcher can't
+      approve; resolved not re-processed; decline; badge), <code>notifications/tests/test_cancellation_emails.py</code>.
+      Scoped suites green (bookings · api · dashboard · notifications · payments, 488 passed);
+      <code>makemigrations --check</code> clean; stack boots.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-17 · Account self-service: edit profile + add/replace card on file</span><span class="tbl">api · payments · accounts · frontend</span></div>

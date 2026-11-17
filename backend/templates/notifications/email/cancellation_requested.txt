@@ -1,0 +1,18 @@
+{% autoescape off %}CANCELLATION REQUESTED - {{ booking.reference }}
+
+A customer has asked to cancel this booking. It is NOT cancelled yet -- please
+review it and approve (with a refund amount) or decline in the back office:
+
+  {{ review_url }}
+
+Customer  : {{ booking.customer_name }}{% if booking.contact_email %} ({{ booking.contact_email }}){% endif %}
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}
+Booking total : ${{ booking.total }} {{ booking.currency }}
+Paid to date  : ${{ cancellation.paid_amount }} {{ cancellation.currency }}
+
+Approving cancels the booking and issues the refund you set (defaulting to the
+amount paid; a partial amount or zero is allowed).
+{% endautoescape %}

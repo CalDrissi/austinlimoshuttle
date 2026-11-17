@@ -1,0 +1,119 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Cancellation — {{ cancellation.booking.reference }}{% endblock %}
+{% block page_title %}Cancellation · {{ cancellation.booking.reference }}{% endblock %}
+{% block lede %}
+  <p class="lede">Requested {{ cancellation.requested_at|date:"l j F Y, H:i" }}{% if cancellation.requested_by %} by {{ cancellation.requested_by.get_full_name|default:cancellation.requested_by.email }}{% endif %}</p>
+{% endblock %}
+{% block actions %}
+  <a href="{% url 'dashboard:cancellations' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> All cancellations
+  </a>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card mb-3">
+      <div class="card-header"><i class="bi bi-cash-coin me-2"></i>Payment &amp; refund</div>
+      <div class="card-body">
+        <dl class="kv mb-0">
+          <dt>Booking total</dt><dd>{{ cancellation.currency }} {{ cancellation.booking.total|floatformat:2 }}</dd>
+          <dt>Paid to date</dt><dd>{{ cancellation.currency }} {{ cancellation.paid_amount|floatformat:2 }}</dd>
+          {% if cancellation.refund_amount is not None %}
+            <dt>Refunded</dt><dd>{{ cancellation.currency }} {{ cancellation.refund_amount|floatformat:2 }}</dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if cancellation.is_pending %}
+      <div class="card">
+        <div class="card-header"><i class="bi bi-check2-square me-2"></i>Review</div>
+        <div class="card-body">
+          {% if can_refund %}
+            <form method="post" class="mb-4">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="approve">
+              <p class="small text-secondary">
+                Approving cancels the booking and issues the refund below, then
+                emails the customer. Default is the amount paid; enter a partial
+                amount or 0 for no refund.
+              </p>
+              <label class="form-label small fw-semibold mb-1" for="refund-amount">Refund amount ({{ cancellation.currency }})</label>
+              <div class="input-group mb-3" style="max-width:260px">
+                <span class="input-group-text">{{ cancellation.currency }}</span>
+                <input type="number" step="0.01" min="0" max="{{ cancellation.paid_amount }}"
+                       id="refund-amount" name="refund_amount" class="form-control"
+                       value="{{ cancellation.paid_amount|floatformat:2 }}">
+              </div>
+              <div class="form-text mb-3">Between 0 and {{ cancellation.paid_amount|floatformat:2 }} {{ cancellation.currency }}.</div>
+              <button type="submit" class="btn btn-brand">
+                <i class="bi bi-check-lg"></i> Approve, cancel &amp; refund
+              </button>
+            </form>
+          {% else %}
+            <div class="alert alert-info d-flex align-items-start gap-2 py-2 mb-4">
+              <i class="bi bi-info-circle-fill mt-1"></i>
+              <div>Issuing a refund needs refund rights — a manager must approve this cancellation.</div>
+            </div>
+          {% endif %}
+
+          {% if can_decline %}
+            <hr>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="decline">
+              <label class="form-label small fw-semibold mb-1" for="decline-reason">Reason for declining</label>
+              <textarea id="decline-reason" name="reason" class="form-control mb-3" rows="3"
+                        placeholder="Shared with the customer by email — e.g. this booking is non-refundable."></textarea>
+              <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-x-lg"></i> Decline request
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="card-header"><i class="bi bi-clipboard-check me-2"></i>Decision</div>
+        <div class="card-body">
+          <dl class="kv mb-0">
+            <dt>Outcome</dt>
+            <dd>
+              {% if cancellation.status == 'approved' %}
+                <span class="badge text-bg-success-subtle text-success-emphasis badge-status">Approved</span>
+              {% else %}
+                <span class="badge text-bg-secondary-subtle text-secondary-emphasis badge-status">Declined</span>
+              {% endif %}
+            </dd>
+            <dt>Reviewed</dt>
+            <dd>{{ cancellation.reviewed_at|date:"j M Y, H:i"|default:"—" }}{% if cancellation.reviewed_by %} by {{ cancellation.reviewed_by.get_full_name|default:cancellation.reviewed_by.email }}{% endif %}</dd>
+            {% if cancellation.decline_reason %}
+              <dt>Reason</dt><dd style="white-space:pre-wrap">{{ cancellation.decline_reason }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-journal-text me-2"></i>Booking</div>
+      <div class="card-body">
+        <dl class="kv">
+          <dt>Reference</dt>
+          <dd><a href="{% url 'dashboard:booking_detail' cancellation.booking.reference %}">{{ cancellation.booking.reference }}</a></dd>
+          <dt>Customer</dt><dd>{{ cancellation.booking.customer_name|default:"—" }}</dd>
+          {% if cancellation.booking.customer %}
+            <dt>Email</dt><dd><a href="mailto:{{ cancellation.booking.customer.email }}">{{ cancellation.booking.customer.email }}</a></dd>
+          {% endif %}
+          <dt>Pickup</dt><dd>{{ cancellation.booking.pickup_at|date:"l j F, H:i" }}</dd>
+          <dt>Route</dt><dd class="small">{{ cancellation.booking.pickup_address }} → {{ cancellation.booking.dropoff_address }}</dd>
+          <dt>Status</dt><dd>{{ cancellation.booking.get_status_display }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

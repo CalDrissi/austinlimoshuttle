@@ -52,6 +52,10 @@ urlpatterns = [
     path("amendments/", views.amendment_list, name="amendments"),
     path("amendments/<int:pk>/", views.amendment_detail, name="amendment_detail"),
 
+    # Customer cancellation requests awaiting back-office review + staff refund.
+    path("cancellations/", views.cancellation_list, name="cancellations"),
+    path("cancellations/<int:pk>/", views.cancellation_detail, name="cancellation_detail"),
+
     # Give drivers a login for the mobile driver app.
     path("drivers/access/", views.driver_access, name="driver_access"),
 

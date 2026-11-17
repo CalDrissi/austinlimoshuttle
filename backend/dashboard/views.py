@@ -35,6 +35,7 @@ from django.views.decorators.http import require_POST
 from bookings.models import (
     Booking,
     BookingAmendmentRequest,
+    BookingCancellationRequest,
     BookingPriceLine,
     BookingStatusChange,
     Driver,
@@ -75,6 +76,7 @@ BOOKINGS_PER_PAGE = 50
 ENQUIRIES_PER_PAGE = 50
 TRIP_EVENTS_PER_PAGE = 50
 AMENDMENTS_PER_PAGE = 50
+CANCELLATIONS_PER_PAGE = 50
 
 
 def admin_login_redirect(request):
@@ -1068,6 +1070,163 @@ def amendment_detail(request, pk):
         "amendment": amendment,
         "changes": amendment.changed_fields(),
         "can_review": request.user.has_perm("bookings.change_booking"),
+        "roles": role_names(request.user),
+        "is_manager": is_manager(request.user),
+    })
+
+
+@staff_required
+def cancellation_list(request):
+    """
+    Customer booking-cancellation requests awaiting staff review.
+
+    Mirrors the amendment queue: pending first, newest-first, with a `state`
+    filter that widens the view to recently approved/declined. A pending request
+    holds a confirmed, paid journey in limbo -- the booking is NOT cancelled
+    until staff approve it and set the refund.
+    """
+    requests = BookingCancellationRequest.objects.select_related(
+        "booking", "booking__customer", "requested_by", "reviewed_by",
+    )
+
+    state = request.GET.get("state", "pending")
+    if state == "pending":
+        requests = requests.filter(status=BookingCancellationRequest.Status.PENDING)
+    elif state == "resolved":
+        requests = requests.exclude(status=BookingCancellationRequest.Status.PENDING)
+
+    paginator = Paginator(requests, CANCELLATIONS_PER_PAGE)
+    page = paginator.get_page(request.GET.get("page"))
+
+    params = request.GET.copy()
+    params.pop("page", None)
+    querystring = params.urlencode()
+
+    context = {
+        "querystring": f"&{querystring}" if querystring else "",
+        "cancellations": page.object_list,
+        "page": page,
+        "paginator": paginator,
+        "page_range": paginator.get_elided_page_range(
+            page.number, on_each_side=2, on_ends=1,
+        ),
+        "counts": BookingCancellationRequest.objects.aggregate(
+            all=Count("id"),
+            pending=Count("id", filter=Q(status=BookingCancellationRequest.Status.PENDING)),
+            approved=Count("id", filter=Q(status=BookingCancellationRequest.Status.APPROVED)),
+            declined=Count("id", filter=Q(status=BookingCancellationRequest.Status.DECLINED)),
+        ),
+        "state": state,
+        "roles": role_names(request.user),
+    }
+    return render(request, "dashboard/cancellations.html", context)
+
+
+@staff_required
+def cancellation_detail(request, pk):
+    """
+    Review one cancellation request: approve (cancel + staff-set refund) or decline.
+
+    Approving requires refund rights (`payments.add_refund`, Manager only) because
+    it issues money back; the refund amount is entered by staff, validated into
+    0..paid_amount, and the actual Stripe refund is issued through the existing
+    `gateway.refund` path BEFORE the booking is cancelled, so a gateway failure
+    never leaves a cancelled-but-unrefunded booking. Declining needs only booking
+    change rights and records a required reason. Both guard against double-
+    processing and record the acting staff user.
+    """
+    cancellation = get_object_or_404(
+        BookingCancellationRequest.objects.select_related(
+            "booking", "booking__customer", "requested_by", "reviewed_by",
+        ),
+        pk=pk,
+    )
+
+    can_refund = request.user.has_perm("payments.add_refund")
+
+    if request.method == "POST":
+        if not cancellation.is_pending:
+            messages.warning(request, "This request has already been resolved.")
+            return redirect("dashboard:cancellation_detail", pk=pk)
+
+        action = request.POST.get("action")
+        if action == "approve":
+            # Issuing a refund is a money action -- gate it on refund rights, like
+            # the stand-alone refund screen.
+            if not can_refund:
+                raise PermissionDenied
+
+            raw = (request.POST.get("refund_amount") or "").strip()
+            try:
+                refund_amount = (
+                    Decimal(raw) if raw != "" else cancellation.paid_amount
+                )
+            except InvalidOperation:
+                messages.error(request, f"{raw!r} is not a valid amount.")
+                return redirect("dashboard:cancellation_detail", pk=pk)
+
+            if refund_amount < 0 or refund_amount > cancellation.paid_amount:
+                messages.error(
+                    request,
+                    f"Enter a refund between 0 and {cancellation.paid_amount} "
+                    f"{cancellation.currency}.",
+                )
+                return redirect("dashboard:cancellation_detail", pk=pk)
+
+            # Issue the refund through the existing path FIRST (when > 0), so a
+            # gateway failure aborts before the booking is cancelled. Reuses the
+            # same Stripe refund mechanism as the stand-alone refund screen.
+            if refund_amount > 0:
+                payment = cancellation.booking.payments.filter(
+                    status=Payment.Status.SUCCEEDED
+                ).first()
+                if payment is None:
+                    messages.error(
+                        request, "There is no successful payment to refund.",
+                    )
+                    return redirect("dashboard:cancellation_detail", pk=pk)
+                try:
+                    gateway.refund(
+                        payment, amount=refund_amount,
+                        reason="Cancellation approved", created_by=request.user,
+                    )
+                except (gateway.PaymentConfigurationError,
+                        gateway.PaymentGatewayError) as exc:
+                    messages.error(request, str(exc))
+                    return redirect("dashboard:cancellation_detail", pk=pk)
+
+            cancellation.approve(reviewed_by=request.user, refund_amount=refund_amount)
+            mailer.send_booking_cancelled(
+                cancellation.booking, refund_amount=refund_amount or None,
+            )
+            messages.success(
+                request,
+                f"Approved. Booking {cancellation.booking.reference} was cancelled"
+                + (f" and {refund_amount} {cancellation.currency} refunded"
+                   if refund_amount else " with no refund")
+                + "; the customer was emailed.",
+            )
+            return redirect("dashboard:cancellations")
+
+        if action == "decline":
+            if not request.user.has_perm("bookings.change_booking"):
+                raise PermissionDenied
+            reason = (request.POST.get("reason") or "").strip()
+            if not reason:
+                messages.error(request, "Give a reason before declining.")
+                return redirect("dashboard:cancellation_detail", pk=pk)
+            cancellation.decline(reviewed_by=request.user, reason=reason)
+            mailer.send_cancellation_declined(cancellation)
+            messages.success(request, "Declined. The customer was emailed the reason.")
+            return redirect("dashboard:cancellations")
+
+        messages.error(request, "Unknown action.")
+        return redirect("dashboard:cancellation_detail", pk=pk)
+
+    return render(request, "dashboard/cancellation_detail.html", {
+        "cancellation": cancellation,
+        "can_refund": can_refund,
+        "can_decline": request.user.has_perm("bookings.change_booking"),
         "roles": role_names(request.user),
         "is_manager": is_manager(request.user),
     })

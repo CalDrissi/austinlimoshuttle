@@ -6,8 +6,8 @@ from django.utils.html import format_html
 from payments.models import Payment
 
 from .models import (
-    Booking, BookingAmendmentRequest, BookingPriceLine, BookingStatusChange,
-    DriverTripEvent, Driver,
+    Booking, BookingAmendmentRequest, BookingCancellationRequest,
+    BookingPriceLine, BookingStatusChange, DriverTripEvent, Driver,
 )
 
 
@@ -162,6 +162,39 @@ class BookingAmendmentRequestAdmin(admin.ModelAdmin):
         "new_subtotal", "new_surcharge_total", "new_tax", "new_total",
         "currency", "requested_at", "reviewed_at", "reviewed_by", "status",
         "decline_reason",
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "booking", "requested_by", "reviewed_by",
+        )
+
+
+@admin.register(BookingCancellationRequest)
+class BookingCancellationRequestAdmin(admin.ModelAdmin):
+    """
+    The cancellation review queue, mirrored into Django admin alongside the
+    dashboard page.
+
+    Read-only: approving/declining must go through the model's guarded
+    transitions (which cancel the booking and record the staff-set refund), never
+    a raw field edit here.
+    """
+
+    list_display = [
+        "id", "booking", "status", "requested_by", "paid_amount",
+        "refund_amount", "requested_at", "reviewed_by", "reviewed_at",
+    ]
+    list_filter = ["status", "requested_at"]
+    search_fields = ["booking__reference", "requested_by__email"]
+    date_hierarchy = "requested_at"
+    autocomplete_fields = ["booking", "requested_by", "reviewed_by"]
+    readonly_fields = [
+        "booking", "requested_by", "paid_amount", "refund_amount", "currency",
+        "requested_at", "reviewed_at", "reviewed_by", "status", "decline_reason",
     ]
 
     def has_add_permission(self, request):

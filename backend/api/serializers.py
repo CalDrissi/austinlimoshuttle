@@ -8,7 +8,11 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from bookings.models import Booking, BookingAmendmentRequest
+from bookings.models import (
+    Booking,
+    BookingAmendmentRequest,
+    BookingCancellationRequest,
+)
 from content.models import Page, SiteSettings
 from payments.models import SavedCard
 from enquiries.models import ContactMessage
@@ -213,6 +217,35 @@ class BookingAmendmentRequestSerializer(serializers.ModelSerializer):
         return obj.changed_fields()
 
 
+class BookingCancellationRequestSerializer(serializers.ModelSerializer):
+    """
+    A customer's request to cancel a booking, awaiting (or past) staff review.
+
+    Read-only: the client POSTs nothing but the request itself (no body) and
+    receives this back. `paid_amount` is what had been paid when they asked;
+    `refund_amount` is null until staff approve and set it (0 is a real value,
+    not "unset").
+    """
+
+    status = serializers.CharField(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    reviewed_by = serializers.EmailField(
+        source="reviewed_by.email", read_only=True, default=None,
+    )
+    booking_reference = serializers.CharField(
+        source="booking.reference", read_only=True,
+    )
+
+    class Meta:
+        model = BookingCancellationRequest
+        fields = [
+            "id", "booking_reference", "status", "status_display",
+            "paid_amount", "refund_amount", "currency",
+            "requested_at", "reviewed_at", "reviewed_by", "decline_reason",
+        ]
+        read_only_fields = fields
+
+
 class BookingSerializer(serializers.ModelSerializer):
     vehicle_name = serializers.CharField(source="vehicle_name_snapshot", read_only=True)
     price_lines = serializers.SerializerMethodField()
@@ -221,6 +254,8 @@ class BookingSerializer(serializers.ModelSerializer):
     amendment_deadline = serializers.DateTimeField(read_only=True)
     pending_amendment = serializers.SerializerMethodField()
     last_amendment = serializers.SerializerMethodField()
+    pending_cancellation = serializers.SerializerMethodField()
+    last_cancellation = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
@@ -233,6 +268,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "subtotal", "surcharge_total", "tax", "total", "currency",
             "price_lines", "created_at", "is_amendable", "amendment_deadline",
             "pending_amendment", "last_amendment",
+            "pending_cancellation", "last_cancellation",
         ]
         read_only_fields = fields
 
@@ -257,6 +293,20 @@ class BookingSerializer(serializers.ModelSerializer):
     def get_last_amendment(self, obj):
         latest = obj.amendment_requests.order_by("-requested_at", "-pk").first()
         return BookingAmendmentRequestSerializer(latest).data if latest else None
+
+    @extend_schema_field(BookingCancellationRequestSerializer(allow_null=True))
+    def get_pending_cancellation(self, obj):
+        """
+        The outstanding cancellation request awaiting staff review, so the client
+        can show "Cancellation requested — pending staff approval". Null when none.
+        """
+        pending = obj.pending_cancellation
+        return BookingCancellationRequestSerializer(pending).data if pending else None
+
+    @extend_schema_field(BookingCancellationRequestSerializer(allow_null=True))
+    def get_last_cancellation(self, obj):
+        latest = obj.cancellation_requests.order_by("-requested_at", "-pk").first()
+        return BookingCancellationRequestSerializer(latest).data if latest else None
 
 
 class BookingAmendSerializer(serializers.Serializer):

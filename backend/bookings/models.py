@@ -252,6 +252,35 @@ class Booking(models.Model):
         ).first()
 
     @property
+    def cancellation_deadline(self):
+        """
+        Latest moment a customer may ask to cancel this booking online.
+
+        Mirrors `amendment_deadline`: the window (hours before pickup) is office-
+        set in pricing settings, so "free cancellation up to 1 hour before" vs
+        "24 hours" is a config change, not a code change.
+        """
+        from datetime import timedelta
+
+        from pricing.models import PricingSettings
+
+        hours = PricingSettings.load().cancellation_window_hours
+        return self.pickup_at - timedelta(hours=hours)
+
+    @property
+    def pending_cancellation(self):
+        """
+        The customer's outstanding cancellation request awaiting staff review.
+
+        Like `pending_amendment`, at most one may be open at a time (the cancel-
+        request endpoint rejects a second), so the newest pending row is the one
+        the client is waiting on. The booking is NOT cancelled while this is set.
+        """
+        return self.cancellation_requests.filter(
+            status=BookingCancellationRequest.Status.PENDING
+        ).first()
+
+    @property
     def contact_email(self) -> str:
         """Where correspondence for this booking goes."""
         if self.customer and self.customer.email:
@@ -692,6 +721,138 @@ class BookingAmendmentRequest(models.Model):
         """
         Mark the request declined with an optional reason. Leaves the booking
         untouched. Idempotent by guard, like `approve()`.
+        """
+        if not self.is_pending:
+            return self
+        self.status = self.Status.DECLINED
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.decline_reason = reason or ""
+        self.save(update_fields=[
+            "status", "reviewed_by", "reviewed_at", "decline_reason",
+        ])
+        return self
+
+
+class BookingCancellationRequest(models.Model):
+    """
+    A customer's request to cancel an upcoming booking, awaiting staff review.
+
+    Mirrors `BookingAmendmentRequest`: the booking is NOT cancelled while the
+    request is pending -- it only becomes cancelled when staff `approve()` it.
+    Crucially, approval is **required** and the refund is **not** automatic: the
+    amount is set by staff at approval time (defaulting to what was paid, but a
+    partial amount or zero is allowed). `approve()` cancels the booking and
+    records the staff-set `refund_amount`; the actual Stripe refund is issued by
+    the caller through the existing refund path, then this is called to flip the
+    state. `decline()` records a reason and leaves the booking untouched. Both
+    transitions are guarded so a resolved request can never be processed twice.
+
+    Why a separate model rather than cancelling in place: cancelling a confirmed,
+    paid journey has money consequences (a refund), so the office decides whether
+    to accept it and how much to return. The audit trail (who asked, who reviewed,
+    how much was refunded, when) is impossible if the cancel just flips a flag.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        DECLINED = "declined", "Declined"
+
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="cancellation_requests",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="booking_cancellation_requests",
+        help_text="The customer who asked to cancel.",
+    )
+
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True,
+    )
+
+    # What the customer had paid when they asked to cancel. Snapshotted at request
+    # time so it survives later refunds, and used as the default/maximum refund
+    # staff may set on approval.
+    paid_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        help_text="Amount paid at request time; the default and ceiling for the refund.",
+    )
+    # The refund staff chose to issue on approval. Null while pending (a 0 refund
+    # is a deliberate choice, distinct from "not decided yet"). Validated into
+    # 0..paid_amount by the approving view.
+    refund_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Refund set by staff at approval. 0 is allowed; null until reviewed.",
+    )
+    currency = models.CharField(max_length=3, default="USD")
+
+    requested_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="reviewed_cancellation_requests",
+        help_text="The staff member who approved or declined the request.",
+    )
+    decline_reason = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["status", "requested_at"]),
+        ]
+
+    def __str__(self):
+        return f"Cancellation {self.pk} for {self.booking.reference} ({self.status})"
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == self.Status.PENDING
+
+    @transaction.atomic
+    def approve(self, reviewed_by, refund_amount):
+        """
+        Cancel the booking and mark the request approved with the staff-set refund.
+
+        Records the `refund_amount` staff chose (the caller is responsible for
+        having issued the actual Stripe refund through the existing refund path
+        first, so a gateway failure never leaves a cancelled-but-unrefunded
+        booking). Idempotent by guard: a request that is not pending is returned
+        untouched, so a double submit never re-cancels or double-counts a refund.
+        """
+        if not self.is_pending:
+            return self
+
+        booking = self.booking
+        from_status = booking.status
+        booking.status = Booking.Status.CANCELLED
+        booking.cancelled_at = timezone.now()
+        if not booking.cancellation_reason:
+            booking.cancellation_reason = "Cancellation requested by customer"
+        booking.save(update_fields=["status", "cancelled_at", "cancellation_reason"])
+
+        BookingStatusChange.objects.create(
+            booking=booking, from_status=from_status,
+            to_status=Booking.Status.CANCELLED, changed_by=reviewed_by,
+            note="Cancellation approved by staff"
+                 + (f"; refunded {refund_amount} {self.currency}"
+                    if refund_amount else "; no refund"),
+        )
+
+        self.status = self.Status.APPROVED
+        self.refund_amount = refund_amount
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.save(update_fields=[
+            "status", "refund_amount", "reviewed_by", "reviewed_at",
+        ])
+        return self
+
+    def decline(self, reviewed_by, reason=""):
+        """
+        Mark the request declined with an optional reason. Leaves the booking
+        untouched (still confirmed). Idempotent by guard, like `approve()`.
         """
         if not self.is_pending:
             return self
