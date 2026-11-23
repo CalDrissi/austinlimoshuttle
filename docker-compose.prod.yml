@@ -3,6 +3,12 @@
 # (see .env.prod.example). Run:
 #
 #   docker compose -f docker-compose.prod.yml up -d --build
+#
+# NOTE: the Next.js frontend is NO LONGER in Docker. It runs on the host via
+# pm2 (see ecosystem.config.js + scripts/deploy-frontend.sh) so frontend
+# deploys are gate-free and build-before-restart. Nginx proxies "/" to the
+# host Next.js on 127.0.0.1:3001 and the API paths to this backend container.
+# Only db + backend remain containerized (and still go through the merge gate).
 
 services:
   db:
@@ -51,19 +57,6 @@ services:
       # Host port is configurable so the stack can coexist with anything already
       # on 8000 (e.g. a prior non-Docker deploy). Nginx proxies to this port.
       - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-    container_name: limo-prod-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:3000"
 
 volumes:
   db_data:

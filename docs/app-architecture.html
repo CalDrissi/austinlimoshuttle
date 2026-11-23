@@ -392,6 +392,34 @@ docker compose exec backend pytest -m "not legacy"</pre>
     <tr><td>MariaDB</td><td><code>localhost:3307</code></td><td><code>limo-db</code></td></tr>
   </table>
 
+  <h4 style="margin-top:28px">Production topology (testmode VPS) — hybrid: Docker + host pm2</h4>
+  <p>Local dev runs the <b>whole</b> stack in Docker (above). <b>Production is a hybrid:</b> db + Django stay
+  in Docker (via <code>docker-compose.prod.yml</code>, still behind the merge gate), but the <b>Next.js
+  storefront runs on the host under <code>pm2</code></b> — it is <i>not</i> containerised in prod. HestiaCP's
+  Nginx reverse-proxies the public domain: <code>/</code> → host Next.js on <code>127.0.0.1:3001</code>, and
+  the API/back-office paths (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/ /static/ /media/</code>)
+  → the backend container on <code>127.0.0.1:8001</code>.</p>
+  <table>
+    <tr><th>Surface</th><th>Runs as</th><th>Port (localhost)</th><th>Deploy path</th></tr>
+    <tr><td>Client site (Next.js)</td><td><b>host pm2</b> app <code>limo-frontend</code></td><td><code>:3001</code></td><td><b>gate-free</b>, build-before-restart</td></tr>
+    <tr><td>Backend (Django) + DB</td><td>Docker <code>limo-prod-backend</code> / <code>limo-prod-db</code></td><td><code>:8001</code></td><td>merge gate (as before)</td></tr>
+  </table>
+  <p>The frontend deploy is <b>gate-free and build-before-restart</b>: the live pm2 process keeps serving the
+  old build until the new one compiles, then swaps. <code>NEXT_PUBLIC_*</code> are inlined at <b>build</b> time, so
+  the deploy script sources them from the root <code>.env</code> (single source of truth) and fails loudly if the
+  API base URL is missing.</p>
+  <pre># frontend-only change — gate-free fast deploy (host):
+bash /opt/austinlimoshuttle/scripts/deploy-frontend.sh
+#   git pull origin main → npm ci → npm run build (with .env NEXT_PUBLIC_*)
+#   → pm2 restart limo-frontend --update-env → pm2 save
+
+# pm2 process is defined by ecosystem.config.js (PORT=3001 to match Nginx):
+pm2 start /opt/austinlimoshuttle/ecosystem.config.js   # first time
+pm2 save && pm2 startup systemd                         # survive reboot
+
+# backend / db changes still go through Docker + the gate:
+docker compose -f docker-compose.prod.yml up -d --build   # db + backend only</pre>
+
   <!-- ============================== 4 ============================== -->
   <h2 id="apps">4 · Django apps</h2>
   <table>
@@ -918,6 +946,36 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-23 · Prod infra: run Next.js on the host via pm2 (out of Docker); gate-free frontend deploy</span><span class="tbl">ops · deploy · frontend</span></div>
+    <table>
+      <tr><td><b>Why.</b> Frontend-only changes had to go through the full Docker image rebuild + merge gate to reach
+      the testmode VPS, which was slow for what are usually copy/CSS/template edits. The Next.js storefront now runs
+      <b>on the host under <code>pm2</code></b> (not in Docker), so frontend deploys are <b>gate-free and
+      build-before-restart</b>. <b>Backend + DB stay in Docker and keep the merge gate.</b></td></tr>
+      <tr><td><b>Topology.</b> HestiaCP Nginx proxies the public domain: <code>/</code> → host Next.js on
+      <code>127.0.0.1:3001</code>; API/back-office paths (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/
+      /static/ /media/</code>) → backend container on <code>127.0.0.1:8001</code>. The host already had Node v22
+      (matching the old <code>node:22-slim</code> image major); <code>pm2</code> was installed and set to start on boot
+      (<code>pm2 save</code> + <code>pm2 startup systemd</code>). See §3 "Production topology".</td></tr>
+      <tr><td><b>Repo.</b> <code>docker-compose.prod.yml</code> — <b>removed the <code>frontend</code> service</b>
+      (keeps <code>db</code> + <code>backend</code>). Added <code>ecosystem.config.js</code> (pm2 app
+      <code>limo-frontend</code>, <code>cwd</code> = <code>frontend/</code>, <code>npm start -- -p 3001</code>,
+      <code>PORT=3001</code> to match Nginx). Added executable <code>scripts/deploy-frontend.sh</code>:
+      <code>git pull origin main → npm ci --prefer-offline → npm run build → pm2 restart limo-frontend
+      --update-env → pm2 save</code>. <b>Critical:</b> <code>NEXT_PUBLIC_*</code> are inlined at <b>build</b> time, so
+      the script exports them from the root <code>.env</code> before building (and fails loudly if
+      <code>NEXT_PUBLIC_API_BASE_URL</code> is missing) — identical to the values the Docker build used
+      (<code>https://testmode.austinlimoshuttle.com/api</code>). No API endpoints changed.</td></tr>
+      <tr><td><b>Cutover (with rollback).</b> Built on the host first; probed the new build on a spare port before
+      touching the live container; only then stopped/removed <code>limo-prod-frontend</code> to free <code>:3001</code>
+      and started the host pm2 process on <code>:3001</code>. <b>Rollback</b>: the Docker frontend container/image was
+      kept so it can be restarted (<code>docker start limo-prod-frontend</code>) if the host process fails — the site
+      is never left down. <code>docker compose -f docker-compose.prod.yml config</code> parses (services: db,
+      backend); <code>frontend</code> build passes.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-17 · Client cancellation → staff approval + staff-set refund (backend)</span><span class="tbl">bookings · api · dashboard · notifications · payments</span></div>
