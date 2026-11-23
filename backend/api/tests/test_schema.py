@@ -89,3 +89,24 @@ class TestSchema:
 
         assert "quote_token" in properties
         assert not (properties & {"total", "price", "subtotal", "amount", "fare"})
+
+    @pytest.mark.parametrize("view", ["swagger", "redoc"])
+    def test_inline_bootstrap_csp_is_scoped_to_docs(self, client, settings, view):
+        settings.DEBUG = False
+
+        def directives(response):
+            assert response.status_code == 200
+            return dict(
+                directive.strip().split(" ", 1)
+                for directive in response["Content-Security-Policy"].split(";")
+            )
+
+        docs_csp = directives(client.get(reverse(f"api-docs:{view}")))
+        assert docs_csp["script-src"].split() == ["'self'", "'unsafe-inline'"]
+        assert docs_csp["style-src"] == "'self' 'unsafe-inline'"
+        assert docs_csp["connect-src"] == "'self'"
+
+        normal_csp = directives(client.get("/dashboard/login/"))
+        assert "'unsafe-inline'" not in normal_csp["script-src"].split()
+        # The raw schema keeps the global policy, too.
+        assert directives(client.get(reverse("api-docs:schema"))) == normal_csp

@@ -16,12 +16,38 @@ from drf_spectacular.views import (
 )
 from rest_framework.permissions import AllowAny
 
+from config.middleware import CSP_DIRECTIVES
+
+
+class DocsCSPMixin:
+    """Allow spectacular's inline bootstrap only on the static docs shells."""
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        directives = {
+            **CSP_DIRECTIVES,
+            "script-src": "'self' 'unsafe-inline'",
+            "connect-src": "'self'",
+        }
+        response["Content-Security-Policy"] = "; ".join(
+            f"{directive} {value}" for directive, value in directives.items()
+        )
+        return response
+
+
+class DocsSwaggerView(DocsCSPMixin, SpectacularSwaggerView):
+    pass
+
+
+class DocsRedocView(DocsCSPMixin, SpectacularRedocView):
+    pass
+
 
 urlpatterns = [
     path("schema/", SpectacularAPIView.as_view(
         permission_classes=[AllowAny]), name="schema"),
-    path("docs/", SpectacularSwaggerView.as_view(
+    path("docs/", DocsSwaggerView.as_view(
         url_name="api-docs:schema", permission_classes=[AllowAny]), name="swagger"),
-    path("redoc/", SpectacularRedocView.as_view(
+    path("redoc/", DocsRedocView.as_view(
         url_name="api-docs:schema", permission_classes=[AllowAny]), name="redoc"),
 ]
