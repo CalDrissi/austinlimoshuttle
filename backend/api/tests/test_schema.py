@@ -50,9 +50,10 @@ class TestSchema:
         assert "cdn.jsdelivr.net" not in body
         assert "unpkg.com" not in body
 
-    def test_docs_are_staff_only_outside_debug(self, client, settings):
+    @pytest.mark.parametrize("view", ["schema", "swagger", "redoc"])
+    def test_docs_are_public_outside_debug(self, client, settings, view):
         settings.DEBUG = False
-        assert client.get(reverse("api-docs:schema")).status_code in (401, 403)
+        assert client.get(reverse(f"api-docs:{view}")).status_code == 200
 
     def test_staff_can_read_the_schema_in_production(self, client, settings):
         settings.DEBUG = False
