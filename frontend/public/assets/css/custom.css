@@ -320,6 +320,7 @@ img {
    Focus state draws a thin blue ring around the whole panel. */
 .blw-panel {
   position: relative;
+  color: #fff;
   background:
     radial-gradient(circle at 80% 160%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 70%),
     rgba(15, 19, 25, 0.66);
