@@ -376,6 +376,22 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
         onFocus={() => setPane(which)}
         onKeyDown={onLocKeyDown}
       />
+      {value !== "" && (
+        <button
+          type="button"
+          className="blw-clear"
+          aria-label={`Clear ${label.toLowerCase()}`}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={(e) => {
+            e.stopPropagation();
+            set("");
+            setPane(which); // stay expanded so the user can retype immediately
+            inputRef.current?.focus();
+          }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 

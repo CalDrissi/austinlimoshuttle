@@ -377,6 +377,18 @@ img {
 }
 .blw-trigger:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 4px; border-radius: 8px; }
 
+/* X clear button on a filled location field */
+.blw-loc .blw-input { padding-right: 30px; }
+.blw-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border: 0; border-radius: 50%;
+  background: transparent; color: rgba(255, 255, 255, 0.65); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.blw-clear:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.blw-clear:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 1px; }
+
 /* CTA — blue pill */
 .blw-go {
   flex: 0 0 auto; align-self: center; border: 0; min-height: 48px;
@@ -501,6 +513,8 @@ img {
   .blw-sched .blw-field + .blw-field { border-left: 1px solid rgba(255, 255, 255, 0.16); }
   /* 16px inputs stop mobile Safari zooming on focus */
   .blw-input, .blw-value { font-size: 16px; }
+  .blw-loc .blw-input { padding-right: 44px; }
+  .blw-clear { width: 44px; height: 44px; right: 0; }
   .blw-go { width: 100%; margin-top: 8px; min-height: 48px; }
   /* expanded content: large touch targets, internal scroll, X to dismiss */
   .blw-area { padding: 10px 12px 14px; }
