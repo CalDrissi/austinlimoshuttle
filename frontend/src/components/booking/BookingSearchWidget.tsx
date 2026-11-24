@@ -251,15 +251,21 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const [activeIdx, setActiveIdx] = useState(-1);
   useEffect(() => { setActiveIdx(-1); }, [suggestions]);
 
-  // Align the expanded content under the active field (desktop). On stacked
+  // Align the expanded content under the active field (desktop). Clamped so
+  // the content block never overruns the panel; the idle placeholder ignores
+  // the indent entirely (it centers against the full panel width). On stacked
   // mobile the CSS zeroes the indent.
   const [indent, setIndent] = useState(0);
   useLayoutEffect(() => {
+    // Rough width of each pane's content block, for clamping the indent.
+    const CONTENT_W: Record<Pane, number> = { pickup: 600, dropoff: 600, date: 360, time: 270, duration: 270 };
     const measure = () => {
       const field = pane ? fieldRefs.current[pane] : null;
       const panel = panelRef.current;
-      if (!field || !panel) return;
-      setIndent(Math.max(0, Math.round(field.getBoundingClientRect().left - panel.getBoundingClientRect().left) - 10));
+      if (!pane || !field || !panel) return;
+      const raw = Math.round(field.getBoundingClientRect().left - panel.getBoundingClientRect().left) - 10;
+      const max = Math.round(panel.getBoundingClientRect().width) - CONTENT_W[pane] - 36;
+      setIndent(Math.max(0, Math.min(raw, max)));
     };
     measure();
     window.addEventListener("resize", measure);

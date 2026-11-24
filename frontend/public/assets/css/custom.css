@@ -428,10 +428,10 @@ img {
 .blw-expand.open { grid-template-rows: 1fr; }
 .blw-expand-clip { overflow: hidden; min-height: 0; }
 .blw-area { position: relative; padding: 4px 18px 18px; }
-.blw-area-inner {
-  min-height: 340px; display: flex; flex-direction: column;
-  padding-left: var(--blw-indent, 0px);
-}
+.blw-area-inner { min-height: 340px; display: flex; flex-direction: column; }
+/* Only field-anchored content follows the active-field indent — the idle
+   placeholder centers against the FULL panel width regardless of field state. */
+.blw-sugs, .blw-list, .blw-cal { margin-left: var(--blw-indent, 0px); }
 .blw-close {
   position: absolute; top: 0; right: 12px; z-index: 2;
   width: 34px; height: 34px; border: 0; border-radius: 50%;
@@ -524,6 +524,7 @@ img {
   }
   .blw-close { display: flex; }
   .blw-idle-line { font-size: 18px; }
+  .blw-sugs, .blw-list, .blw-cal { margin-left: 0; }
   .blw-sugs { max-width: none; padding-right: 40px; }
   .blw-list { max-width: none; max-height: none; }
   .blw-cal { display: flex; justify-content: center; }
