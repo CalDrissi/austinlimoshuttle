@@ -165,34 +165,9 @@ img {
 }
 
 /* ===================================================================== *
- * Home search form + date/time pickers — themed to M&M (black / white)  *
+ * Light pickers (TripEditor on the booking flow)                         *
  * ===================================================================== */
 .mm-picker { position: relative; width: 100%; }
-
-/* Uppercase brand labels — always visible ABOVE each field (never placeholder-only). */
-.box-search-ride .search-item .search-inputs label {
-  font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
-  color: #9aa1ac; font-weight: 700; margin-bottom: 3px; display: block;
-}
-/* Bigger, readable inputs. 16px stops mobile Safari zooming on focus and the
-   extra height gives comfortable touch targets; applies to the text inputs as
-   well as the date/time/city/hours triggers (all use .search-input). */
-.box-search-ride .search-input {
-  cursor: pointer; color: #0E0E0E; font-weight: 600;
-  font-size: 16px; line-height: 26px; min-height: 30px; padding: 2px 0;
-}
-.box-search-ride .search-input::placeholder { color: #b6bbc4; font-weight: 500; }
-/* Visible focus: the inputs are border-less by design, so the active field
-   highlights its whole row instead (focus would otherwise be invisible). */
-.box-search-ride .search-item { border-radius: 14px; transition: background .12s; }
-.box-search-ride .search-item:not(.search-button):focus-within { background: #f6f6f7; }
-.box-search-ride .search-input:focus,
-.box-search-ride .search-input:focus-visible { outline: none; }
-/* subtle dividers between the input fields (desktop pill only; the grid layout
-   below removes these since gaps separate the cells instead) */
-.box-search-ride .search-from,
-.box-search-ride .search-to,
-.box-search-ride .search-time { border-left: 1px solid #eceef1; }
 
 /* Shared dropdown panel */
 .mm-dropdown {
@@ -229,21 +204,6 @@ img {
 .mm-daypicker .rdp-today:not(.rdp-selected) .rdp-day_button { font-weight: 800; box-shadow: inset 0 0 0 1.5px #0E0E0E; }
 .mm-daypicker .rdp-outside .rdp-day_button, .mm-daypicker .rdp-disabled .rdp-day_button { color: #cfd2d8; }
 
-/* Meet & Greet — themed checkbox */
-.mm-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; user-select: none; }
-.mm-check input { position: absolute; opacity: 0; width: 0; height: 0; }
-.mm-check .mm-check-box {
-  width: 20px; height: 20px; border: 1.5px solid #d0d3d9; border-radius: 6px;
-  display: inline-flex; align-items: center; justify-content: center; transition: .12s; flex: 0 0 auto;
-}
-.mm-check input:checked + .mm-check-box { background: #0E0E0E; border-color: #0E0E0E; }
-.mm-check input:checked + .mm-check-box::after {
-  content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
-  transform: rotate(45deg); margin-top: -2px;
-}
-.mm-check input:focus-visible + .mm-check-box { box-shadow: 0 0 0 3px rgba(14,14,14,.15); }
-.mm-check .mm-check-label { font-size: 13px; font-weight: 600; color: #181A1F; }
-
 /* Remove the template's orange curved decoration behind the fleet + services. */
 .bg-our-fleet, .bg-our-service { background-image: none !important; }
 
@@ -277,15 +237,6 @@ img {
 .mm-loc-title { font-size: 14px; font-weight: 500; color: #181A1F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mm-loc-sub { font-size: 12px; color: #9aa1ac; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mm-loc-empty { padding: 10px 12px; font-size: 13px; color: #9aa1ac; }
-/* comfortable click targets for the whole field */
-.box-search-ride .search-item { cursor: pointer; }
-.box-search-ride .search-item .search-inputs { cursor: text; }
-.mm-search-error {
-  position: absolute; bottom: -34px; left: 24px; color: #fff;
-  background: rgba(192,57,43,.96); padding: 5px 14px; border-radius: 20px;
-  font-size: 12.5px; font-weight: 600;
-}
-
 /* booking Details step: auth gate + passenger panel */
 .mm-auth-gate { border: 1px solid #ececec; border-radius: 14px; overflow: hidden; }
 .mm-auth-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; background: #fff; border-bottom: 1px solid #f0f0f0; cursor: pointer; }
@@ -326,158 +277,209 @@ img {
 .mm-ride-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 @media (max-width: 820px){ .mm-acct { grid-template-columns: 1fr; } }
 
-/* Trip-type tabs docked directly above the hero search card. The dock takes over
-   the card's own absolute position and the card flows inside it, so the tabs sit
-   in the gap above the card with no hardcoded offset. */
+/* ===================================================================== *
+ * Hero booking widget — dark glass panel (.blw)                          *
+ *                                                                        *
+ * Visual language: frosted near-black panel over the hero photo, pill    *
+ * trip-type tabs, one row of label-over-value fields with hairline       *
+ * dividers, an ink CTA, and dark dropdowns (suggestions / calendar /     *
+ * time list). Geist for all widget text.                                 *
+ * ===================================================================== */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist/Geist-Regular.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist/Geist-Medium.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/geist/Geist-SemiBold.woff2") format("woff2");
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+
+.blw, .blw input, .blw button {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+/* Dock position: in the hero's desktop flex flow; bottom-overlaid < 1200px. */
 .mm-search-dock { position: relative; }
 @media (min-width: 1200px) {
   .mm-search-dock {
     position: absolute; bottom: 104px; left: 0; right: 0;
-    /* Widened from the template's 1170px so the single-row card has room to give
-       the pickup/drop-off fields the most width possible. The dock is full-bleed
-       inside the (full-width) hero banner, so this only changes its centred width
-       — it does not require the marketing hero wrapper to change. */
-    margin: auto; max-width: 1280px; z-index: 3;
-  }
-  .mm-search-dock .box-search-ride {
-    position: static; bottom: auto; left: auto; right: auto;
-    margin: 0; max-width: none; width: 100%;
+    margin: auto; max-width: 1060px; z-index: 3;
   }
 }
-.mm-trip-tabs {
-  display: inline-flex; gap: 4px; margin-bottom: 12px;
-  background: #ffffff; border-radius: 10px; padding: 4px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+
+/* Trip-type pills */
+.blw-tabs {
+  display: inline-flex; gap: 4px; margin-bottom: 14px; padding: 4px;
+  background: rgba(15, 19, 25, 0.55); border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.blw-tab {
+  border: 0; cursor: pointer; padding: 8px 18px; border-radius: 999px;
+  background: transparent; color: rgba(255, 255, 255, 0.85);
+  font-size: 14px; font-weight: 500; line-height: 20px; white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.blw-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.blw-tab.on { background: #fff; color: #0f1319; font-weight: 600; }
+
+/* The panel */
+.blw-panel {
+  display: flex; align-items: stretch; gap: 10px; padding: 10px;
+  background:
+    radial-gradient(circle at 80% 160%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 70%),
+    rgba(15, 19, 25, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 18px;
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 24px 64px rgba(6, 10, 13, 0.45);
+}
+.blw-fields { display: flex; flex: 1 1 auto; min-width: 0; }
+
+/* One field: small grey label above a white value, whole cell clickable. */
+.blw-field {
+  position: relative; display: flex; flex-direction: column; justify-content: center;
+  min-width: 0; padding: 9px 16px; border-radius: 12px; cursor: pointer;
+  transition: background .15s;
+}
+.blw-field:hover, .blw-field:focus-within { background: rgba(255, 255, 255, 0.09); }
+.blw-loc { flex: 1.45 1 0; }
+.blw-date { flex: 1.1 0 auto; }
+.blw-fields > .blw-field:last-child { flex: 0 0 auto; min-width: 128px; }
+/* hairline dividers between fields (hidden while a neighbour is highlighted) */
+.blw-fields > .blw-field + .blw-field::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+}
+.blw-label {
+  display: block; font-size: 12px; line-height: 16px; font-weight: 400;
+  color: #aeaeae; margin-bottom: 1px; white-space: nowrap;
+}
+.blw-input, .blw-value {
+  display: block; width: 100%; border: 0; background: transparent; padding: 0;
+  color: #fff; font-size: 15px; line-height: 22px; font-weight: 500; text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.blw-input:focus, .blw-input:focus-visible { outline: none; }
+.blw-input::placeholder { color: rgba(255, 255, 255, 0.45); font-weight: 400; }
+.blw-value.empty { color: rgba(255, 255, 255, 0.45); font-weight: 400; }
+.blw-trigger {
+  display: block; width: 100%; border: 0; background: transparent;
+  padding: 0; margin: 0; text-align: left; cursor: pointer; min-width: 0;
+}
+.blw-trigger:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 4px; border-radius: 8px; }
+
+/* CTA */
+.blw-go {
+  flex: 0 0 auto; align-self: stretch; border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 12px; padding: 0 26px; cursor: pointer;
+  background: #0f1319; color: #fff; font-size: 15px; font-weight: 600; white-space: nowrap;
+  transition: background .15s, transform .1s;
+}
+.blw-go:hover:not(:disabled) { background: #000; }
+.blw-go:active:not(:disabled) { transform: scale(.985); }
+.blw-go:disabled { opacity: .7; cursor: default; }
+
+/* Footer row: Meet & Greet + validation message */
+.blw-foot { display: flex; align-items: center; gap: 14px; margin-top: 10px; min-height: 24px; flex-wrap: wrap; }
+.blw-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.blw-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.blw-check-box {
+  width: 18px; height: 18px; border: 1.5px solid rgba(255, 255, 255, 0.55); border-radius: 5px;
+  display: inline-flex; align-items: center; justify-content: center; transition: .12s; flex: 0 0 auto;
+  background: rgba(15, 19, 25, 0.4);
+}
+.blw-check input:checked + .blw-check-box { background: #fff; border-color: #fff; }
+.blw-check input:checked + .blw-check-box::after {
+  content: ""; width: 5px; height: 9px; border: solid #0f1319; border-width: 0 2px 2px 0;
+  transform: rotate(45deg); margin-top: -2px;
+}
+.blw-check input:focus-visible + .blw-check-box { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3); }
+.blw-check-label { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.9); text-shadow: 0 1px 8px rgba(0,0,0,.4); }
+.blw-error {
+  color: #fff; background: rgba(176, 32, 50, 0.95); padding: 5px 14px;
+  border-radius: 999px; font-size: 12.5px; font-weight: 500;
 }
 
-/* ===================================================================== *
- * Home search card — single horizontal row (desktop)                    *
- *                                                                       *
- * All fields sit on ONE line: date / time are kept narrow, Meet&Greet   *
- * and Search stay at their natural width, and the two address fields    *
- * flex-grow to absorb every remaining pixel — so the longest possible   *
- * pickup/drop-off value is visible on a single line. The big icon       *
- * circles are hidden on this layout (the always-visible labels already  *
- * name each field) to hand that space back to the addresses.            *
- * Tablet/mobile keep luxride's stacked, full-width layout untouched.    *
- * ===================================================================== */
-@media (min-width: 1200px) {
-  .mm-search-dock .box-search-ride {
-    display: flex;
-    flex-wrap: nowrap;          /* never spill onto a second row */
-    align-items: center;
-    gap: 12px;
-    border-radius: 28px;        /* softer card corners instead of the 100px pill */
-    padding: 16px 22px;
-  }
-  /* Reclaim the 52px icon circles for the address fields on the one-row layout. */
-  .mm-search-dock .box-search-ride .search-item .search-icon { display: none; }
-
-  .mm-search-dock .box-search-ride .search-item {
-    width: auto; min-width: 0; max-width: none; padding: 6px 12px;
-  }
-  /* Compact fields — fixed, tidy widths (override the template's wide min-widths).
-     Date fits the "Fri, Oct 31, 2026" display; time fits "10:30 AM". */
-  .mm-search-dock .box-search-ride .search-date  { flex: 0 0 auto; width: 150px; min-width: 0; max-width: none; }
-  .mm-search-dock .box-search-ride .search-time  { flex: 0 0 auto; width: 112px; min-width: 0; max-width: none; }
-  .mm-search-dock .box-search-ride .search-item.search-hours { flex: 0 0 auto; width: 118px; min-width: 0; }
-  /* Address fields grow equally to take the most space on the row. */
-  .mm-search-dock .box-search-ride .search-from,
-  .mm-search-dock .box-search-ride .search-to   { flex: 1 1 0; min-width: 0; }
-  /* Meet & Greet + Search stay compact at their natural content width. */
-  .mm-search-dock .box-search-ride .search-meet { flex: 0 0 auto; }
-  .mm-search-dock .box-search-ride .search-button {
-    flex: 0 0 auto; min-width: 0; max-width: none;
-  }
-  .mm-search-dock .box-search-ride .search-button .btn-search { width: auto; white-space: nowrap; }
-  /* No stray left-dividers now that gaps separate each field. */
-  .mm-search-dock .box-search-ride .search-from,
-  .mm-search-dock .box-search-ride .search-to,
-  .mm-search-dock .box-search-ride .search-time { border-left: 0; }
-  /* Keep the validation toast clear of the row. */
-  .mm-search-dock .box-search-ride .mm-search-error { bottom: -30px; left: 26px; }
+/* Dark dropdown panels (suggestions / calendar / time / duration) */
+.blw-pop {
+  position: absolute; top: calc(100% + 10px); left: 0; z-index: 140;
+  background: #15181d; color: #fff; border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); padding: 6px;
 }
+.blw-loc-pop { min-width: min(360px, 86vw); max-height: 320px; overflow-y: auto; }
+.blw-loc-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 10px; cursor: pointer;
+}
+.blw-loc-item.on { background: rgba(255, 255, 255, 0.1); }
+.blw-loc-item img { width: 20px; height: 20px; object-fit: contain; flex: 0 0 auto; filter: invert(1) brightness(1.6); }
+.blw-loc-text { display: flex; flex-direction: column; min-width: 0; }
+.blw-loc-title { font-size: 14.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blw-loc-sub { font-size: 12.5px; color: #aeaeae; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blw-loc-empty { padding: 12px 14px; font-size: 13px; color: #aeaeae; }
 
-/* ===================================================================== *
- * Home search dock — overlaid ON the hero on tablet & phone too.        *
- *                                                                       *
- * The luxride template drops the dock into normal flow BELOW the hero   *
- * on < 1200px (it sets .box-search-ride to position:relative inside its *
- * max-width:1199.98px query). We re-assert the overlay so the form      *
- * always sits over the banner image — anchored near the bottom of the   *
- * hero, inside a legible white card, with the fields stacked            *
- * full-width. The hero itself is already .banner-home1-relative and     *
- * tall enough (height:calc(100vh-66px); min 520px) to hold the card, so *
- * no change to the marketing-owned hero wrapper/height is required.     *
- * ===================================================================== */
+.blw-list { min-width: 160px; max-height: 280px; overflow-y: auto; }
+.blw-list::-webkit-scrollbar { width: 8px; }
+.blw-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 8px; }
+.blw-list-item { padding: 9px 16px; border-radius: 9px; cursor: pointer; font-size: 14px; font-weight: 500; }
+.blw-list-item:hover { background: rgba(255, 255, 255, 0.1); }
+.blw-list-item.sel { background: #fff; color: #0f1319; font-weight: 600; }
+
+/* Dark calendar (react-day-picker) — past days disabled, today ringed. */
+.blw-cal { padding: 10px 12px 12px; }
+.blw-cal .rdp-root {
+  --rdp-accent-color: #fff;
+  --rdp-accent-background-color: rgba(255, 255, 255, 0.1);
+  --rdp-today-color: #fff;
+  --rdp-day-width: 40px; --rdp-day-height: 40px;
+  --rdp-day_button-width: 36px; --rdp-day_button-height: 36px;
+  --rdp-day_button-border-radius: 10px;
+  margin: 0;
+}
+.blw-cal .rdp-month_caption, .blw-cal .rdp-caption_label { font-size: 15px; font-weight: 600; color: #fff; }
+.blw-cal .rdp-weekday { color: #8f9499; font-size: 11px; text-transform: uppercase; font-weight: 500; }
+.blw-cal .rdp-chevron { fill: #fff; }
+.blw-cal .rdp-button_previous:hover, .blw-cal .rdp-button_next:hover { background: rgba(255, 255, 255, 0.1); border-radius: 9px; }
+.blw-cal .rdp-day_button { border-radius: 10px; color: #fff; font-weight: 500; }
+.blw-cal .rdp-day_button:hover:not([disabled]) { background: rgba(255, 255, 255, 0.12); }
+.blw-cal .rdp-selected .rdp-day_button { background: #fff !important; color: #0f1319 !important; border-color: #fff !important; }
+.blw-cal .rdp-today:not(.rdp-selected) .rdp-day_button { box-shadow: inset 0 0 0 1.5px #fff; }
+.blw-cal .rdp-outside .rdp-day_button, .blw-cal .rdp-disabled .rdp-day_button { color: rgba(255, 255, 255, 0.28); }
+
+/* -------- stacked layout on tablet & phone, overlaid on the hero -------- */
 @media (max-width: 1199.98px) {
-  /* Overlay the whole dock (trip tabs + card) on the hero, BOTTOM-ANCHORED so
-     the compact card hugs the hero floor and the hero headline stays clearly
-     visible ABOVE it (375 / 430 / 768px). Side gutters keep it off the edges. */
   .mm-search-dock {
     position: absolute;
-    left: 16px; right: 16px; bottom: 44px;
+    left: 16px; right: 16px; bottom: 36px;
     margin: 0 auto;
-    max-width: 560px;        /* keeps the stacked card tidy on tablet/large phone */
-    z-index: 5;              /* above the banner image + overlay + title */
+    max-width: 560px;
+    z-index: 5;
   }
-  /* Card: near-solid white so every input reads clearly over the photo.
-     Compact — trimmed padding + tight gaps remove excess vertical space so the
-     whole card is short enough to sit below the hero title. */
-  .mm-search-dock .box-search-ride {
-    position: static; bottom: auto; left: auto; right: auto; margin: 0;
-    width: 100%; max-width: none;
-    flex-direction: column; align-items: stretch;
-    gap: 6px;
-    background: rgba(255, 255, 255, 0.97);
-    border-radius: 16px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-    padding: 12px 14px 14px;
+  .blw-tabs { display: flex; margin-bottom: 10px; }
+  .blw-tab { flex: 1 1 0; padding: 8px 10px; text-align: center; }
+  .blw-panel { flex-direction: column; gap: 2px; padding: 8px; }
+  .blw-fields { flex-direction: column; }
+  .blw-field { padding: 8px 14px; }
+  /* horizontal hairlines between stacked fields */
+  .blw-fields > .blw-field + .blw-field::before {
+    top: 0; bottom: auto; left: 14px; right: 14px;
+    border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.16);
   }
-  /* Compact stacked fields: trimmer vertical padding + smaller icons shave the
-     card height while the inputs stay fully readable (16px, full-width, labels
-     kept). The gaps above replace the template's 20px bottom margin. */
-  .mm-search-dock .box-search-ride .search-item {
-    margin-bottom: 0;
-    padding: 6px 12px;
-    background: #f6f6f7;
-    border-radius: 10px;
-  }
-  .mm-search-dock .box-search-ride .search-item .search-icon {
-    max-width: 34px; min-width: 34px; margin-right: 9px;
-  }
-  .mm-search-dock .box-search-ride .search-item .search-icon .item-icon {
-    width: 34px; height: 34px;
-  }
-  /* Tighten the label/input stack inside each field — still 16px and readable,
-     just with less line spacing so the fields are shorter. */
-  .mm-search-dock .box-search-ride .search-item .search-inputs label {
-    font-size: 11px; margin-bottom: 1px;
-  }
-  .mm-search-dock .box-search-ride .search-input {
-    font-size: 16px; line-height: 22px; min-height: 24px; padding: 1px 0;
-  }
-  /* Slimmer trip-type tabs sitting just above the card. */
-  .mm-search-dock .mm-trip-tabs {
-    margin-bottom: 8px; padding: 3px;
-  }
-  /* Meet & Greet + Search sit flush (no grey pill) — the button goes
-     full-width with a tighter but still comfortable 44px touch height. */
-  .mm-search-dock .box-search-ride .search-item.search-meet {
-    background: transparent; padding: 2px 4px;
-  }
-  .mm-search-dock .box-search-ride .search-item.search-button {
-    background: transparent; padding: 0;
-  }
-  .mm-search-dock .box-search-ride .search-item.search-button .btn-search {
-    width: 100%; border-radius: 12px; min-height: 44px;
-  }
-  /* The desktop toast is absolutely pinned below the row; in the stacked card
-     flow it instead reads centred under the fields. */
-  .mm-search-dock .box-search-ride .mm-search-error {
-    position: static; margin-top: 2px; text-align: center;
-    bottom: auto; left: auto; right: auto;
-  }
+  .blw-fields > .blw-field:last-child { min-width: 0; }
+  /* 16px inputs stop mobile Safari zooming on focus */
+  .blw-input, .blw-value { font-size: 16px; }
+  .blw-go { min-height: 48px; margin-top: 6px; }
+  .blw-pop { left: 0; right: 0; }
+  .blw-loc-pop { min-width: 0; max-height: 260px; }
+  .blw-cal { overflow-x: auto; }
+  .blw-foot { justify-content: center; }
 }
 
 /* Keep desktop content in one flow: wrapping headlines reserve their full
@@ -515,7 +517,7 @@ img {
   }
 }
 
-/* Vehicle-page booking uses the same card, but belongs in the section's flow.
+/* Vehicle-page booking uses the same widget, but belongs in the section's flow.
    Hero overlay offsets otherwise pull the entire dock out of this section. */
 #book-vehicle .mm-search-dock {
   position: relative;
@@ -524,12 +526,6 @@ img {
   max-width: none;
   margin: 0;
 }
-#book-vehicle .mm-search-dock .mm-search-error {
-  position: static;
-  flex-basis: 100%;
-  margin-top: 8px;
-}
-#book-vehicle .box-search-ride { flex-wrap: wrap; }
 
 /* Stretch carousel slides and grid columns to their row's tallest card. */
 .bg-our-fleet .swiper-wrapper { align-items: stretch; }

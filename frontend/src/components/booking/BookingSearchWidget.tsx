@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { DayPicker as ReactDayPicker } from "react-day-picker";
+import "react-day-picker/style.css";
 import { quoteService, quoteRequest } from "@/lib/api/quote.service";
-import Image from "next/image";
-import DayPicker from "@/components/ui/DayPicker";
-import TimePicker from "@/components/ui/TimePicker";
 import { useBookingStore } from "@/lib/booking/store";
 import {
   loadGoogleMaps,
@@ -22,38 +21,19 @@ const PIN_ICON = "/assets/imgs/page/homepage1/building.png";
 const MIN_QUERY = 3;
 
 /**
- * A typeable address field backed by Google Places autocomplete.
+ * Google Places suggestions for a free-text address query.
  *
- * Free text is always allowed — the backend geocodes whatever is submitted, so
- * the suggestions only save typing. Keystrokes are debounced and grouped under
- * one session token for billing; if Places can't load (missing/blocked key) the
- * field degrades to a plain text input with no dropdown.
+ * Shared by the dark hero widget's location fields and the legacy AddressField
+ * (TripEditor). Keystrokes are debounced and grouped under one session token
+ * for billing; if Places can't load (missing/blocked key) the caller's field
+ * degrades to a plain text input with no dropdown.
  */
-export function AddressField({ label, value, onChange, placeholder }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
+function usePlacesSuggestions(value: string, open: boolean) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
   const tokenRef = useRef<unknown>(null);
   const [mapsReady, setMapsReady] = useState(false);
   const reqRef = useRef(0); // guards against out-of-order responses
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-    };
-  }, []);
 
   // Start the shared loader before the first keystroke. Readiness is a search
   // dependency so a query entered while Maps was cold is automatically replayed.
@@ -105,11 +85,46 @@ export function AddressField({ label, value, onChange, placeholder }: {
     };
   }, [value, open, mapsReady]);
 
+  // A selection ends the Places billing session.
+  const endSession = useCallback(() => { tokenRef.current = null; }, []);
+
+  return { suggestions, loading, endSession, clearSuggestions: () => setSuggestions([]) };
+}
+
+/** Close a dropdown when clicking anywhere outside `ref`. */
+function useOutsideClose(ref: React.RefObject<HTMLElement | null>, close: () => void) {
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) close();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [ref, close]);
+}
+
+/**
+ * Legacy light-theme address field (kept for TripEditor on the booking flow).
+ * Free text is always allowed — the backend geocodes whatever is submitted, so
+ * the suggestions only save typing.
+ */
+export function AddressField({ label, value, onChange, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { suggestions, loading, endSession, clearSuggestions } = usePlacesSuggestions(value, open);
+
+  useOutsideClose(ref, useCallback(() => setOpen(false), []));
+
   const pick = (s: PlaceSuggestion) => {
     onChange(s.full);
     setOpen(false);
-    setSuggestions([]);
-    tokenRef.current = null; // a selection ends the billing session
+    clearSuggestions();
+    endSession();
   };
 
   return (
@@ -152,15 +167,228 @@ export function AddressField({ label, value, onChange, placeholder }: {
   );
 }
 
+/* ================= dark hero widget fields ================= */
+
+/**
+ * Typeable location field with a keyboard-navigable suggestion dropdown
+ * (ArrowUp/Down to move, Enter to select, Escape to close).
+ */
+function LocationField({ label, value, onChange, placeholder }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+  const { suggestions, loading, endSession, clearSuggestions } = usePlacesSuggestions(value, open);
+
+  useOutsideClose(ref, useCallback(() => setOpen(false), []));
+
+  // New results restart keyboard navigation from the top.
+  useEffect(() => { setActive(-1); }, [suggestions]);
+
+  const pick = (s: PlaceSuggestion) => {
+    onChange(s.full);
+    setOpen(false);
+    clearSuggestions();
+    endSession();
+  };
+
+  const listOpen = open && value.trim().length >= MIN_QUERY;
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") { setOpen(false); return; }
+    if (!listOpen || !suggestions.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    } else if (e.key === "Enter" && active >= 0) {
+      e.preventDefault();
+      pick(suggestions[active]);
+    }
+  };
+
+  return (
+    <div className="blw-field blw-loc" ref={ref} onClick={() => inputRef.current?.focus()}>
+      <span className="blw-label">{label}</span>
+      <input
+        ref={inputRef}
+        className="blw-input"
+        type="text"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={listOpen}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+      />
+      {listOpen && (
+        <div className="blw-pop blw-loc-pop" id={listId} role="listbox">
+          {suggestions.length ? (
+            suggestions.map((s, i) => (
+              <div
+                key={s.id}
+                role="option"
+                aria-selected={i === active}
+                className={`blw-loc-item${i === active ? " on" : ""}`}
+                onMouseEnter={() => setActive(i)}
+                onMouseDown={(e) => { e.preventDefault(); pick(s); }}
+              >
+                <img src={s.isAirport ? PLANE_ICON : PIN_ICON} alt="" />
+                <span className="blw-loc-text">
+                  <span className="blw-loc-title">{s.primary}</span>
+                  {s.secondary && <span className="blw-loc-sub">{s.secondary}</span>}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="blw-loc-empty">
+              {loading ? "Searching…" : "No matches — you can enter any address."}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// "YYYY-MM-DD" <-> local Date, without the UTC shift `new Date(string)` causes.
+function parseYmd(value: string): Date | undefined {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return undefined;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+function toYmd(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Date field opening an inline dark calendar (past days disabled, today ringed). */
+function DateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useOutsideClose(ref, useCallback(() => setOpen(false), []));
+
+  const selected = value ? parseYmd(value) : undefined;
+  const display = selected
+    ? selected.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (
+    <div className="blw-field blw-date" ref={ref}>
+      <button
+        type="button"
+        className="blw-trigger"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="blw-label">Date</span>
+        <span className={`blw-value${display ? "" : " empty"}`}>{display || "Select date"}</span>
+      </button>
+      {open && (
+        <div className="blw-pop blw-cal" role="dialog" aria-label="Choose a date">
+          <ReactDayPicker
+            mode="single"
+            selected={selected}
+            defaultMonth={selected ?? today}
+            disabled={{ before: today }}
+            onSelect={(d) => {
+              if (d) { onChange(toYmd(d)); setOpen(false); }
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TIMES: string[] = [];
+for (let h = 0; h < 24; h++) {
+  for (const m of [0, 15, 30, 45]) {
+    const hour = h % 12 || 12;
+    const ampm = h < 12 ? "AM" : "PM";
+    TIMES.push(`${hour}:${String(m).padStart(2, "0")} ${ampm}`);
+  }
+}
+
+/** A scrollable dark list dropdown (used for pickup time and hourly duration). */
+function ListField({ label, value, display, placeholder, options, onPick }: {
+  label: string;
+  value: string;
+  display: string;
+  placeholder: string;
+  options: { key: string; text: string }[];
+  onPick: (key: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  useOutsideClose(ref, useCallback(() => setOpen(false), []));
+
+  // Open with the current choice in view.
+  useEffect(() => {
+    if (open) {
+      listRef.current?.querySelector(".sel")?.scrollIntoView({ block: "center" });
+    }
+  }, [open]);
+
+  return (
+    <div className="blw-field" ref={ref}>
+      <button
+        type="button"
+        className="blw-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="blw-label">{label}</span>
+        <span className={`blw-value${display ? "" : " empty"}`}>{display || placeholder}</span>
+      </button>
+      {open && (
+        <div className="blw-pop blw-list" role="listbox" ref={listRef}>
+          {options.map((o) => (
+            <div
+              key={o.key}
+              role="option"
+              aria-selected={o.key === value}
+              className={`blw-list-item${o.key === value ? " sel" : ""}`}
+              onMouseDown={(e) => { e.preventDefault(); onPick(o.key); setOpen(false); }}
+            >
+              {o.text}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ================= the widget ================= */
+
 type TripType = "transfer" | "hourly" | "city";
 
 const TABS: [TripType, string][] = [
-  ["transfer", "Transfer"],
+  ["transfer", "One way"],
   ["hourly", "By the hour"],
-  ["city", "City to City"],
+  ["city", "City to city"],
 ];
 
-const HOUR_OPTIONS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// Hourly hire runs 3–24 hours; 3 is the business minimum.
+const HOUR_OPTIONS = Array.from({ length: 22 }, (_, i) => i + 3);
 
 export default function BookingSearchWidget({ preselectedVehicleId = null }: { preselectedVehicleId?: number | null }) {
   const router = useRouter();
@@ -177,11 +405,6 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const [meetGreet, setMeetGreet] = useState(false);
   const [error, setError] = useState("");
 
-  // City-to-city is always selectable: it is now a free-form origin→destination
-  // trip (pickup + drop-off addresses), priced server-side on the measured
-  // distance against each vehicle's intercity rate card.
-  const tabs = TABS;
-
   const changeTab = (value: TripType) => {
     setError("");
     setTripType(value);
@@ -193,8 +416,8 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
       setError("Please fill in date, time and pickup.");
       return;
     }
-    // A transfer and a city-to-city trip both need a drop-off address; only an
-    // hourly hire omits it.
+    // A one-way transfer and a city-to-city trip both need a drop-off address;
+    // only an hourly hire omits it.
     if (tripType === "transfer" || tripType === "city") {
       if (!to.trim()) {
         setError(
@@ -226,94 +449,71 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   };
 
   return (
-    <div className="mm-search-dock">
-      {/* Segmented control, docked directly above the search card. */}
-      <div className="mm-trip-tabs">
-        {tabs.map(([value, label]) => (
+    <div className="mm-search-dock blw">
+      <div className="blw-tabs" role="tablist" aria-label="Trip type">
+        {TABS.map(([value, label]) => (
           <button
             key={value}
             type="button"
+            role="tab"
+            aria-selected={tripType === value}
+            className={`blw-tab${tripType === value ? " on" : ""}`}
             onClick={() => changeTab(value)}
-            style={{
-              padding: "8px 18px", borderRadius: 7, fontSize: 14, fontWeight: 600,
-              cursor: "pointer", border: "none", transition: "all .15s",
-              background: tripType === value ? "#0E0E0E" : "transparent",
-              color: tripType === value ? "#fff" : "#4a5568",
-              boxShadow: tripType === value ? "0 1px 3px rgba(0,0,0,.18)" : "none",
-            }}
           >
             {label}
           </button>
         ))}
       </div>
 
-      <div className="box-search-ride">
-        <div className="search-item search-date">
-          <div className="search-icon"><span className="item-icon icon-date" /></div>
-          <div className="search-inputs">
-            <label>Date</label>
-            <DayPicker value={date} onChange={setDate} placeholder="Select date" />
-          </div>
+      <div className="blw-panel">
+        <div className="blw-fields">
+          <LocationField
+            label="Pickup location"
+            value={from}
+            onChange={setFrom}
+            placeholder="Address, airport, hotel…"
+          />
+          {tripType === "hourly" ? (
+            <ListField
+              label="Duration"
+              value={hours}
+              display={`${hours} hours`}
+              placeholder="Select duration"
+              options={HOUR_OPTIONS.map((h) => ({ key: String(h), text: `${h} hours` }))}
+              onPick={setHours}
+            />
+          ) : (
+            <LocationField
+              label="Drop-off location"
+              value={to}
+              onChange={setTo}
+              placeholder="Address, airport, hotel…"
+            />
+          )}
+          <DateField value={date} onChange={setDate} />
+          <ListField
+            label="Pickup time"
+            value={time}
+            display={time}
+            placeholder="Select time"
+            options={TIMES.map((t) => ({ key: t, text: t }))}
+            onPick={setTime}
+          />
         </div>
+        <button className="blw-go" type="button" disabled={busy} aria-busy={busy} onClick={handleSearch}>
+          {busy ? "Finding your cars…" : "View options"}
+        </button>
+      </div>
 
-        <div className="search-item search-time">
-          <div className="search-icon"><span className="item-icon icon-time" /></div>
-          <div className="search-inputs">
-            <label>Time</label>
-            <TimePicker value={time} onChange={setTime} />
-          </div>
-        </div>
-
-        <div className="search-item search-from">
-          <div className="search-icon"><span className="item-icon icon-from" /></div>
-          <AddressField label="From" value={from} onChange={setFrom} placeholder="Pickup address" />
-        </div>
-
-        {(tripType === "transfer" || tripType === "city") && (
-          <div className="search-item search-to">
-            <div className="search-icon"><span className="item-icon icon-to" /></div>
-            <AddressField label="To" value={to} onChange={setTo} placeholder="Drop-off address" />
-          </div>
-        )}
-        {tripType === "hourly" && (
-          <div className="search-item search-to search-hours">
-            <div className="search-icon"><span className="item-icon icon-time" /></div>
-            <div className="search-inputs">
-              <label>Hours</label>
-              <select
-                className="search-input"
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                style={{ border: "none", background: "transparent", width: "100%", cursor: "pointer" }}
-              >
-                {HOUR_OPTIONS.map((h) => (
-                  <option key={h} value={h}>{h} hour{h > 1 ? "s" : ""}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* Meet & Greet applies to every point-to-point trip (transfer or
-            city-to-city); only an hourly hire has no fixed drop-off to meet at. */}
+      <div className="blw-foot">
         {tripType !== "hourly" && (
-          <div className="search-item search-meet">
-            <label className="mm-check">
-              <input type="checkbox" checked={meetGreet} onChange={(e) => setMeetGreet(e.target.checked)} />
-              <span className="mm-check-box" />
-              <span className="mm-check-label">Meet &amp; Greet</span>
-            </label>
-          </div>
+          <label className="blw-check">
+            <input type="checkbox" checked={meetGreet} onChange={(e) => setMeetGreet(e.target.checked)} />
+            <span className="blw-check-box" />
+            <span className="blw-check-label">Meet &amp; Greet at pickup</span>
+          </label>
         )}
-
-        <div className="search-item search-button">
-          <button className="btn btn-search" type="button" disabled={busy} aria-busy={busy} onClick={handleSearch}>
-            <Image src="/assets/imgs/template/icons/search.svg" alt="" width={16} height={16} />
-            {busy ? "Finding your cars…" : "Search"}
-          </button>
-        </div>
-
-        {error && <div role="alert" className="mm-search-error">{error}</div>}
+        {error && <div role="alert" className="blw-error">{error}</div>}
       </div>
     </div>
   );
