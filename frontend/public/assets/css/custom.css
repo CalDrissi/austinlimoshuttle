@@ -407,9 +407,10 @@ img {
   border-radius: 999px; font-size: 12.5px; font-weight: 500;
 }
 
-/* Dark dropdown panels (suggestions / calendar / time / duration) */
+/* Dark dropdown panels (suggestions / calendar / time / duration).
+   The dock hugs the hero's bottom edge, so panels open UPWARD to stay in view. */
 .blw-pop {
-  position: absolute; top: calc(100% + 10px); left: 0; z-index: 140;
+  position: absolute; bottom: calc(100% + 12px); left: 0; z-index: 140;
   background: #15181d; color: #fff; border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); padding: 6px;
 }
@@ -526,6 +527,8 @@ img {
   max-width: none;
   margin: 0;
 }
+/* In-flow embed isn't bottom-anchored, so dropdowns open downward here. */
+#book-vehicle .blw-pop { top: calc(100% + 12px); bottom: auto; }
 
 /* Stretch carousel slides and grid columns to their row's tallest card. */
 .bg-our-fleet .swiper-wrapper { align-items: stretch; }
