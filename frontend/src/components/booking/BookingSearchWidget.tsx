@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useId } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { DayPicker as ReactDayPicker } from "react-day-picker";
@@ -23,10 +23,10 @@ const MIN_QUERY = 3;
 /**
  * Google Places suggestions for a free-text address query.
  *
- * Shared by the dark hero widget's location fields and the legacy AddressField
- * (TripEditor). Keystrokes are debounced and grouped under one session token
- * for billing; if Places can't load (missing/blocked key) the caller's field
- * degrades to a plain text input with no dropdown.
+ * Shared by the expanding hero widget and the legacy AddressField (TripEditor).
+ * Keystrokes are debounced and grouped under one session token for billing; if
+ * Places can't load (missing/blocked key) the caller's field degrades to a
+ * plain text input with no suggestions.
  */
 function usePlacesSuggestions(value: string, open: boolean) {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
@@ -91,7 +91,7 @@ function usePlacesSuggestions(value: string, open: boolean) {
   return { suggestions, loading, endSession, clearSuggestions: () => setSuggestions([]) };
 }
 
-/** Close a dropdown when clicking anywhere outside `ref`. */
+/** Close a panel when clicking anywhere outside `ref`. */
 function useOutsideClose(ref: React.RefObject<HTMLElement | null>, close: () => void) {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -167,101 +167,7 @@ export function AddressField({ label, value, onChange, placeholder }: {
   );
 }
 
-/* ================= dark hero widget fields ================= */
-
-/**
- * Typeable location field with a keyboard-navigable suggestion dropdown
- * (ArrowUp/Down to move, Enter to select, Escape to close).
- */
-function LocationField({ label, value, onChange, placeholder }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(-1);
-  const ref = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listId = useId();
-  const { suggestions, loading, endSession, clearSuggestions } = usePlacesSuggestions(value, open);
-
-  useOutsideClose(ref, useCallback(() => setOpen(false), []));
-
-  // New results restart keyboard navigation from the top.
-  useEffect(() => { setActive(-1); }, [suggestions]);
-
-  const pick = (s: PlaceSuggestion) => {
-    onChange(s.full);
-    setOpen(false);
-    clearSuggestions();
-    endSession();
-  };
-
-  const listOpen = open && value.trim().length >= MIN_QUERY;
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") { setOpen(false); return; }
-    if (!listOpen || !suggestions.length) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => (i + 1) % suggestions.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
-    } else if (e.key === "Enter" && active >= 0) {
-      e.preventDefault();
-      pick(suggestions[active]);
-    }
-  };
-
-  return (
-    <div className="blw-field blw-loc" ref={ref} onClick={() => inputRef.current?.focus()}>
-      <span className="blw-label">{label}</span>
-      <input
-        ref={inputRef}
-        className="blw-input"
-        type="text"
-        autoComplete="off"
-        role="combobox"
-        aria-expanded={listOpen}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        placeholder={placeholder}
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={onKeyDown}
-      />
-      {listOpen && (
-        <div className="blw-pop blw-loc-pop" id={listId} role="listbox">
-          {suggestions.length ? (
-            suggestions.map((s, i) => (
-              <div
-                key={s.id}
-                role="option"
-                aria-selected={i === active}
-                className={`blw-loc-item${i === active ? " on" : ""}`}
-                onMouseEnter={() => setActive(i)}
-                onMouseDown={(e) => { e.preventDefault(); pick(s); }}
-              >
-                <img src={s.isAirport ? PLANE_ICON : PIN_ICON} alt="" />
-                <span className="blw-loc-text">
-                  <span className="blw-loc-title">{s.primary}</span>
-                  {s.secondary && <span className="blw-loc-sub">{s.secondary}</span>}
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="blw-loc-empty">
-              {loading ? "Searching…" : "No matches — you can enter any address."}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+/* ================= expanding hero widget ================= */
 
 // "YYYY-MM-DD" <-> local Date, without the UTC shift `new Date(string)` causes.
 function parseYmd(value: string): Date | undefined {
@@ -274,48 +180,6 @@ function toYmd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Date field opening an inline dark calendar (past days disabled, today ringed). */
-function DateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useOutsideClose(ref, useCallback(() => setOpen(false), []));
-
-  const selected = value ? parseYmd(value) : undefined;
-  const display = selected
-    ? selected.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-    : "";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return (
-    <div className="blw-field blw-date" ref={ref}>
-      <button
-        type="button"
-        className="blw-trigger"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="blw-label">Date</span>
-        <span className={`blw-value${display ? "" : " empty"}`}>{display || "Select date"}</span>
-      </button>
-      {open && (
-        <div className="blw-pop blw-cal" role="dialog" aria-label="Choose a date">
-          <ReactDayPicker
-            mode="single"
-            selected={selected}
-            defaultMonth={selected ?? today}
-            disabled={{ before: today }}
-            onSelect={(d) => {
-              if (d) { onChange(toYmd(d)); setOpen(false); }
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 const TIMES: string[] = [];
 for (let h = 0; h < 24; h++) {
   for (const m of [0, 15, 30, 45]) {
@@ -325,61 +189,8 @@ for (let h = 0; h < 24; h++) {
   }
 }
 
-/** A scrollable dark list dropdown (used for pickup time and hourly duration). */
-function ListField({ label, value, display, placeholder, options, onPick }: {
-  label: string;
-  value: string;
-  display: string;
-  placeholder: string;
-  options: { key: string; text: string }[];
-  onPick: (key: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  useOutsideClose(ref, useCallback(() => setOpen(false), []));
-
-  // Open with the current choice in view.
-  useEffect(() => {
-    if (open) {
-      listRef.current?.querySelector(".sel")?.scrollIntoView({ block: "center" });
-    }
-  }, [open]);
-
-  return (
-    <div className="blw-field" ref={ref}>
-      <button
-        type="button"
-        className="blw-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="blw-label">{label}</span>
-        <span className={`blw-value${display ? "" : " empty"}`}>{display || placeholder}</span>
-      </button>
-      {open && (
-        <div className="blw-pop blw-list" role="listbox" ref={listRef}>
-          {options.map((o) => (
-            <div
-              key={o.key}
-              role="option"
-              aria-selected={o.key === value}
-              className={`blw-list-item${o.key === value ? " sel" : ""}`}
-              onMouseDown={(e) => { e.preventDefault(); onPick(o.key); setOpen(false); }}
-            >
-              {o.text}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ================= the widget ================= */
-
 type TripType = "transfer" | "hourly" | "city";
+type Pane = "pickup" | "dropoff" | "date" | "time" | "duration";
 
 const TABS: [TripType, string][] = [
   ["transfer", "One way"],
@@ -389,6 +200,17 @@ const TABS: [TripType, string][] = [
 
 // Hourly hire runs 3–24 hours; 3 is the business minimum.
 const HOUR_OPTIONS = Array.from({ length: 22 }, (_, i) => i + 3);
+
+/** Our mark for the expanded panel's idle state (original art). */
+function BrandMark() {
+  return (
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+      <circle cx="18" cy="15" r="8" stroke="#3b82d7" strokeWidth="2.4" />
+      <circle cx="18" cy="15" r="2.6" fill="#3b82d7" />
+      <path d="M18 23v7M11.5 32h13" stroke="#3b82d7" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export default function BookingSearchWidget({ preselectedVehicleId = null }: { preselectedVehicleId?: number | null }) {
   const router = useRouter();
@@ -405,13 +227,91 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const [meetGreet, setMeetGreet] = useState(false);
   const [error, setError] = useState("");
 
+  // Which pane the panel is expanded for. `shownPane` lags on close so the
+  // content stays rendered during the collapse animation.
+  const [pane, setPane] = useState<Pane | null>(null);
+  const lastPaneRef = useRef<Pane>("pickup");
+  if (pane) lastPaneRef.current = pane;
+  const shownPane = pane ?? lastPaneRef.current;
+
+  const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const fieldRefs = useRef<Partial<Record<Pane, HTMLDivElement | null>>>({});
+  const pickupInputRef = useRef<HTMLInputElement>(null);
+  const dropoffInputRef = useRef<HTMLInputElement>(null);
+  const timeListRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => setPane(null), []);
+  useOutsideClose(rootRef, close);
+
+  // Location suggestions follow whichever location field is active.
+  const locPane = pane === "pickup" || pane === "dropoff" ? pane : null;
+  const locValue = locPane === "pickup" ? from : locPane === "dropoff" ? to : "";
+  const { suggestions, loading, endSession, clearSuggestions } = usePlacesSuggestions(locValue, !!locPane);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  useEffect(() => { setActiveIdx(-1); }, [suggestions]);
+
+  // Align the expanded content under the active field (desktop). On stacked
+  // mobile the CSS zeroes the indent.
+  const [indent, setIndent] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const field = pane ? fieldRefs.current[pane] : null;
+      const panel = panelRef.current;
+      if (!field || !panel) return;
+      setIndent(Math.max(0, Math.round(field.getBoundingClientRect().left - panel.getBoundingClientRect().left) - 10));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [pane]);
+
+  // Keep the panel (and the focused input) visible above the on-screen
+  // keyboard when a pane opens on small screens.
+  useEffect(() => {
+    if (pane && window.matchMedia("(max-width: 1199.98px)").matches) {
+      panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [pane]);
+
+  // Scroll the chosen time into view when the list pane opens.
+  useEffect(() => {
+    if (pane === "time" || pane === "duration") {
+      timeListRef.current?.querySelector(".sel")?.scrollIntoView({ block: "center" });
+    }
+  }, [pane]);
+
   const changeTab = (value: TripType) => {
     setError("");
     setTripType(value);
+    if (pane === "dropoff" || pane === "duration") setPane(null);
+  };
+
+  const pickSuggestion = (s: PlaceSuggestion) => {
+    if (locPane === "pickup") setFrom(s.full); else setTo(s.full);
+    clearSuggestions();
+    endSession();
+    setPane(null);
+  };
+
+  const onLocKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape") { setPane(null); (e.target as HTMLInputElement).blur(); return; }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (suggestions.length) setActiveIdx((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (suggestions.length) setActiveIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIdx >= 0 && suggestions[activeIdx]) pickSuggestion(suggestions[activeIdx]);
+      else { setPane(null); (e.target as HTMLInputElement).blur(); }
+    }
   };
 
   const handleSearch = async () => {
     if (busy) return;
+    setPane(null);
     if (!from.trim() || !date || !time) {
       setError("Please fill in date, time and pickup.");
       return;
@@ -448,8 +348,153 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     finally { setBusy(false); }
   };
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const selectedDay = date ? parseYmd(date) : undefined;
+  const dateDisplay = selectedDay
+    ? selectedDay.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+    : "";
+
+  const locField = (which: "pickup" | "dropoff", label: string, value: string, set: (v: string) => void, inputRef: React.RefObject<HTMLInputElement | null>) => (
+    <div
+      className={`blw-field blw-loc${pane === which ? " live" : ""}`}
+      ref={(el) => { fieldRefs.current[which] = el; }}
+      onClick={() => inputRef.current?.focus()}
+    >
+      <span className="blw-label">{label}</span>
+      <input
+        ref={inputRef}
+        className="blw-input"
+        type="text"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={pane === which}
+        aria-autocomplete="list"
+        placeholder="Address, airport, hotel…"
+        value={value}
+        onChange={(e) => { set(e.target.value); setPane(which); }}
+        onFocus={() => setPane(which)}
+        onKeyDown={onLocKeyDown}
+      />
+    </div>
+  );
+
+  const triggerField = (which: Pane, label: string, display: string, placeholder: string, extraClass = "") => (
+    <div
+      className={`blw-field${extraClass ? ` ${extraClass}` : ""}${pane === which ? " live" : ""}`}
+      ref={(el) => { fieldRefs.current[which] = el; }}
+    >
+      <button
+        type="button"
+        className="blw-trigger"
+        aria-expanded={pane === which}
+        onClick={() => setPane(pane === which ? null : which)}
+        onKeyDown={(e) => { if (e.key === "Escape") setPane(null); }}
+      >
+        <span className="blw-label">{label}</span>
+        <span className={`blw-value${display ? "" : " empty"}`}>{display || placeholder}</span>
+      </button>
+    </div>
+  );
+
+  /* ----- expanded-area content for each pane ----- */
+
+  const locContent = () => {
+    if (locValue.trim().length < MIN_QUERY) {
+      return (
+        <div className="blw-idle">
+          <BrandMark />
+          <p className="blw-idle-line">
+            Your chauffeur, anywhere in Austin.<br />We will be there on time.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="blw-sugs" role="listbox">
+        {suggestions.length ? (
+          <>
+            {suggestions.map((s, i) => (
+              <div
+                key={s.id}
+                role="option"
+                aria-selected={i === activeIdx}
+                className={`blw-sug${i === activeIdx ? " on" : ""}`}
+                onMouseEnter={() => setActiveIdx(i)}
+                onMouseDown={(e) => { e.preventDefault(); pickSuggestion(s); }}
+              >
+                <img src={s.isAirport ? PLANE_ICON : PIN_ICON} alt="" />
+                <span className="blw-sug-text">
+                  <span className="blw-sug-title">{s.primary}</span>
+                  {s.secondary && <span className="blw-sug-sub">{s.secondary}</span>}
+                </span>
+              </div>
+            ))}
+            <div className="blw-powered">powered by Google</div>
+          </>
+        ) : (
+          <div className="blw-sug-empty">
+            {loading ? "Searching…" : "No matches — you can enter any address."}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const areaContent = () => {
+    switch (shownPane) {
+      case "pickup":
+      case "dropoff":
+        return locContent();
+      case "date":
+        return (
+          <div className="blw-cal">
+            <ReactDayPicker
+              mode="single"
+              selected={selectedDay}
+              defaultMonth={selectedDay ?? today}
+              disabled={{ before: today }}
+              onSelect={(d) => { if (d) { setDate(toYmd(d)); setPane(null); } }}
+            />
+          </div>
+        );
+      case "time":
+        return (
+          <div className="blw-list" role="listbox" ref={timeListRef}>
+            {TIMES.map((t) => (
+              <div
+                key={t}
+                role="option"
+                aria-selected={t === time}
+                className={`blw-list-item${t === time ? " sel" : ""}`}
+                onMouseDown={(e) => { e.preventDefault(); setTime(t); setPane(null); }}
+              >
+                {t}
+              </div>
+            ))}
+          </div>
+        );
+      case "duration":
+        return (
+          <div className="blw-list" role="listbox" ref={timeListRef}>
+            {HOUR_OPTIONS.map((h) => (
+              <div
+                key={h}
+                role="option"
+                aria-selected={String(h) === hours}
+                className={`blw-list-item${String(h) === hours ? " sel" : ""}`}
+                onMouseDown={(e) => { e.preventDefault(); setHours(String(h)); setPane(null); }}
+              >
+                {h} hours
+              </div>
+            ))}
+          </div>
+        );
+    }
+  };
+
   return (
-    <div className="mm-search-dock blw">
+    <div className="mm-search-dock blw" ref={rootRef}>
       <div className="blw-tabs" role="tablist" aria-label="Trip type">
         {TABS.map(([value, label]) => (
           <button
@@ -465,44 +510,29 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
         ))}
       </div>
 
-      <div className="blw-panel">
-        <div className="blw-fields">
-          <LocationField
-            label="Pickup location"
-            value={from}
-            onChange={setFrom}
-            placeholder="Address, airport, hotel…"
-          />
-          {tripType === "hourly" ? (
-            <ListField
-              label="Duration"
-              value={hours}
-              display={`${hours} hours`}
-              placeholder="Select duration"
-              options={HOUR_OPTIONS.map((h) => ({ key: String(h), text: `${h} hours` }))}
-              onPick={setHours}
-            />
-          ) : (
-            <LocationField
-              label="Drop-off location"
-              value={to}
-              onChange={setTo}
-              placeholder="Address, airport, hotel…"
-            />
-          )}
-          <DateField value={date} onChange={setDate} />
-          <ListField
-            label="Pickup time"
-            value={time}
-            display={time}
-            placeholder="Select time"
-            options={TIMES.map((t) => ({ key: t, text: t }))}
-            onPick={setTime}
-          />
+      <div className={`blw-panel${pane ? " open" : ""}`} ref={panelRef}>
+        <div className="blw-bar">
+          {locField("pickup", "Pickup location", from, setFrom, pickupInputRef)}
+          {tripType === "hourly"
+            ? triggerField("duration", "Duration", `${hours} hours`, "Select duration")
+            : locField("dropoff", "Drop-off location", to, setTo, dropoffInputRef)}
+          <div className="blw-sched">
+            {triggerField("date", "Date", dateDisplay, "Select date")}
+            {triggerField("time", "Pickup time", time, "Select time")}
+          </div>
+          <button className="blw-go" type="button" disabled={busy} aria-busy={busy} onClick={handleSearch}>
+            {busy ? "Finding your cars…" : "View options"}
+          </button>
         </div>
-        <button className="blw-go" type="button" disabled={busy} aria-busy={busy} onClick={handleSearch}>
-          {busy ? "Finding your cars…" : "View options"}
-        </button>
+
+        <div className={`blw-expand${pane ? " open" : ""}`} aria-hidden={!pane}>
+          <div className="blw-expand-clip">
+            <div className="blw-area" style={{ "--blw-indent": `${indent}px` } as React.CSSProperties}>
+              <button type="button" className="blw-close" aria-label="Close" onClick={close}>✕</button>
+              <div className="blw-area-inner">{areaContent()}</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="blw-foot">
