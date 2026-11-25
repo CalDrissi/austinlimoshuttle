@@ -898,7 +898,9 @@ img {
     scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
   }
   .blv-grid::-webkit-scrollbar { display: none; }
-  .blv-card { flex: 0 0 80%; scroll-snap-align: center; }
+  /* min-width:0 stops the intrinsic image width from inflating the flex item */
+  .blv-card { flex: 0 0 80%; max-width: 80%; min-width: 0; scroll-snap-align: center; }
+  .blv-card-media { width: 100%; }
   .blv-pills { justify-content: center; }
   .blv-pill b { max-width: 120px; }
 }
