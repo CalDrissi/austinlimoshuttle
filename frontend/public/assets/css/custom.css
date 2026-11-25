@@ -711,26 +711,32 @@ img {
 .mm-flow h2, .mm-flow h3, .mm-flow h4, .mm-flow h5 { color: #0f1319; }
 .mm-flow .heading-24-medium { font-weight: 600; letter-spacing: -0.01em; }
 
-/* step bar: clean numbered pills */
-.mm-flow .box-booking-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
-.mm-flow .box-tab-step {
+/* step bar: clean numbered pills. Selectors mirror the template's full chain
+   (.box-booking-tabs .item-tab .box-tab-step …) so these rules out-specify
+   luxride's sizing/icon rules. */
+.mm-flow .box-booking-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin: 0; }
+.mm-flow .box-booking-tabs .item-tab { width: auto; padding: 0; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step {
   display: flex; align-items: center; gap: 10px;
+  width: auto; min-width: 0; height: auto; min-height: 0;
   border: 1px solid #e3e7eb; border-radius: 999px; padding: 9px 18px;
   background: #fff; transition: border-color .15s, background .15s;
 }
-.mm-flow .box-tab-step .icon-tab { display: flex; align-items: center; gap: 8px; }
-.mm-flow .box-tab-step .icon-book { display: none; }
-.mm-flow .box-tab-step .text-tab { font-size: 14px; font-weight: 500; color: #6e6e73; }
-.mm-flow .box-tab-step .number-tab span {
-  font-size: 12px; font-weight: 600; color: #6e6e73;
+.mm-flow .box-booking-tabs .item-tab .box-tab-step .icon-tab { display: flex; align-items: center; gap: 8px; padding: 0; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step .icon-tab .icon-book { display: none !important; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step .icon-tab .text-tab { font-size: 14px; font-weight: 500; color: #6e6e73; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step .number-tab { padding: 0; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step .number-tab span {
+  font-size: 12px; font-weight: 600; color: #6e6e73; line-height: 1;
   border: 1px solid #c9ced3; border-radius: 50%;
   width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
 }
-.mm-flow .box-tab-step.active { border-color: #0f1319; background: #0f1319; }
-.mm-flow .box-tab-step.active .text-tab { color: #fff; }
-.mm-flow .box-tab-step.active .number-tab span { color: #fff; border-color: rgba(255,255,255,.5); }
-.mm-flow .box-tab-step.done { border-color: #0f1319; }
-.mm-flow .box-tab-step.done .text-tab, .mm-flow .box-tab-step.done .number-tab span { color: #0f1319; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.active { border-color: #0f1319; background: #0f1319; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.active .icon-tab .text-tab { color: #fff; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.active .number-tab span { color: #fff; border-color: rgba(255,255,255,.5); }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.done { border-color: #0f1319; }
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.done .icon-tab .text-tab,
+.mm-flow .box-booking-tabs .item-tab .box-tab-step.done .number-tab span { color: #0f1319; }
 
 /* inputs */
 .mm-flow .form-control {
