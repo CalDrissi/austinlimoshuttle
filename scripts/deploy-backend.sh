@@ -23,16 +23,15 @@ APP_DIR=/opt/austinlimoshuttle
 SMOKE_HOST=testmode.austinlimoshuttle.com
 cd "$APP_DIR"
 
-BEFORE="$(git rev-parse HEAD)"
-git pull origin main
+BEFORE="${DEPLOY_PREVIOUS_COMMIT:-}"
 AFTER="$(git rev-parse HEAD)"
 
-# The pull runs as root; hand backend files back to limoweb (same pattern as
+# The checkout runs as root; hand backend files back to limoweb (same pattern as
 # deploy-frontend.sh) so collectstatic/media writes keep working.
 chown -R limoweb:limoweb "$APP_DIR/backend"
 
 # pip only when requirements changed — keeps the common deploy fast.
-if ! git diff --quiet "$BEFORE" "$AFTER" -- backend/requirements/ 2>/dev/null; then
+if [ -z "$BEFORE" ] || ! git diff --quiet "$BEFORE" "$AFTER" -- backend/requirements/ 2>/dev/null; then
   echo "deploy-backend: requirements changed, installing"
   su - limoweb -s /bin/bash -c "cd '$APP_DIR/backend' \
     && .venv/bin/pip install --quiet -r requirements/prod.txt"
