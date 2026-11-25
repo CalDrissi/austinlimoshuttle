@@ -505,7 +505,7 @@ class DriverTripEvent(models.Model):
 # the single source of truth for both the amend serializer and the amendment
 # request below.
 AMENDABLE_FIELDS = (
-    "passenger_count", "luggage_count", "flight_number",
+    "passenger_count", "luggage_count",
     "pickup_sign", "notes", "phone", "pickup_at",
 )
 
@@ -514,7 +514,6 @@ AMENDABLE_FIELDS = (
 AMENDMENT_FIELD_LABELS = {
     "passenger_count": "Passengers",
     "luggage_count": "Luggage",
-    "flight_number": "Flight number",
     "pickup_sign": "Pickup sign",
     "notes": "Notes",
     "phone": "Contact phone",
@@ -669,7 +668,7 @@ class BookingAmendmentRequest(models.Model):
             applied.append("phone")
 
         new_pickup = changes.pop("pickup_at", None)
-        for field in ("passenger_count", "luggage_count", "flight_number",
+        for field in ("passenger_count", "luggage_count",
                       "pickup_sign", "notes"):
             if field in changes:
                 setattr(booking, field, changes[field])

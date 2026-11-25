@@ -9,7 +9,7 @@ import "swiper/css/navigation";
 const SERVICES = [
   {
     title: "Airport Transfers",
-    desc: "Door-to-door service to and from Austin-Bergstrom (AUS) with flight tracking and a meet-and-greet.",
+    desc: "Door-to-door service to and from Austin-Bergstrom (AUS) with a meet-and-greet.",
     img: "service-airport",
   },
   {

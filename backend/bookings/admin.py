@@ -73,7 +73,7 @@ class BookingAdmin(admin.ModelAdmin):
     list_filter = ["status", "trip_type", "vehicle", "pickup_at"]
     search_fields = [
         "reference", "pickup_address", "dropoff_address", "pickup_sign",
-        "flight_number", "customer__email", "customer__first_name",
+        "customer__email", "customer__first_name",
         "customer__last_name", "legacy_order_id",
     ]
     date_hierarchy = "pickup_at"
@@ -95,7 +95,7 @@ class BookingAdmin(admin.ModelAdmin):
         }),
         ("Party", {"fields": ("customer", "passenger_count", "luggage_count")}),
         ("Vehicle & driver", {"fields": ("vehicle", "vehicle_name_snapshot", "driver")}),
-        ("Airport", {"fields": ("flight_number", "pickup_sign", "meet_and_greet")}),
+        ("Airport", {"fields": ("pickup_sign", "meet_and_greet")}),
         ("Fare", {
             "fields": ("subtotal", "surcharge_total", "tax", "total", "currency"),
             "description": "Computed by the pricing engine. See the breakdown below.",

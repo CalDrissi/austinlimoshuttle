@@ -322,7 +322,6 @@ class BookingAmendSerializer(serializers.Serializer):
 
     passenger_count = serializers.IntegerField(min_value=1, max_value=MAX_PASSENGERS, required=False)
     luggage_count = serializers.IntegerField(min_value=0, max_value=MAX_PASSENGERS, required=False)
-    flight_number = serializers.CharField(max_length=32, required=False, allow_blank=True)
     pickup_sign = serializers.CharField(max_length=120, required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)

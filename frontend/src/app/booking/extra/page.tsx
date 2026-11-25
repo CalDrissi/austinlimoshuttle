@@ -69,11 +69,6 @@ export default function BookingExtraPage() {
             {lugOver && <div className="text-14" style={{ color: "#c0392b", marginTop: 4 }}>Max {maxLug} bags for {quote.vehicle_name} — choose a larger vehicle.</div>}
           </div>
           <div className="col-6 mb-20">
-            <label className="text-14 color-grey">Flight number (optional)</label>
-            <input type="text" className="form-control" value={trip.flightNumber ?? ""}
-              onChange={(e) => setTrip({ flightNumber: e.target.value })} />
-          </div>
-          <div className="col-6 mb-20">
             <label className="text-14 color-grey">Name on pickup sign (optional)</label>
             <input type="text" className="form-control" value={trip.pickupSign ?? ""}
               onChange={(e) => setTrip({ pickupSign: e.target.value })} />

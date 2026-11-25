@@ -11,6 +11,5 @@
   <div class="drv-meta">
     {{ b.pickup_sign|default:b.customer_name }}
     <span class="dot">•</span>{{ b.vehicle_name_snapshot|default:b.vehicle.name }}
-    {% if b.flight_number %}<span class="dot">•</span><i class="bi bi-airplane"></i> {{ b.flight_number }}{% endif %}
   </div>
 </a>

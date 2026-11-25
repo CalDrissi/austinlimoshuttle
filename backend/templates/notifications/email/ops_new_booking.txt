@@ -5,8 +5,7 @@ From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
 Passengers: {{ booking.passenger_count }}
-{% if booking.flight_number %}Flight    : {{ booking.flight_number }}
-{% endif %}
+
 Customer  : {{ booking.customer_name }}{% if booking.contact_email %} ({{ booking.contact_email }}){% endif %}
 Total     : ${{ booking.total }} {{ booking.currency }}
 {% endautoescape %}

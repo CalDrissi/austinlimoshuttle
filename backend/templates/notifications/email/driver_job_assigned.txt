@@ -9,8 +9,7 @@ From      : {{ booking.pickup_address }}
 {% endif %}{% if booking.hours %}Duration  : {{ booking.hours }} hours
 {% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
 Passengers: {{ booking.passenger_count }}
-{% if booking.flight_number %}Flight    : {{ booking.flight_number }}
-{% endif %}{% if booking.pickup_sign %}Placard   : {{ booking.pickup_sign }}
+{% if booking.pickup_sign %}Placard   : {{ booking.pickup_sign }}
 {% endif %}
 Passenger : {{ booking.customer_name }}{% if booking.contact_phone %}
 Phone     : {{ booking.contact_phone }}{% endif %}

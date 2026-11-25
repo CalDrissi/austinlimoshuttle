@@ -89,7 +89,7 @@ class ManualBookingForm(BootstrapFormMixin, forms.ModelForm):
         fields = [
             "pickup_sign", "guest_phone", "guest_email",
             "vehicle", "pickup_at", "pickup_address", "dropoff_address",
-            "hours", "passenger_count", "luggage_count", "flight_number",
+            "hours", "passenger_count", "luggage_count",
             "meet_and_greet", "driver", "status", "notes",
         ]
         labels = {
@@ -164,7 +164,7 @@ class BookingEditForm(BootstrapFormMixin, forms.ModelForm):
         fields = [
             "pickup_sign", "guest_phone", "guest_email",
             "vehicle", "pickup_at", "pickup_address", "dropoff_address",
-            "passenger_count", "luggage_count", "flight_number",
+            "passenger_count", "luggage_count",
             "meet_and_greet", "total", "notes",
         ]
         labels = {

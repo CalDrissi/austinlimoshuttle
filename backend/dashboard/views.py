@@ -188,7 +188,6 @@ def booking_list(request):
             | Q(pickup_address__icontains=query)
             | Q(dropoff_address__icontains=query)
             | Q(pickup_sign__icontains=query)
-            | Q(flight_number__icontains=query)
             | Q(customer__email__icontains=query)
             | Q(customer__first_name__icontains=query)
             | Q(customer__last_name__icontains=query)

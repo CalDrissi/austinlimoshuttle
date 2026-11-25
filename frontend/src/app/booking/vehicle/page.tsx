@@ -283,7 +283,6 @@ export default function BookingVehiclePage() {
                 <ul>
                   <li><CheckIcon /> Free cancellation up to 1 hour before pickup</li>
                   <li><CheckIcon /> 60 minutes of free wait time on airport pickups</li>
-                  <li><CheckIcon /> Flight tracking for airport transfers</li>
                   <li><CheckIcon /> All-inclusive fares — taxes and gratuity in the price</li>
                   <li><CheckIcon /> Licensed, insured professional chauffeur</li>
                   <li><CheckIcon /> Assistance with luggage at pickup and drop-off</li>

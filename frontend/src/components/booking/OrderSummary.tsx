@@ -37,7 +37,6 @@ export default function OrderSummary({ journey: suppliedJourney }: { journey?: J
         <Row label="Date">{search.date}</Row><Row label="Time">{search.time} (Austin)</Row>
         {journey && <><Row label="Distance">{Number(journey.distance_miles).toFixed(1)} miles</Row><Row label="Duration">{journey.duration_minutes} min</Row></>}
         <Row label="Meet & Greet">{search.meetGreet ? "Yes" : "No"}</Row>
-        {trip.flightNumber && <Row label="Flight">{trip.flightNumber}</Row>}
         <ItineraryMap search={search} />
       </Group>
       <Group title="Passengers + Luggage">

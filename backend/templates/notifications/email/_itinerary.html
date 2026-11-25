@@ -6,6 +6,5 @@
   {% if booking.hours %}<tr><td style="padding:6px 0;color:#5b636d">Duration</td><td style="padding:6px 0">{{ booking.hours }} hours</td></tr>{% endif %}
   <tr><td style="padding:6px 0;color:#5b636d">Vehicle</td><td style="padding:6px 0">{{ booking.vehicle_name_snapshot }}</td></tr>
   <tr><td style="padding:6px 0;color:#5b636d">Passengers</td><td style="padding:6px 0">{{ booking.passenger_count }}</td></tr>
-  {% if booking.flight_number %}<tr><td style="padding:6px 0;color:#5b636d">Flight</td><td style="padding:6px 0">{{ booking.flight_number }}</td></tr>{% endif %}
   {% if booking.pickup_sign %}<tr><td style="padding:6px 0;color:#5b636d">Placard</td><td style="padding:6px 0">{{ booking.pickup_sign }}</td></tr>{% endif %}
 </table>

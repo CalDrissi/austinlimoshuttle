@@ -30,7 +30,6 @@
     {% if booking.hours %}<tr><td class="k">Duration</td><td>{{ booking.hours }} hours</td></tr>{% endif %}
     <tr><td class="k">Vehicle</td><td>{{ booking.vehicle_name_snapshot }}</td></tr>
     <tr><td class="k">Passengers</td><td>{{ booking.passenger_count }}</td></tr>
-    {% if booking.flight_number %}<tr><td class="k">Flight</td><td>{{ booking.flight_number }}</td></tr>{% endif %}
     {% if booking.pickup_sign %}<tr><td class="k">Placard name</td><td>{{ booking.pickup_sign }}</td></tr>{% endif %}
     <tr><td class="k">Booked by</td><td>{{ booking.customer_name }}</td></tr>
   </table>

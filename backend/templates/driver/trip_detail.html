@@ -42,7 +42,6 @@
   <div class="drv-meta" style="margin-top:12px;font-size:14px;color:#2a2f36;line-height:1.9;">
     <div><i class="bi bi-car-front" style="color:var(--brand);margin-right:7px;"></i>{{ booking.vehicle_name_snapshot|default:booking.vehicle.name }}</div>
     <div><i class="bi bi-person" style="color:var(--brand);margin-right:7px;"></i>{{ booking.passenger_count }} passenger{{ booking.passenger_count|pluralize }} <span style="color:#c7cdd4;">·</span> <i class="bi bi-luggage" style="color:var(--brand);margin:0 7px;"></i>{{ booking.luggage_count }} bag{{ booking.luggage_count|pluralize }}</div>
-    {% if booking.flight_number %}<div><i class="bi bi-airplane" style="color:var(--brand);margin-right:7px;"></i>Flight {{ booking.flight_number }}</div>{% endif %}
     {% if booking.meet_and_greet %}<div><i class="bi bi-person-badge" style="color:var(--brand);margin-right:7px;"></i>Meet &amp; greet</div>{% endif %}
   </div>
   {% if booking.notes %}

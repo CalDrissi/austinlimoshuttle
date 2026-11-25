@@ -117,7 +117,6 @@ export interface BookingCreateRequest {
   quote_token: string;
   passenger_count?: number;
   luggage_count?: number;
-  flight_number?: string;
   pickup_sign?: string;
   notes?: string;
   /** Guest checkout — required when not signed in. */
@@ -163,7 +162,6 @@ export interface Booking {
   hours: string | null;
   passenger_count: number;
   luggage_count: number;
-  flight_number: string;
   pickup_sign: string;
   meet_and_greet: boolean;
   notes: string;

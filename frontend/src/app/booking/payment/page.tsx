@@ -114,7 +114,6 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           quote_token: quote.quote_token,
           passenger_count: trip.passengerCount,
           luggage_count: trip.luggageCount,
-          flight_number: trip.flightNumber,
           pickup_sign: pickupSign,
           notes,
           guest_email: contact.email,

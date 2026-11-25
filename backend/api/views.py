@@ -778,7 +778,7 @@ def my_booking_detail(request, reference):
 
             changed = []
             recomputed = None
-            for field in ("passenger_count", "luggage_count", "flight_number",
+            for field in ("passenger_count", "luggage_count",
                           "pickup_sign", "notes"):
                 if field in data:
                     setattr(booking, field, data[field])

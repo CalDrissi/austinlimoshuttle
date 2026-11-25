@@ -32,7 +32,6 @@ export const bookingService = {
 export interface BookingAmendRequest {
   passenger_count?: number;
   luggage_count?: number;
-  flight_number?: string;
   pickup_sign?: string;
   notes?: string;
   phone?: string;

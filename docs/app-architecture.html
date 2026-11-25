@@ -669,7 +669,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/bookings/</span><span class="au">public</span></div>
     <div class="ep-b"><p class="sm">Create a booking from a signed quote. The server re-derives the total from the token — it never trusts a client price.</p>
       <div class="lab">Request · BookingCreate</div>
-      <div class="fieldgrid"><span class="r">quote_token<span class="ty"> str</span></span><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>flight_number<span class="ty"> str</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>guest_email<span class="ty"> email</span></span><span>guest_name<span class="ty"> str</span></span></div>
+      <div class="fieldgrid"><span class="r">quote_token<span class="ty"> str</span></span><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>guest_email<span class="ty"> email</span></span><span>guest_name<span class="ty"> str</span></span></div>
       <div class="lab">Response 201 · Booking</div>
       <div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span><span class="r">status<span class="ty"> enum</span></span><span class="r">pickup_at<span class="ty"> datetime</span></span><span class="r">vehicle_name<span class="ty"> str</span></span><span class="r">subtotal / surcharge_total / tax / total<span class="ty"> decimal</span></span><span class="r">price_lines<span class="ty"> obj[]</span></span></div>
       <div class="codes"><span class="code ok">201</span><span class="code">400</span></div></div></div>
@@ -699,7 +699,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/amend-request/</span><span class="au session">session</span></div>
     <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending change request</b> — the booking is <b>not</b> modified. Enforces the office-set amendment window (rejects once pickup is inside <code>PricingSettings.amendment_window_hours</code>), rejects a second open request, and re-prices when the pickup time moves. Emails all active staff + a configured admin/contact address, <b>and the customer an acknowledgement</b> (<code>amendment_received</code> — explicit that nothing has changed yet). The pending request also appears on the booking's own detail/list via <code>pending_amendment</code>.</p>
       <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
-      <div class="lab">Request · BookingAmend (all optional)</div><div class="fieldgrid"><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>flight_number<span class="ty"> str</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span><span>pickup_at<span class="ty"> datetime</span></span></div>
+      <div class="lab">Request · BookingAmend (all optional)</div><div class="fieldgrid"><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span><span>pickup_at<span class="ty"> datetime</span></span></div>
       <div class="lab">Response 201 · BookingAmendmentRequest {id, booking_reference, status, status_display, requested_changes, changes[], old_total, new_subtotal, new_surcharge_total, new_tax, new_total, currency, price_delta, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
       <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/cancel-request/</span><span class="au session">session</span></div>
@@ -946,6 +946,22 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Flight number removed product-wide (owner decision)</span><span class="tbl">frontend · api · bookings · dashboard · driver · notifications</span></div>
+    <table>
+      <tr><td><b>Owner decision: the business does not collect flight numbers.</b> Every flight-number input and
+      display is gone: the booking-flow header pill and extras-step field, Ride Summary row, account booking cards +
+      client change-request form, back-office new-booking/edit forms (<code>BookingForm</code>/<code>BookingEditForm</code>),
+      booking detail/dispatch/list search, driver run cards + job sheet, all email/PDF templates, the Django-admin
+      "Airport" fieldset/search, and the "flight tracking" marketing copy (what's-included bullet, FAQ, services,
+      how-it-works). <code>flight_number</code> was also dropped from the amendment-editable set
+      (<code>AMENDABLE_FIELDS</code>, <code>BookingAmendSerializer</code>, apply/diff loops).
+      <b>Kept for back-compat:</b> the <code>bookings.flight_number</code> DB column (historical data, no destructive
+      migration), the legacy importer, and <code>BookingCreateSerializer</code> still silently accepts the field from
+      old clients; the read API still returns it.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Email package P1–P5: driver job sheet, client acks, trip thank-you, SMTP retry, reminder cron</span><span class="tbl">notifications · dashboard · api · ops</span></div>
@@ -1899,7 +1915,7 @@ const CLIENT_TREE = {
     ]},
     {id:'booking', title:'Booking Wizard', path:'/booking', type:'wizard', desc:'5-step funnel · Zustand store (sessionStorage).', children:[
       {title:'1 · Vehicle', path:'/booking/vehicle', status:'built', desc:'Prices all vehicles → shows real fares.', api:'POST /api/quotes/'},
-      {title:'2 · Extra', path:'/booking/extra', status:'built', desc:'Passengers, luggage, flight no., pickup sign, notes.'},
+      {title:'2 · Extra', path:'/booking/extra', status:'built', desc:'Passengers, luggage, pickup sign, notes.'},
       {title:'3 · Passenger', path:'/booking/passenger', status:'built', desc:'Guest details, book-for-someone-else, or sign in / register inline on the page.'},
       {title:'4 · Payment', path:'/booking/payment', status:'built', desc:'Creates booking from quote token; Cash (works) or Card (pending Stripe).', api:'POST /api/bookings/ → pay-cash | payments/intent'},
       {title:'5 · Confirmation', path:'/booking/confirmation', status:'built', desc:'Polls /bookings/{ref}/status/ until confirmed.'},

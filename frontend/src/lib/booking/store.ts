@@ -27,7 +27,6 @@ export interface Search {
 export interface Trip {
   passengerCount: number;
   luggageCount: number;
-  flightNumber?: string;
   pickupSign?: string;
   notes?: string;
   /** When the booker isn't the passenger, capture who's actually travelling. */

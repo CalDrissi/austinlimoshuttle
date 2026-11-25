@@ -57,7 +57,6 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
   const [f, setF] = useState({
     passenger_count: b.passenger_count,
     luggage_count: b.luggage_count,
-    flight_number: b.flight_number || "",
     pickup_sign: b.pickup_sign || "",
     notes: b.notes || "",
     phone: userPhone || "",
@@ -90,7 +89,6 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       await onAmend(b.reference, {
         passenger_count: f.passenger_count,
         luggage_count: f.luggage_count,
-        flight_number: f.flight_number.trim(),
         pickup_sign: f.pickup_sign.trim(),
         notes: f.notes.trim(),
         phone: f.phone.trim(),
@@ -109,7 +107,7 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
         <div>
           <div className="route">{b.pickup_address} → {b.dropoff_address || "Hourly hire"}</div>
           <div className="meta">{when(b.pickup_at)} · {b.vehicle_name} · {money(b.total, b.currency)} · Ref {b.reference}</div>
-          <div className="meta">Passengers {b.passenger_count} · Luggage {b.luggage_count}{b.flight_number ? ` · Flight ${b.flight_number}` : ""}</div>
+          <div className="meta">Passengers {b.passenger_count} · Luggage {b.luggage_count}</div>
         </div>
         <span className={`mm-badge ${b.status}`}>{b.status_display}</span>
       </div>
@@ -143,7 +141,6 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
           <div className="col-12 mb-15"><label className="text-14 color-grey">Pickup date &amp; time</label><input type="datetime-local" className="form-control" value={f.pickup_at} onChange={(e) => setF({ ...f, pickup_at: e.target.value })} /><span className="text-13 color-grey">Changing the time may change the fare (night/event rates).</span></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Passengers</label><input type="number" min={1} className="form-control" value={f.passenger_count} onChange={(e) => setF({ ...f, passenger_count: Math.max(1, Number(e.target.value)) })} /></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Luggage</label><input type="number" min={0} className="form-control" value={f.luggage_count} onChange={(e) => setF({ ...f, luggage_count: Math.max(0, Number(e.target.value)) })} /></div>
-          <div className="col-6 mb-15"><label className="text-14 color-grey">Flight number</label><input className="form-control" value={f.flight_number} onChange={(e) => setF({ ...f, flight_number: e.target.value })} /></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Contact phone</label><input type="tel" className="form-control" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           <div className="col-12 mb-15"><label className="text-14 color-grey">Name on pickup sign</label><input className="form-control" value={f.pickup_sign} onChange={(e) => setF({ ...f, pickup_sign: e.target.value })} /></div>
           <div className="col-12 mb-15"><label className="text-14 color-grey">Notes for the driver</label><textarea className="form-control" rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
@@ -160,7 +157,7 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
         {b.is_amendable && !requestPending && !editing && (
           <button className="btn btn-border btn-sm hover-up" onClick={() => {
             setF({ passenger_count: b.passenger_count, luggage_count: b.luggage_count,
-              flight_number: b.flight_number || "", pickup_sign: b.pickup_sign || "",
+              pickup_sign: b.pickup_sign || "",
               notes: b.notes || "", phone: userPhone || "", pickup_at: toAustinLocalInput(b.pickup_at) });
             setErr(""); setEditing(true);
           }}>Request changes</button>

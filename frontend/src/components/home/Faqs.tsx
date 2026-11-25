@@ -14,13 +14,6 @@ const FAQS = [
     show: false,
   },
   {
-    id: "Three",
-    question: "Do you track my flight for airport pickups?",
-    answer:
-      "Yes. We monitor your flight in real time and adjust your pickup if it lands early or late, so your chauffeur is waiting when you arrive at Austin-Bergstrom (AUS) at no extra charge for reasonable delays.",
-    show: false,
-  },
-  {
     id: "Four",
     question: "How is pricing calculated?",
     answer:

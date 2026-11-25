@@ -62,7 +62,7 @@ export interface Booking {
   status: "pending" | "confirmed" | "cancelled";
   search: BookingSearch;
   vehicle: Vehicle;
-  extras: { items: ExtraItem[]; flightNo?: string; trainNo?: string; notes?: string };
+  extras: { items: ExtraItem[]; trainNo?: string; notes?: string };
   passenger: PassengerDetails;
   totalPrice: number;
   createdAt: string;

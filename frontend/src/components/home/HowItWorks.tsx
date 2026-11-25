@@ -23,7 +23,7 @@ const STEPS = [
   },
   {
     title: "Ride With a Pro",
-    text: "Your licensed, insured chauffeur tracks your flight and arrives early, so you ride on time across Central Texas.",
+    text: "Your licensed, insured chauffeur arrives early, so you ride on time across Central Texas.",
     image: "how-pro",
   },
 ] as const;

@@ -30,7 +30,6 @@
           {% if booking.distance_miles %}<dt>Distance</dt><dd>{{ booking.distance_miles }} miles</dd>{% endif %}
           {% if booking.hours %}<dt>Hours booked</dt><dd>{{ booking.hours }}</dd>{% endif %}
           <dt>Passengers / luggage</dt><dd>{{ booking.passenger_count }} / {{ booking.luggage_count }}</dd>
-          {% if booking.flight_number %}<dt>Flight</dt><dd>{{ booking.flight_number }}</dd>{% endif %}
           {% if booking.pickup_sign %}<dt>Placard name</dt><dd>{{ booking.pickup_sign }}</dd>{% endif %}
           {% if booking.notes %}<dt>Customer notes</dt><dd>{{ booking.notes|linebreaksbr }}</dd>{% endif %}
         </dl>

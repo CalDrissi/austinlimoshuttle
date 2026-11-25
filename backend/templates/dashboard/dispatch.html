@@ -10,7 +10,7 @@
       <table class="table table-hover align-middle">
         <thead><tr>
           <th>Pickup</th><th>Reference</th><th>Customer</th><th>Route</th>
-          <th>Vehicle</th><th>Flight / sign</th><th style="min-width:340px">Driver &amp; status</th>
+          <th>Vehicle</th><th>Pickup sign</th><th style="min-width:340px">Driver &amp; status</th>
         </tr></thead>
         <tbody>
         {% for booking in bookings %}
@@ -34,7 +34,6 @@
             </td>
             <td class="small">{{ booking.vehicle_name_snapshot }}</td>
             <td class="small text-secondary">
-              {% if booking.flight_number %}<i class="bi bi-airplane"></i> {{ booking.flight_number }}{% endif %}
               {% if booking.pickup_sign %}<div>“{{ booking.pickup_sign }}”</div>{% endif %}
             </td>
             <td>

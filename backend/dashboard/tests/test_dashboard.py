@@ -1073,7 +1073,7 @@ class TestManualBooking:
             pickup_sign="Jane Doe", guest_phone="+15125550100", guest_email="",
             vehicle=str(vehicle.pk), pickup_at="2026-12-01T14:00",
             pickup_address="Austin", dropoff_address="", hours="",
-            passenger_count="1", luggage_count="0", flight_number="",
+            passenger_count="1", luggage_count="0",
             status=Booking.Status.CONFIRMED, notes="",
             trip_mode="hourly", override_total="",
             customer_id="", driver="", payment_method="cash",
