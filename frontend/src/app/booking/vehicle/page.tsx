@@ -15,6 +15,21 @@ function money(amount: string, currency: string) {
   return `${symbol}${Number(amount).toFixed(2)}`;
 }
 
+function PaxIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+    </svg>
+  );
+}
+function BagIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="7" width="14" height="14" rx="2" /><path d="M9 7V5a3 3 0 0 1 6 0v2" />
+    </svg>
+  );
+}
+
 function VehicleCard({ quote, vehicle, meetGreet, selected, onSelect }: {
   quote: QuoteResult;
   vehicle?: Vehicle;
@@ -23,28 +38,58 @@ function VehicleCard({ quote, vehicle, meetGreet, selected, onSelect }: {
   onSelect: (q: QuoteResult) => void;
 }) {
   return (
-    <div id={`vehicle-${quote.vehicle_id}`} className="item-vehicle" style={selected ? { outline: "3px solid #b89b5e", borderRadius: 12, scrollMarginTop: 100 } : undefined}>
-      <div className="vehicle-left">
-        <div className="vehicle-image"><img src={vehicle?.photo || VEHICLE_PLACEHOLDER} alt={quote.vehicle_name} /></div>
-        <div className="vehicle-facilities">
-          {meetGreet && <div className="text-fact meet-greeting">Meet &amp; Greet included</div>}
-          <div className="text-fact free-cancel">Free cancellation</div>
-          <div className="text-fact free-waiting">Free Waiting time</div>
-          <div className="text-fact safe-travel">Safe and secure travel</div>
+    <div id={`vehicle-${quote.vehicle_id}`} className={`blf-car${selected ? " on" : ""}`}>
+      <div className="blf-car-media">
+        <img src={vehicle?.photo || VEHICLE_PLACEHOLDER} alt={quote.vehicle_name} />
+      </div>
+      <div className="blf-car-body">
+        <h5 className="blf-car-name">{quote.vehicle_name}</h5>
+        <div className="blf-car-caps">
+          <span><PaxIcon /> {vehicle?.passenger_capacity ?? "–"}</span>
+          <span><BagIcon /> {vehicle?.luggage_capacity ?? "–"}</span>
+        </div>
+        {vehicle?.description && <p className="blf-car-desc">{vehicle.description}</p>}
+        <p className="blf-car-perks">
+          {meetGreet && <span>Meet &amp; Greet included</span>}
+          <span>Free cancellation</span>
+          <span>Free waiting time</span>
+        </p>
+        {selected && <p role="status" className="blf-car-chosen">Selected for your trip — you can still choose any car below.</p>}
+      </div>
+      <div className="blf-car-side">
+        <div className="blf-car-price">{money(quote.total, quote.currency)}</div>
+        <div className="blf-car-incl">All-inclusive — taxes &amp; fees included</div>
+        <button className="blf-btn" onClick={() => onSelect(quote)}>{selected ? "Continue" : "Select"}</button>
+      </div>
+    </div>
+  );
+}
+
+/** Compact trip recap above the vehicle list, with an edit link back home. */
+function TripStrip({ journey }: { journey?: { distance_miles: string; duration_minutes: number } | null }) {
+  const search = useBookingStore((s) => s.search);
+  if (!search) return null;
+  const date = (() => {
+    const m = search.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return search.date;
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  })();
+  return (
+    <div className="blf-strip">
+      <div className="blf-strip-info">
+        <div className="blf-strip-route">
+          <span>{search.pickupAddress}</span>
+          {search.tripType === "hourly"
+            ? <em>· {search.hours} hours at your disposal</em>
+            : <><span className="blf-strip-arrow" aria-hidden="true">→</span><span>{search.dropoffAddress}</span></>}
+        </div>
+        <div className="blf-strip-meta">
+          {date} at {search.time}
+          {journey && <> · {Number(journey.distance_miles).toFixed(1)} mi · {journey.duration_minutes} min</>}
         </div>
       </div>
-      <div className="vehicle-right">
-        <h5 className="text-20-medium color-text mb-10">{quote.vehicle_name}</h5>
-        {selected && <p role="status" className="text-14 mb-10">Selected for your trip — you can still choose any car below.</p>}
-        {vehicle?.description && <p className="text-14 color-text mb-20">{vehicle.description}</p>}
-        <div className="vehicle-passenger-luggage mb-10">
-          <span className="passenger">Passengers {vehicle?.passenger_capacity ?? "-"}</span>
-          <span className="luggage">Luggage {vehicle?.luggage_capacity ?? "-"}</span>
-        </div>
-        <div className="vehicle-price"><h4 className="heading-30-medium color-text">{money(quote.total, quote.currency)}</h4></div>
-        <div className="price-desc mb-20">All-inclusive — taxes &amp; fees included.</div>
-        <button className="btn btn-primary w-100" onClick={() => onSelect(quote)}>{selected ? "Continue with this car" : "Select"}</button>
-      </div>
+      <a className="blf-strip-edit" href="/">Edit</a>
     </div>
   );
 }
@@ -98,7 +143,8 @@ export default function BookingVehiclePage() {
         <div className="box-row-tab mt-50">
           <div className="box-tab-left">
             <div className="box-content-detail">
-              <h3 className="heading-24-medium color-text mb-30">Select Your Car</h3>
+              <h3 className="heading-24-medium color-text mb-20">Choose your experience</h3>
+              {search && <TripStrip journey={data?.journey} />}
 
               {!search && (
                 <p className="text-16 color-grey">Start with a search from the <a href="/">home page</a>.</p>

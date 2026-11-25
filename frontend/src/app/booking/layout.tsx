@@ -6,7 +6,7 @@ export default function BookingLayout({ children }: { children: React.ReactNode 
   return (
     <>
       <Header />
-      <main className="main">
+      <main className="main mm-flow">
         <BookingSteps />
         {children}
       </main>

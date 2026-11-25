@@ -699,3 +699,135 @@ img {
   .mm-desktop-nav, .mm-header-actions { display: none; }
   .mm-menu-toggle { display: inline-flex; }
 }
+
+/* ===================================================================== *
+ * Booking flow (.mm-flow) — same visual language as the hero widget:    *
+ * Geist type, ink #0f1319, grey #6e6e73, 12-16px radii, blue accents.   *
+ * Content and fields unchanged; this is presentation only.              *
+ * ===================================================================== */
+.mm-flow, .mm-flow input, .mm-flow button, .mm-flow select, .mm-flow textarea {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.mm-flow h2, .mm-flow h3, .mm-flow h4, .mm-flow h5 { color: #0f1319; }
+.mm-flow .heading-24-medium { font-weight: 600; letter-spacing: -0.01em; }
+
+/* step bar: clean numbered pills */
+.mm-flow .box-booking-tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+.mm-flow .box-tab-step {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid #e3e7eb; border-radius: 999px; padding: 9px 18px;
+  background: #fff; transition: border-color .15s, background .15s;
+}
+.mm-flow .box-tab-step .icon-tab { display: flex; align-items: center; gap: 8px; }
+.mm-flow .box-tab-step .icon-book { display: none; }
+.mm-flow .box-tab-step .text-tab { font-size: 14px; font-weight: 500; color: #6e6e73; }
+.mm-flow .box-tab-step .number-tab span {
+  font-size: 12px; font-weight: 600; color: #6e6e73;
+  border: 1px solid #c9ced3; border-radius: 50%;
+  width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center;
+}
+.mm-flow .box-tab-step.active { border-color: #0f1319; background: #0f1319; }
+.mm-flow .box-tab-step.active .text-tab { color: #fff; }
+.mm-flow .box-tab-step.active .number-tab span { color: #fff; border-color: rgba(255,255,255,.5); }
+.mm-flow .box-tab-step.done { border-color: #0f1319; }
+.mm-flow .box-tab-step.done .text-tab, .mm-flow .box-tab-step.done .number-tab span { color: #0f1319; }
+
+/* inputs */
+.mm-flow .form-control {
+  border: 1px solid #c9ced3; border-radius: 10px; padding: 11px 14px;
+  font-size: 15px; color: #0f1319; background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+}
+.mm-flow .form-control:focus {
+  border-color: #0f63bd; outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 99, 189, 0.15);
+}
+.mm-flow label { font-weight: 500; }
+
+/* primary buttons -> ink, rounded */
+.mm-flow .btn.btn-primary {
+  background: #0f1319; border-color: #0f1319; color: #fff;
+  border-radius: 999px; padding: 12px 28px; font-weight: 600; font-size: 15px;
+}
+.mm-flow .btn.btn-primary:hover:not(:disabled) { background: #000; border-color: #000; }
+.mm-flow .btn.btn-primary:disabled { opacity: .6; }
+
+/* summary sidebar card */
+.mm-flow .sidebar {
+  border: 1px solid #e3e7eb; border-radius: 16px; padding: 22px;
+  background: #fff; box-shadow: 0 10px 30px rgba(15, 19, 25, 0.05);
+}
+
+/* -------- vehicle page: trip recap strip -------- */
+.blf-strip {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px solid #e3e7eb; border-radius: 14px; background: #fbf8f2;
+  padding: 14px 18px; margin-bottom: 24px;
+}
+.blf-strip-info { min-width: 0; }
+.blf-strip-route {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 15px; font-weight: 600; color: #0f1319;
+}
+.blf-strip-route > span { overflow-wrap: anywhere; }
+.blf-strip-route em { font-style: normal; color: #6e6e73; font-weight: 500; }
+.blf-strip-arrow { color: #6e6e73; flex: 0 0 auto; }
+.blf-strip-meta { font-size: 13.5px; color: #6e6e73; margin-top: 3px; }
+.blf-strip-edit {
+  flex: 0 0 auto; font-size: 14px; font-weight: 600; color: #0f63bd;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.blf-strip-edit:hover { color: #0d4a8c; }
+
+/* -------- vehicle page: full-width horizontal cards -------- */
+.blf-car {
+  display: flex; align-items: stretch; gap: 20px;
+  border: 1px solid #e3e7eb; border-radius: 16px; background: #fff;
+  padding: 18px; margin-bottom: 16px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.blf-car:hover { border-color: #c9ced3; box-shadow: 0 10px 30px rgba(15, 19, 25, 0.07); }
+.blf-car.on { border-color: #0f1319; box-shadow: 0 0 0 1px #0f1319, 0 10px 30px rgba(15, 19, 25, 0.08); scroll-margin-top: 100px; }
+.blf-car-media { flex: 0 0 240px; display: flex; align-items: center; }
+.blf-car-media img {
+  width: 100%; aspect-ratio: 16 / 10; object-fit: contain;
+  border-radius: 10px; background: #f5f5f5;
+}
+.blf-car-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.blf-car-name { font-size: 19px; font-weight: 600; color: #0f1319; margin: 2px 0 6px; }
+.blf-car-caps { display: flex; gap: 16px; margin-bottom: 8px; }
+.blf-car-caps span { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: #6e6e73; }
+.blf-car-desc {
+  font-size: 14px; line-height: 1.55; color: #4b4b50; margin: 0 0 10px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.blf-car-perks { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: auto 0 0; font-size: 13px; color: #0f7244; }
+.blf-car-perks span::before { content: "✓ "; }
+.blf-car-chosen { font-size: 13px; color: #0f63bd; margin: 8px 0 0; }
+.blf-car-side {
+  flex: 0 0 190px; display: flex; flex-direction: column; align-items: flex-end;
+  justify-content: center; text-align: right; gap: 4px;
+  border-left: 1px solid #eef1f3; padding-left: 20px;
+}
+.blf-car-price { font-size: 26px; font-weight: 700; color: #0f1319; letter-spacing: -0.01em; }
+.blf-car-incl { font-size: 12px; color: #6e6e73; margin-bottom: 10px; }
+.blf-btn {
+  border: 0; border-radius: 999px; padding: 11px 26px; cursor: pointer;
+  background: #0f1319; color: #fff; font-size: 14.5px; font-weight: 600;
+  transition: background .15s;
+}
+.blf-btn:hover { background: #000; }
+.blf-car.on .blf-btn { background: #0f63bd; }
+.blf-car.on .blf-btn:hover { background: #0d4a8c; }
+
+@media (max-width: 767.98px) {
+  .blf-car { flex-direction: column; gap: 12px; }
+  .blf-car-media { flex: none; }
+  .blf-car-side {
+    flex: none; border-left: 0; border-top: 1px solid #eef1f3;
+    padding: 12px 0 0; align-items: stretch; text-align: left;
+  }
+  .blf-car-price { font-size: 23px; }
+  .blf-btn { width: 100%; padding: 13px 26px; }
+  .blf-strip { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
