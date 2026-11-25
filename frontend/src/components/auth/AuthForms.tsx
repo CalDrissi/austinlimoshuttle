@@ -111,7 +111,7 @@ export function RegisterFields({ onSuccess, initialEmail = "" }: {
       // 201 returns the new User (and signs them in); 202 is the neutral
       // "if that address can be registered…" response for an existing email.
       if (result?.email) {
-        notify("Your account is ready — welcome!");
+        notify("Account created — welcome!");
         await refreshAuth();
         onSuccess();
       } else {

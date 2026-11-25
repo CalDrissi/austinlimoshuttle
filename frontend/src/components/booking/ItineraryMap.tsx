@@ -31,8 +31,8 @@ export default function ItineraryMap({ search }: { search: Search }) {
           return results[0].geometry.location;
         }
         const [pickup, dropoff] = await Promise.all([
-          locate(search.pickupAddress),
-          destination ? locate(destination) : Promise.resolve(null),
+          search.pickupCoordinates ?? locate(search.pickupAddress),
+          destination ? (search.dropoffCoordinates ?? locate(destination)) : Promise.resolve(null),
         ]);
         if (cancelled || !container.current) return;
         const map = new Map(container.current, {
@@ -89,7 +89,7 @@ export default function ItineraryMap({ search }: { search: Search }) {
         else overlay.map = null;
       });
     };
-  }, [search.pickupAddress, destination]);
+  }, [search.pickupAddress, destination, search.pickupCoordinates, search.dropoffCoordinates]);
 
   if (unavailable) return <p className="text-14 mm-map-unavailable mt-20">Map unavailable</p>;
   return <div ref={container} className="mm-itinerary-map mt-20" role="region"

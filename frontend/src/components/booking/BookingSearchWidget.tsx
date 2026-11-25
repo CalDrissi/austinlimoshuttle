@@ -12,6 +12,7 @@ import { useBookingStore } from "@/lib/booking/store";
 import {
   loadGoogleMaps,
   fetchPlaceSuggestions,
+  resolvePlaceCoordinates,
   newSessionToken,
   type PlaceSuggestion,
 } from "@/lib/google/places";
@@ -242,6 +243,9 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const [time, setTime] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [pickupCoordinates, setPickupCoordinates] = useState<{ lat: number; lng: number }>();
+  const [dropoffCoordinates, setDropoffCoordinates] = useState<{ lat: number; lng: number }>();
+  const locationVersion = useRef({ pickup: 0, dropoff: 0 });
   const [hours, setHours] = useState("3");
   const [meetGreet, setMeetGreet] = useState(false);
   const [error, setError] = useState("");
@@ -388,11 +392,19 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     // Meet & Greet is only offered on point-to-point trips; leaving them must
     // drop it or an hourly quote silently carries the hidden fee.
     if (value === "hourly") setMeetGreet(false);
-    if (pane === "dropoff" || pane === "duration") setPane(null);
+    setPane(null);
   };
 
   const pickSuggestion = (s: PlaceSuggestion) => {
-    if (locPane === "pickup") setFrom(s.full); else setTo(s.full);
+    const which = locPane;
+    if (!which) return;
+    const version = ++locationVersion.current[which];
+    if (which === "pickup") { setFrom(s.full); setPickupCoordinates(undefined); }
+    else { setTo(s.full); setDropoffCoordinates(undefined); }
+    void resolvePlaceCoordinates(s.id).then((coords) => {
+      if (locationVersion.current[which] !== version) return;
+      if (which === "pickup") setPickupCoordinates(coords); else setDropoffCoordinates(coords);
+    });
     clearSuggestions();
     endSession();
     setPane(null);
@@ -445,13 +457,13 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
       }
       setSearch({
         tripType,
-        pickupAddress: from.trim(), dropoffAddress: to.trim(),
+        pickupAddress: from.trim(), dropoffAddress: to.trim(), pickupCoordinates, dropoffCoordinates,
         date, time, meetGreet,
       }, preselectedVehicleId);
     } else {
       setSearch({
         tripType: "hourly",
-        pickupAddress: from.trim(), dropoffAddress: "", hours: Number(hours),
+        pickupAddress: from.trim(), dropoffAddress: "", pickupCoordinates, hours: Number(hours),
         date, time, meetGreet,
       }, preselectedVehicleId);
     }
@@ -492,9 +504,11 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
         role="combobox"
         aria-expanded={pane === which}
         aria-autocomplete="list"
+        aria-controls={pane === which && locValue.trim().length >= MIN_QUERY ? "blw-location-options" : undefined}
+        aria-activedescendant={pane === which && activeIdx >= 0 ? `blw-location-option-${activeIdx}` : undefined}
         placeholder="Address, airport, hotel…"
         value={value}
-        onChange={(e) => { set(e.target.value); setPane(which); }}
+        onChange={(e) => { ++locationVersion.current[which]; if (which === "pickup") setPickupCoordinates(undefined); else setDropoffCoordinates(undefined); set(e.target.value); setPane(which); }}
         onFocus={() => setPane(which)}
         onKeyDown={onLocKeyDown}
       />
@@ -506,6 +520,8 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
           onMouseDown={(e) => e.preventDefault()}
           onClick={(e) => {
             e.stopPropagation();
+            ++locationVersion.current[which];
+            if (which === "pickup") setPickupCoordinates(undefined); else setDropoffCoordinates(undefined);
             set("");
             setPane(which); // stay expanded so the user can retype immediately
             inputRef.current?.focus();
@@ -550,13 +566,14 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
       );
     }
     return (
-      <div className="blw-sugs" role="listbox">
+      <div id="blw-location-options" className="blw-sugs" role="listbox">
         {suggestions.length ? (
           <>
             {suggestions.map((s, i) => (
               <div
                 key={s.id}
                 role="option"
+                id={`blw-location-option-${i}`}
                 aria-selected={i === activeIdx}
                 className={`blw-sug${i === activeIdx ? " on" : ""}`}
                 onMouseEnter={() => setActiveIdx(i)}
@@ -669,7 +686,7 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
           <div className="blw-expand-clip">
             <div className="blw-area" style={{ "--blw-indent": `${indent}px` } as React.CSSProperties}>
               <button type="button" className="blw-close" aria-label="Close" onClick={close}>✕</button>
-              <div className="blw-area-inner">{areaContent()}</div>
+              <div className="blw-area-inner">{pane && areaContent()}</div>
             </div>
           </div>
         </div>

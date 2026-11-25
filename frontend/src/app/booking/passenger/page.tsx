@@ -32,6 +32,9 @@ export default function BookingPassengerPage() {
   const [paxName, setPaxName] = useState(trip.passengerName ?? "");
   const [paxPhone, setPaxPhone] = useState(trip.passengerPhone ?? "");
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const touch = (key: string) => setTouched((old) => ({ ...old, [key]: true }));
+  const invalid = (key: string, value: string) => touched[key] && (key === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) : key === "phone" ? value.replace(/\D/g, "").length < 7 : key === "paxPhone" ? !!value.trim() && value.replace(/\D/g, "").length < 7 : !value.trim());
   const [detailsReady, setDetailsReady] = useState(false);
   useEffect(() => {
     if (!hydrated) return;
@@ -141,7 +144,7 @@ export default function BookingPassengerPage() {
 
   const next = async () => {
     if (capacity.blocked) { setError("Check passengers and luggage against your vehicle capacity before payment."); return; }
-    if (!user && (!name.trim() || !email.includes("@"))) {
+    if (!user && (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))) {
       setError("Please enter your name and a valid email.");
       return;
     }
@@ -153,6 +156,7 @@ export default function BookingPassengerPage() {
       setError("Please enter the passenger's name.");
       return;
     }
+    if (forElse && paxPhone.trim() && paxPhone.replace(/\D/g, "").length < 7) { setError("Please enter a valid passenger phone number."); return; }
     // For signed-in bookers the booking takes its contact phone from the account,
     // so persist it when it's new or changed (best-effort — still proceed on error).
     if (user && phone.trim() !== (user.phone ?? "")) {
@@ -278,15 +282,18 @@ export default function BookingPassengerPage() {
                 <div className="row">
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your full name</label>
-                    <input id="guest-name" type="text" className="form-control" value={name} onChange={(e) => setName(e.target.value)} />
+                    <input id="guest-name" type="text" className="form-control" value={name} onBlur={() => touch("name")} aria-invalid={!!invalid("name", name)} onChange={(e) => setName(e.target.value)} />
+                    {invalid("name", name) && <p role="alert" className="mm-field-error">Enter your full name.</p>}
                   </div>
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your email <span className="color-grey">(receipt goes here)</span></label>
-                    <input type="email" className="form-control" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <input type="email" className="form-control" value={email} onBlur={() => touch("email")} aria-invalid={!!invalid("email", email)} onChange={(e) => setEmail(e.target.value)} />
+                    {invalid("email", email) && <p role="alert" className="mm-field-error">Enter a valid email address.</p>}
                   </div>
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
-                    <input type="tel" className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    <input type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    {invalid("phone", phone) && <p role="alert" className="mm-field-error">Enter a valid phone number.</p>}
                   </div>
                 </div>
               )}
@@ -295,7 +302,8 @@ export default function BookingPassengerPage() {
                 <div className="row">
                   <div className="col-12 mb-20">
                     <label className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
-                    <input type="tel" className="form-control" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    <input type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    {invalid("phone", phone) && <p role="alert" className="mm-field-error">Enter a valid phone number.</p>}
                   </div>
                 </div>
               )}
@@ -314,11 +322,13 @@ export default function BookingPassengerPage() {
                   <div className="row">
                     <div className="col-6 mb-20">
                       <label className="text-14 color-grey">Passenger full name</label>
-                      <input type="text" className="form-control" value={paxName} onChange={(e) => setPaxName(e.target.value)} placeholder="Name for the driver&rsquo;s sign" />
+                      <input type="text" className="form-control" value={paxName} onBlur={() => touch("paxName")} aria-invalid={!!invalid("paxName", paxName)} onChange={(e) => setPaxName(e.target.value)} placeholder="Name for the driver&rsquo;s sign" />
+                    {invalid("paxName", paxName) && <p role="alert" className="mm-field-error">Enter the passenger’s name.</p>}
                     </div>
                     <div className="col-6 mb-20">
                       <label className="text-14 color-grey">Passenger phone (optional)</label>
-                      <input type="tel" className="form-control" value={paxPhone} onChange={(e) => setPaxPhone(e.target.value)} placeholder="So the driver can reach them" />
+                      <input type="tel" className="form-control" value={paxPhone} onBlur={() => touch("paxPhone")} aria-invalid={!!invalid("paxPhone", paxPhone)} onChange={(e) => setPaxPhone(e.target.value)} placeholder="So the driver can reach them" />
+                    {invalid("paxPhone", paxPhone) && <p role="alert" className="mm-field-error">Enter a valid phone number or leave it blank.</p>}
                     </div>
                   </div>
                 </div>

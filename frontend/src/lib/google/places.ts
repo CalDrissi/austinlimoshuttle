@@ -134,3 +134,13 @@ export async function fetchPlaceSuggestions(
       isAirport: Array.isArray(p.types) && p.types.includes("airport"),
     }));
 }
+
+/** Resolve only a selected prediction; free text still uses geocoding. */
+export async function resolvePlaceCoordinates(id: string): Promise<{ lat: number; lng: number } | undefined> {
+  try {
+    const google = await loadGoogleMaps();
+    const place = new google.maps.places.Place({ id });
+    await place.fetchFields({ fields: ["location"] });
+    return place.location ? { lat: place.location.lat(), lng: place.location.lng() } : undefined;
+  } catch { return undefined; }
+}

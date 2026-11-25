@@ -11,6 +11,7 @@ import { ApiRequestError } from "@/lib/api/client";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
 import ItineraryMap from "@/components/booking/ItineraryMap";
 import AuthModal from "@/components/booking/AuthModal";
+import { materiallyDiffers } from "@/components/booking/OrderSummary";
 import type { QuoteResult, Vehicle } from "@/types/api";
 
 import { money } from "@/lib/format";
@@ -137,6 +138,7 @@ function ClassRow({ children }: { children: React.ReactNode }) {
   return (
     <div className="blv-rowwrap">
       <div className="blv-grid" ref={row}>{children}</div>
+      {canNext && <p className="blv-swipe-hint" aria-hidden="true">Swipe to see more vehicles →</p>}
       {canPrev && (
         <button type="button" className="blv-nav blv-nav-prev" aria-label="Previous vehicles" onClick={() => page(-1)}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
@@ -285,7 +287,7 @@ export default function BookingVehiclePage() {
                 <h2 className="blv-h2">What&apos;s included</h2>
                 <ul>
                   <li><CheckIcon /> Free cancellation up to 1 hour before pickup</li>
-                  <li><CheckIcon /> 60 minutes of free wait time on airport pickups</li>
+                  {search?.tripType === "transfer" && <li><CheckIcon /> 60 minutes of free wait time on airport pickups</li>}
                   <li><CheckIcon /> All-inclusive fares — taxes and gratuity in the price</li>
                   <li><CheckIcon /> Licensed, insured professional chauffeur</li>
                   <li><CheckIcon /> Assistance with luggage at pickup and drop-off</li>
@@ -304,13 +306,18 @@ export default function BookingVehiclePage() {
             </div>
 
             <aside className="blv-rail" aria-label="Your selection">
-              {search && <div className="blv-rail-map"><ItineraryMap search={search} /></div>}
+              {search && <div className="blv-rail-map"><ItineraryMap search={search} />
+                <div className="text-14" style={{padding: "12px 16px", overflowWrap: "anywhere"}}>
+                  <div>Pickup: {search.pickupAddress}{data?.journey?.pickup_address && materiallyDiffers(search.pickupAddress, data.journey.pickup_address) && <div>interpreted as {data.journey.pickup_address}</div>}</div>
+                  {search.tripType !== "hourly" && <div>Drop-off: {search.dropoffAddress}{data?.journey?.dropoff_address && materiallyDiffers(search.dropoffAddress, data.journey.dropoff_address) && <div>interpreted as {data.journey.dropoff_address}</div>}</div>}
+                </div>
+              </div>}
               <div className="blv-railcard">
                 {selectedQuote ? (
                   <>
                     <div className="blv-rail-row">
                       <span className="blv-rail-name">{selectedQuote.vehicle_name}</span>
-                      <span className="blv-rail-price">{money(selectedQuote.total, selectedQuote.currency)}</span>
+                      <span className="blv-rail-price">{money(selectedQuote.total, selectedQuote.currency)}{search?.tripType === "hourly" && <small> for {search.hours} hours</small>}</span>
                     </div>
                     <div className="blv-rail-sub">{selectedQuote.vehicle_name} or similar</div>
 

@@ -16,6 +16,8 @@ export interface Search {
   tripType: "transfer" | "hourly" | "city";
   pickupAddress: string;
   dropoffAddress: string; // empty for an hourly hire
+  pickupCoordinates?: { lat: number; lng: number };
+  dropoffCoordinates?: { lat: number; lng: number };
   hours?: number; // set for an hourly hire
   date: string; // YYYY-MM-DD
   time: string; // HH:MM

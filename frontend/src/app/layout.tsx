@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { DM_Sans } from "next/font/google";
 import { Providers } from "@/providers/Providers";
-import ScrollToTop from "@/components/layout/ScrollToTop";
 
 // Swiper CSS (no relative image urls — safe as JS import)
 import "swiper/css";
@@ -55,7 +54,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="body-overlay-1" />
         <Providers>
           {children}
-          <ScrollToTop />
         </Providers>
         {/* Bootstrap 5 bundle (vanilla JS) powers the template's accordion +
             dropdown toggles (FAQs, fleet filters). Loaded after hydration. */}

@@ -22,6 +22,7 @@ export default function AuthModal({ open, initialTab, onClose }: {
 
   useEffect(() => {
     if (!open) return;
+    const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const scrollY = window.scrollY;
     const body = document.body;
     const previous = { overflow: body.style.overflow, position: body.style.position, top: body.style.top, width: body.style.width };
@@ -33,8 +34,8 @@ export default function AuthModal({ open, initialTab, onClose }: {
         const items = panelRef.current?.querySelectorAll<HTMLElement>("a[href], button:not(:disabled), input:not(:disabled)");
         if (!items?.length) return;
         const first = items[0], last = items[items.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        if (e.shiftKey && (document.activeElement === first || !panelRef.current?.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (document.activeElement === last || !panelRef.current?.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
       }
     };
     document.addEventListener("keydown", keydown);
@@ -42,6 +43,7 @@ export default function AuthModal({ open, initialTab, onClose }: {
       Object.assign(body.style, previous);
       window.scrollTo(0, scrollY);
       document.removeEventListener("keydown", keydown);
+      returnFocus?.focus({ preventScroll: true });
     };
   }, [open, onClose]);
 

@@ -38,8 +38,8 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     <div role="radiogroup" aria-label="Trip type" style={{display:"flex", gap:12, flexWrap:"wrap"}}>
       {([ ["transfer", "Transfer"], ["hourly", "Hourly"], ["city", "City-to-City"] ] as const).map(([value, label]) => <label key={value}><input type="radio" name="trip-type" value={value} checked={draft.tripType === value} onChange={() => update({ tripType: value })} /> {label}</label>)}
     </div>
-    <AddressField label="Pickup" value={draft.pickupAddress} onChange={(pickupAddress) => update({ pickupAddress })} placeholder="Pickup address" />
-    {draft.tripType !== "hourly" ? <AddressField label="Drop-off" value={draft.dropoffAddress} onChange={(dropoffAddress) => update({ dropoffAddress })} placeholder="Drop-off address" /> :
+    <AddressField label="Pickup" value={draft.pickupAddress} onChange={(pickupAddress) => update({ pickupAddress, pickupCoordinates: undefined })} placeholder="Pickup address" />
+    {draft.tripType !== "hourly" ? <AddressField label="Drop-off" value={draft.dropoffAddress} onChange={(dropoffAddress) => update({ dropoffAddress, dropoffCoordinates: undefined })} placeholder="Drop-off address" /> :
       <label>Hours<select className="form-control" value={draft.hours ?? 3} onChange={(e) => update({ hours: Number(e.target.value) })}>{Array.from({length:22}, (_, i) => <option key={i} value={i+3}>{i+3}</option>)}</select></label>}
     <label>Date<input className="form-control" type="date" value={draft.date} required onChange={(e) => update({ date: e.target.value })} /></label>
     <label>Time<input className="form-control" type="time" value={normalTime(draft.time)} required onChange={(e) => update({ time: e.target.value })} /></label>

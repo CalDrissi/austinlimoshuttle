@@ -32,7 +32,7 @@ export default function BookingSteps() {
   // How far forward the stepper may jump: each step is reachable only once the
   // steps before it hold what they collect. Back-navigation is always allowed.
   const phoneOk = (contact.phone ?? "").replace(/\D/g, "").length >= 7;
-  const contactOk = phoneOk && !!contact.name?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email ?? "") && (!trip.forSomeoneElse || (!!trip.passengerName?.trim() && (trip.passengerPhone ?? "").replace(/\D/g, "").length >= 7));
+  const contactOk = phoneOk && !!contact.name?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email ?? "") && (!trip.forSomeoneElse || (!!trip.passengerName?.trim() && (!(trip.passengerPhone ?? "").trim() || (trip.passengerPhone ?? "").replace(/\D/g, "").length >= 7)));
   const maxReachable = !hydrated || !quote ? 0 : capacity.blocked ? 1 : contactOk ? 3 : 2;
 
   return (

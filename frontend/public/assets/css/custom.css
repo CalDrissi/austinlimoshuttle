@@ -1166,3 +1166,16 @@ button.fh-pill:focus-visible { outline: 2px solid #0f63bd; outline-offset: 2px; 
 .box-booking-tabs .item-tab > div > .box-tab-step.locked { opacity: 0.55; }
 .box-booking-tabs .item-tab > div > .box-tab-step.locked:hover { background: transparent; }
 .box-booking-tabs .item-tab > div { cursor: default; }
+
+/* Readable picker surfaces and mobile carousel guidance. */
+.blw-sugs, .blw-list, .blw-cal { background: #202124; border: 1px solid #555b62; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.35); padding: 8px; }
+.blw-cal .rdp-disabled .rdp-day_button, .blw-cal .rdp-outside .rdp-day_button { color: #aeb3b9; }
+.blw-cal .rdp-disabled { opacity: 1; }
+.mm-daypicker .rdp-disabled .rdp-day_button, .mm-daypicker .rdp-outside .rdp-day_button { color: #747b85; }
+.mm-daypicker .rdp-disabled { opacity: 1; }
+.mm-field-error { color: #b42318; margin: 5px 0 0; font-size: 14px; }
+.blv-swipe-hint { display: none; }
+@media (max-width: 767px) {
+  .blv-swipe-hint { display: block; color: #555; font-size: 13px; margin: 6px 0; }
+  .mm-dropdown { left: 0; right: auto; max-width: min(100%, calc(100vw - 32px)); }
+}

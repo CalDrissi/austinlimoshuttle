@@ -83,7 +83,7 @@
             <td><a href="{% url 'dashboard:booking_detail' booking.reference %}"
                    class="fw-semibold">{{ booking.reference }}</a></td>
             <td>{{ booking.customer_name }}</td>
-            <td class="small text-secondary">{{ booking.pickup_address|truncatechars:24 }}
+            <td class="small text-secondary">{% if booking.is_city_to_city %}<strong>City-to-city</strong><br>{% endif %}{{ booking.pickup_address|truncatechars:24 }}
               <i class="bi bi-arrow-right mx-1"></i>{{ booking.dropoff_address|truncatechars:24|default:"—" }}</td>
             <td class="small">{{ booking.vehicle_name_snapshot }}</td>
             <td class="small">{{ booking.driver.full_name|default:"—" }}</td>
