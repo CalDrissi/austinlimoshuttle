@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { telHref } from "@/lib/api/site.service";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
+import TripEditor from "@/components/booking/TripEditor";
 
 /** "Austin-Bergstrom International Airport (AUS), Presidential Blvd…" -> "Austin-Bergstrom International Airport (AUS)" */
 function shortAddress(value: string): string {
@@ -34,19 +35,41 @@ function ArrowIcon() {
 }
 
 /** Blacklane-style booking-flow header: logo left, trip-summary pills centred,
- *  hamburger menu right. The pills are read-only — clicking returns home to edit. */
+ *  hamburger menu right. Clicking a pill edits the trip in place — an overlay
+ *  with the same TripEditor the Ride Summary uses, never a trip back home. */
 export default function FlowHeader() {
   const search = useBookingStore((s) => s.search);
   const hydrated = useHydrated();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const site = useSiteSettings();
   const qc = useQueryClient();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const editPanelRef = useRef<HTMLDivElement>(null);
+
+  // Signing in anywhere in the flow replaces the booker identity: the booking
+  // belongs to the account, so any guest contact typed earlier must not survive.
+  // Keyed by email so a re-render or profile refetch doesn't clobber edits.
+  useEffect(() => {
+    if (!hydrated || authLoading) return; // never act on the pre-fetch null
+    const store = useBookingStore.getState();
+    if (user) store.adoptAccountIdentity(user);
+    else store.clearAccountIdentity();
+  }, [user, authLoading, hydrated]);
 
   useEffect(() => { setMenuOpen(false); }, [pathname]);
+
+  // Trip-editor overlay: Esc closes, focus starts inside.
+  useEffect(() => {
+    if (!editing) return;
+    editPanelRef.current?.querySelector<HTMLElement>("input, select, button")?.focus();
+    const keydown = (e: KeyboardEvent) => { if (e.key === "Escape") setEditing(false); };
+    document.addEventListener("keydown", keydown);
+    return () => document.removeEventListener("keydown", keydown);
+  }, [editing]);
   useEffect(() => {
     const outside = (e: PointerEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -77,7 +100,7 @@ export default function FlowHeader() {
 
         {hydrated && search && (
           <div className="fh-pills">
-            <Link href="/" className="fh-pill" title="Edit your trip">
+            <button type="button" className="fh-pill" title="Edit your trip" onClick={() => setEditing(true)}>
               <b>{shortAddress(search.pickupAddress)}</b>
               {search.tripType === "hourly" ? (
                 <em>{search.hours} hours</em>
@@ -87,14 +110,14 @@ export default function FlowHeader() {
                   <b>{shortAddress(search.dropoffAddress)}</b>
                 </>
               )}
-            </Link>
-            <Link href="/" className="fh-pill fh-pill-when" title="Edit your trip">
+            </button>
+            <button type="button" className="fh-pill fh-pill-when" title="Edit your trip" onClick={() => setEditing(true)}>
               <span className="fh-seg">{pillDate(search.date)}</span>
               <span className="fh-seg">
                 <span className="fh-pill-icon"><ArrowIcon /></span>
                 {search.time}
               </span>
-            </Link>
+            </button>
           </div>
         )}
 
@@ -135,6 +158,17 @@ export default function FlowHeader() {
           )}
         </div>
       </div>
+
+      {/* In-place trip edit: same editor + reprice path as the Ride Summary
+          (applyRequote), shown as an overlay so the current step is kept. */}
+      {editing && search && (
+        <div className="mm-auth-layer" role="presentation">
+          <div className="mm-auth-backdrop" onClick={() => setEditing(false)} aria-hidden="true" />
+          <div ref={editPanelRef} className="mm-auth-panel" role="dialog" aria-modal="true" aria-label="Edit your trip">
+            <TripEditor search={search} onClose={() => setEditing(false)} />
+          </div>
+        </div>
+      )}
     </header>
   );
 }

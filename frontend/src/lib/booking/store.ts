@@ -49,6 +49,15 @@ interface BookingState {
   setJourney: (journey: Journey | null) => void;
   /** The vehicle the customer chose, with its signed quote_token. */
   quote: QuoteResult | null;
+  /**
+   * Which account (by email) the contact identity was last synced from.
+   * Signing in mid-flow must replace any guest contact with the account's
+   * profile — otherwise the booking is created under the previous guest's
+   * identity. Cleared on sign-out so a later guest starts clean.
+   */
+  contactOwner: string | null;
+  adoptAccountIdentity: (user: { first_name: string; last_name: string; email: string; phone?: string | null }) => void;
+  clearAccountIdentity: () => void;
   trip: Trip;
   contact: Contact;
   /** Set once POST /bookings/ succeeds. */
@@ -57,7 +66,7 @@ interface BookingState {
   preselectedVehicleId: number | null;
   setPreselectedVehicle: (id: number | null) => void;
   setSearch: (search: Search, preselectedVehicleId?: number | null) => void;
-  setQuote: (quote: QuoteResult) => void;
+  setQuote: (quote: QuoteResult | null) => void;
   setTrip: (trip: Partial<Trip>) => void;
   setContact: (contact: Contact) => void;
   setReference: (reference: string) => void;
@@ -73,6 +82,7 @@ const initial = {
   quote: null,
   trip: { passengerCount: 1, luggageCount: 0 } as Trip,
   contact: {} as Contact,
+  contactOwner: null,
   reference: null,
 };
 
@@ -89,9 +99,27 @@ export const useBookingStore = create<BookingState>()(
       setQuote: (quote) => set({ quote }),
       setTrip: (trip) => set((s) => ({ trip: { ...s.trip, ...trip } })),
       setContact: (contact) => set({ contact }),
+      adoptAccountIdentity: (user) =>
+        set((s) => {
+          if (s.contactOwner === user.email) return s; // already this account's identity
+          return {
+            contactOwner: user.email,
+            contact: {
+              name: `${user.first_name} ${user.last_name}`.trim(),
+              email: user.email,
+              // The account may have no phone on file yet — keep a phone the
+              // booker already typed rather than wiping a required field.
+              phone: user.phone || s.contact.phone || "",
+            },
+          };
+        }),
+      // Sign-out: drop the adopted identity so it can't prefill (or be booked
+      // under) for whoever uses the device next.
+      clearAccountIdentity: () =>
+        set((s) => (s.contactOwner ? { contactOwner: null, contact: {} } : s)),
       setReference: (reference) => set({ reference }),
       clearDraft: () =>
-        set({ search: null, preselectedVehicleId: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {} }),
+        set({ search: null, preselectedVehicleId: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {}, contactOwner: null }),
       reset: () => set(initial),
     }),
     {

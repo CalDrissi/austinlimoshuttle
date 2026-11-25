@@ -19,6 +19,8 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     setBusy(true); setError("");
     try {
       const next = { ...draft, pickupCoordinates: undefined, dropoffCoordinates: undefined,
+        // Meet & Greet is a point-to-point extra; an hourly hire must never carry it.
+        meetGreet: draft.tripType === "hourly" ? false : draft.meetGreet,
         dropoffAddress: draft.tripType === "hourly" ? "" : draft.dropoffAddress.trim(), pickupAddress: draft.pickupAddress.trim() };
       const response = await quoteService.create(quoteRequest(next));
       if (!response.quotes.length) throw new Error("No vehicles are available for this trip. Try another trip.");
@@ -38,7 +40,7 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
       <label>Hours<select className="form-control" value={draft.hours ?? 3} onChange={(e) => update({ hours: Number(e.target.value) })}>{Array.from({length:10}, (_, i) => <option key={i} value={i+3}>{i+3}</option>)}</select></label>}
     <label>Date<input className="form-control" type="date" value={draft.date} required onChange={(e) => update({ date: e.target.value })} /></label>
     <label>Time<input className="form-control" type="time" value={normalTime(draft.time)} required onChange={(e) => update({ time: e.target.value })} /></label>
-    <label><input type="checkbox" checked={draft.meetGreet} onChange={(e) => update({ meetGreet: e.target.checked })} /> Meet &amp; Greet</label>
+    {draft.tripType !== "hourly" && <label><input type="checkbox" checked={draft.meetGreet} onChange={(e) => update({ meetGreet: e.target.checked })} /> Meet &amp; Greet</label>}
     {error && <p role="alert" style={{color:"#b42318"}}>{error}</p>}
     <div style={{display:"flex", gap:12, flexWrap:"wrap"}}><button type="button" className="btn btn-primary" onClick={save}>{busy ? "Updating prices…" : "Save & reprice"}</button><button type="button" className="btn btn-link" onClick={onClose}>Cancel</button></div>
   </fieldset>;

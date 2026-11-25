@@ -7,6 +7,7 @@ import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { catalogService } from "@/lib/api/catalog.service";
 import { useBookingStore } from "@/lib/booking/store";
 import { useAuth } from "@/hooks/useAuth";
+import { ApiRequestError } from "@/lib/api/client";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
 import ItineraryMap from "@/components/booking/ItineraryMap";
 import AuthModal from "@/components/booking/AuthModal";
@@ -180,9 +181,13 @@ export default function BookingVehiclePage() {
   });
 
   // Fleet-page pre-selection wins; otherwise the first class is selected on
-  // load (matching Blacklane) so the rail is always populated.
+  // load (matching Blacklane) so the rail is always populated. Every refetch
+  // re-points the selection at the FRESH result for the same vehicle — the old
+  // QuoteResult carries a stale price and token; keeping it would show (and
+  // try to book) a price the server no longer honours.
   useEffect(() => {
-    if (!data || data.quotes.length === 0) return;
+    if (!data) return;
+    if (data.quotes.length === 0) { setQuote(null); return; }
     if (preselectedVehicleId != null) {
       const preferred = data.quotes.find((q) => q.vehicle_id === preselectedVehicleId);
       if (preferred) {
@@ -193,9 +198,8 @@ export default function BookingVehiclePage() {
       return;
     }
     const current = useBookingStore.getState().quote;
-    if (!current || !data.quotes.some((q) => q.vehicle_id === current.vehicle_id)) {
-      setQuote(data.quotes[0]);
-    }
+    const fresh = current ? data.quotes.find((q) => q.vehicle_id === current.vehicle_id) : undefined;
+    setQuote(fresh ?? data.quotes[0]);
   }, [data, preselectedVehicleId, setQuote, setPreselectedVehicle]);
 
   const setJourney = useBookingStore((s) => s.setJourney);
@@ -232,8 +236,11 @@ export default function BookingVehiclePage() {
           </>
         )}
         {error && (
-          <p className="text-16" style={{ color: "#b02032" }}>
-            We couldn&apos;t price that trip — check your addresses. <a href="/">Edit your search</a>
+          <p className="text-16" role="alert" style={{ color: "#b02032" }}>
+            {error instanceof ApiRequestError && error.message !== "Request failed"
+              ? error.message
+              : "We couldn't price that trip — check your addresses."}{" "}
+            <a href="/">Edit your search</a>
           </p>
         )}
         {data && data.quotes.length === 0 && (
@@ -311,25 +318,31 @@ export default function BookingVehiclePage() {
                     </div>
                     <div className="blv-rail-sub">{selectedQuote.vehicle_name} or similar</div>
 
+                    {/* Every booker row is a real, keyboard-reachable button:
+                        aria-pressed + the check mark make the selection
+                        unmistakable, and every click visibly responds. */}
                     <div className="blv-bookers">
                       {user ? (
                         <>
                           <button type="button" className={`blv-booker${bookFor === "me" ? " on" : ""}`}
+                                  aria-pressed={bookFor === "me"}
                                   onClick={() => { setBookFor("me"); setTrip({ forSomeoneElse: false }); }}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for myself</span>
                               <span className="blv-booker-sub">{user.email || "Book with your account information"}</span>
                             </span>
+                            {bookFor === "me" && <span className="blv-booker-check"><CheckIcon /></span>}
                           </button>
                           <button type="button" className={`blv-booker${bookFor === "guest" ? " on" : ""}`}
+                                  aria-pressed={bookFor === "guest"}
                                   onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: true }); }}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for a guest</span>
-                              <span className="blv-booker-sub">Select or add a guest</span>
+                              <span className="blv-booker-sub">Enter the passenger&rsquo;s details at the next steps</span>
                             </span>
-                            <span className="blv-booker-chevron"><ChevronRight /></span>
+                            {bookFor === "guest" && <span className="blv-booker-check"><CheckIcon /></span>}
                           </button>
                         </>
                       ) : (
@@ -348,13 +361,15 @@ export default function BookingVehiclePage() {
                             New here?{" "}
                             <button type="button" onClick={() => setAuthModal("register")}>Create an account</button>
                           </div>
-                          <div className="blv-booker on" role="note">
+                          <button type="button" className="blv-booker on" aria-pressed="true"
+                                  onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: false }); }}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
-                              <span className="blv-booker-title">Book for a guest</span>
-                              <span className="blv-booker-sub">Continue with your contact details</span>
+                              <span className="blv-booker-title">Book as guest</span>
+                              <span className="blv-booker-sub">Selected — continue with your contact details, no account needed</span>
                             </span>
-                          </div>
+                            <span className="blv-booker-check"><CheckIcon /></span>
+                          </button>
                         </>
                       )}
                     </div>

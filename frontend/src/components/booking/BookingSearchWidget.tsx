@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { DayPicker as ReactDayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { quoteService, quoteRequest } from "@/lib/api/quote.service";
+import { ApiRequestError } from "@/lib/api/client";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useBookingStore } from "@/lib/booking/store";
 import {
   loadGoogleMaps,
@@ -189,6 +191,22 @@ for (let h = 0; h < 24; h++) {
   }
 }
 
+/** "h:mm AM/PM" -> minutes since midnight. */
+function slotMinutes(t: string): number {
+  const m = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return 0;
+  return ((Number(m[1]) % 12) + (/PM/i.test(m[3]) ? 12 : 0)) * 60 + Number(m[2]);
+}
+
+/**
+ * Austin's current wall-clock as a local Date. Trips are priced and validated
+ * in America/Chicago, so "is this slot in the past" must be judged against
+ * Austin's clock, not the visitor's.
+ */
+function austinNow(): Date {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Chicago" }));
+}
+
 type TripType = "transfer" | "hourly" | "city";
 type Pane = "pickup" | "dropoff" | "date" | "time" | "duration";
 
@@ -215,6 +233,7 @@ function BrandMark() {
 export default function BookingSearchWidget({ preselectedVehicleId = null }: { preselectedVehicleId?: number | null }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const site = useSiteSettings();
   const [busy, setBusy] = useState(false);
   const setSearch = useBookingStore((s) => s.setSearch);
 
@@ -237,9 +256,29 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const fieldRefs = useRef<Partial<Record<Pane, HTMLDivElement | null>>>({});
+  const triggerRefs = useRef<Partial<Record<Pane, HTMLButtonElement | null>>>({});
   const pickupInputRef = useRef<HTMLInputElement>(null);
   const dropoffInputRef = useRef<HTMLInputElement>(null);
   const timeListRef = useRef<HTMLDivElement>(null);
+
+  // Never offer a slot that is already unbookable: for an Austin-today date,
+  // drop times before now + the office minimum lead. Other dates keep the
+  // full grid.
+  const availableTimes = useMemo(() => {
+    const day = date ? parseYmd(date) : undefined;
+    if (!day) return TIMES;
+    const cutoff = new Date(austinNow().getTime() + (site?.min_booking_lead_hours ?? 0) * 3_600_000);
+    const startOfDay = new Date(day);
+    if (startOfDay.getTime() + 24 * 3_600_000 <= cutoff.getTime()) return []; // whole day gone
+    if (startOfDay.getTime() > cutoff.getTime()) return TIMES; // a future day
+    return TIMES.filter((t) => startOfDay.getTime() + slotMinutes(t) * 60_000 >= cutoff.getTime());
+  }, [date, site?.min_booking_lead_hours]);
+
+  // A date change can strand an already-picked time in the past; clear it so
+  // the schedule never silently holds an unbookable slot.
+  useEffect(() => {
+    if (time && !availableTimes.includes(time)) setTime("");
+  }, [time, availableTimes]);
 
   const close = useCallback(() => setPane(null), []);
   useOutsideClose(rootRef, close);
@@ -280,16 +319,75 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     }
   }, [pane]);
 
-  // Scroll the chosen time into view when the list pane opens.
+  /* ----- keyboard support for the list + calendar panes (listbox pattern:
+     the container keeps focus, aria-activedescendant names the active row) ----- */
+  const [listIdx, setListIdx] = useState(0);
+  const listOptions = shownPane === "duration" ? HOUR_OPTIONS.map((h) => `${h} hours`) : availableTimes;
+  const listValue = shownPane === "duration" ? `${hours} hours` : time;
+
+  // When a list pane opens: focus it, start on the chosen row, bring it into view.
   useEffect(() => {
     if (pane === "time" || pane === "duration") {
-      timeListRef.current?.querySelector(".sel")?.scrollIntoView({ block: "center" });
+      const options = pane === "duration" ? HOUR_OPTIONS.map((h) => `${h} hours`) : availableTimes;
+      const chosen = pane === "duration" ? `${hours} hours` : time;
+      const idx = options.indexOf(chosen);
+      setListIdx(idx >= 0 ? idx : 0);
+      timeListRef.current?.focus({ preventScroll: true });
+      requestAnimationFrame(() => {
+        timeListRef.current?.querySelector(".sel, .act")?.scrollIntoView({ block: "center" });
+      });
     }
+    // Opening the calendar moves focus into the day grid so arrow keys work
+    // immediately (react-day-picker handles the arrows once focus is inside).
+    if (pane === "date") {
+      requestAnimationFrame(() => {
+        panelRef.current
+          ?.querySelector<HTMLElement>(
+            ".rdp-selected .rdp-day_button, .rdp-today .rdp-day_button, .rdp-day_button:not([disabled])",
+          )
+          ?.focus();
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run on open only
   }, [pane]);
+
+  const closePaneToTrigger = (which: Pane) => {
+    setPane(null);
+    triggerRefs.current[which]?.focus();
+  };
+
+  const pickListOption = (idx: number) => {
+    const value = listOptions[idx];
+    if (value === undefined) return;
+    if (shownPane === "duration") setHours(value.replace(/\D/g, ""));
+    else setTime(value);
+    closePaneToTrigger(shownPane);
+  };
+
+  const onListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const last = listOptions.length - 1;
+    const move = (to: number) => {
+      const next = Math.max(0, Math.min(last, to));
+      setListIdx(next);
+      document.getElementById(`blw-opt-${next}`)?.scrollIntoView({ block: "nearest" });
+    };
+    switch (e.key) {
+      case "ArrowDown": e.preventDefault(); move(listIdx + 1); break;
+      case "ArrowUp": e.preventDefault(); move(listIdx - 1); break;
+      case "Home": e.preventDefault(); move(0); break;
+      case "End": e.preventDefault(); move(last); break;
+      case "Enter":
+      case " ": e.preventDefault(); pickListOption(listIdx); break;
+      case "Escape": e.preventDefault(); closePaneToTrigger(shownPane); break;
+    }
+  };
 
   const changeTab = (value: TripType) => {
     setError("");
     setTripType(value);
+    // Meet & Greet is only offered on point-to-point trips; leaving them must
+    // drop it or an hourly quote silently carries the hidden fee.
+    if (value === "hourly") setMeetGreet(false);
     if (pane === "dropoff" || pane === "duration") setPane(null);
   };
 
@@ -350,7 +448,13 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     try {
       await qc.fetchQuery({ queryKey: ["quotes", search], queryFn: () => quoteService.create(quoteRequest(search)), staleTime: 0, retry: false });
       router.push("/booking/vehicle");
-    } catch { setError("We couldn't price that trip — check your addresses"); }
+    } catch (e) {
+      // The server says exactly what's wrong (lead time, unroutable address,
+      // no vehicle for the trip) — show that, not a blanket "check addresses".
+      setError(e instanceof ApiRequestError && e.message !== "Request failed"
+        ? e.message
+        : "We couldn't price that trip — check your addresses");
+    }
     finally { setBusy(false); }
   };
 
@@ -408,6 +512,7 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     >
       <button
         type="button"
+        ref={(el) => { triggerRefs.current[which] = el; }}
         className="blw-trigger"
         aria-expanded={pane === which}
         onClick={() => setPane(pane === which ? null : which)}
@@ -470,44 +575,45 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
         return locContent();
       case "date":
         return (
-          <div className="blw-cal">
+          <div
+            className="blw-cal"
+            onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); closePaneToTrigger("date"); } }}
+          >
             <ReactDayPicker
               mode="single"
               selected={selectedDay}
               defaultMonth={selectedDay ?? today}
               disabled={{ before: today }}
-              onSelect={(d) => { if (d) { setDate(toYmd(d)); setPane(null); } }}
+              onSelect={(d) => { if (d) { setDate(toYmd(d)); closePaneToTrigger("date"); } }}
             />
           </div>
         );
       case "time":
-        return (
-          <div className="blw-list" role="listbox" ref={timeListRef}>
-            {TIMES.map((t) => (
-              <div
-                key={t}
-                role="option"
-                aria-selected={t === time}
-                className={`blw-list-item${t === time ? " sel" : ""}`}
-                onMouseDown={(e) => { e.preventDefault(); setTime(t); setPane(null); }}
-              >
-                {t}
-              </div>
-            ))}
-          </div>
-        );
       case "duration":
         return (
-          <div className="blw-list" role="listbox" ref={timeListRef}>
-            {HOUR_OPTIONS.map((h) => (
+          <div
+            className="blw-list"
+            role="listbox"
+            aria-label={shownPane === "duration" ? "Duration" : "Pickup time"}
+            tabIndex={0}
+            aria-activedescendant={listOptions.length ? `blw-opt-${listIdx}` : undefined}
+            onKeyDown={onListKeyDown}
+            ref={timeListRef}
+          >
+            {listOptions.length === 0 && (
+              <div className="blw-sug-empty">No times left today — pick another date.</div>
+            )}
+            {listOptions.map((label, i) => (
               <div
-                key={h}
+                key={label}
+                id={`blw-opt-${i}`}
                 role="option"
-                aria-selected={String(h) === hours}
-                className={`blw-list-item${String(h) === hours ? " sel" : ""}`}
-                onMouseDown={(e) => { e.preventDefault(); setHours(String(h)); setPane(null); }}
+                aria-selected={label === listValue}
+                className={`blw-list-item${label === listValue ? " sel" : ""}${i === listIdx ? " act" : ""}`}
+                onMouseMove={() => setListIdx(i)}
+                onMouseDown={(e) => { e.preventDefault(); pickListOption(i); }}
               >
-                {h} hours
+                {label}
               </div>
             ))}
           </div>

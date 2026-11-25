@@ -8,6 +8,7 @@ import { Elements, CardElement, useStripe, useElements } from "@stripe/react-str
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth } from "@/hooks/useAuth";
 import { bookingService } from "@/lib/api/booking.service";
+import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { paymentService } from "@/lib/api/payment.service";
 import { ApiRequestError } from "@/lib/api/client";
 import { useCapacity } from "@/lib/booking/useCapacity";
@@ -76,11 +77,15 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   const submissionLock = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Quote tokens are short-lived; when one dies at confirm the fix is a fresh
+  // quote, not a trip back through the funnel — one click, same step.
+  const [expired, setExpired] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
   // The booking is created on the first confirm and reused on retry, so a
   // declined card doesn't leave a trail of duplicate pending bookings.
   const [createdRef, setCreatedRef] = useState("");
-  useEffect(() => { setCreatedRef(""); }, [quote?.quote_token, trip, contact]);
+  useEffect(() => { setCreatedRef(""); setExpired(false); }, [quote?.quote_token, trip, contact]);
   const hydrated = useHydrated();
   const capacity = useCapacity();
 
@@ -116,9 +121,13 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           luggage_count: trip.luggageCount,
           pickup_sign: pickupSign,
           notes,
-          guest_email: contact.email,
-          guest_name: contact.name,
-          guest_phone: contact.phone,
+          // Signed-in bookings take their identity from the account; sending
+          // guest_* here would carry a previous guest's details into the booking.
+          ...(user ? {} : {
+            guest_email: contact.email,
+            guest_name: contact.name,
+            guest_phone: contact.phone,
+          }),
         });
         reference = booking.reference;
         setCreatedRef(reference);
@@ -157,13 +166,39 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
       void qc.invalidateQueries({ queryKey: ["my-bookings"] });
       router.push("/booking/confirmation");
     } catch (e) {
-      if (e instanceof ApiRequestError && e.status === 503) {
+      if (e instanceof ApiRequestError && e.fieldError("quote_token")) {
+        setExpired(true); // dedicated recovery UI below; no generic error
+      } else if (e instanceof ApiRequestError && e.status === 503) {
         setError("Card payments are unavailable right now. Please choose cash, or contact us.");
       } else {
         setError(e instanceof Error ? e.message : "Something went wrong creating your booking.");
       }
       submissionLock.current = false;
       setSubmitting(false);
+    }
+  };
+
+  // One click back to a bookable state: re-run the same search, adopt the fresh
+  // prices/tokens (applyRequote re-points the chosen vehicle), stay right here.
+  const refreshPrices = async () => {
+    const { search, applyRequote } = useBookingStore.getState();
+    if (!search || refreshing) return;
+    setRefreshing(true);
+    setError("");
+    try {
+      const response = await quoteService.create(quoteRequest(search));
+      qc.setQueryData(["quotes", search], response);
+      applyRequote(search, response);
+      setExpired(false);
+      if (!response.quotes.some((q) => q.vehicle_id === quote.vehicle_id)) {
+        // Vehicle no longer offered for this trip — the cleared selection
+        // sends the booker back to choose (guard effect above).
+        return;
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "We couldn't refresh your prices — please try again.");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -202,6 +237,9 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           <div className="d-flex justify-content-between heading-20-medium">
             <span>Total</span><span>{money(quote.total, quote.currency)}</span>
           </div>
+          <p className="text-13 color-grey" style={{ margin: "8px 0 0" }}>
+            Quoted prices are held for a short time — if yours expires we&rsquo;ll refresh it right here.
+          </p>
         </div>
 
         <h5 className="text-16-medium mb-10">How would you like to pay?</h5>
@@ -236,18 +274,35 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           </div>
         )}
 
+              {expired && (
+                <div className="mm-quote-expired" role="alert">
+                  <p style={{ margin: 0 }}>
+                    <b>Your quote expired.</b> Prices are held for a limited time — refresh to get
+                    today&rsquo;s price for the same trip. All your details are kept.
+                  </p>
+                  <button type="button" className="btn btn-primary hover-up" onClick={refreshPrices} disabled={refreshing}>
+                    {refreshing ? "Getting fresh prices…" : "Get fresh prices"}
+                  </button>
+                </div>
+              )}
               {error && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
               <button
                 className="btn btn-primary hover-up mt-10"
                 onClick={confirm}
-                disabled={submitting || cardDisabledSubmit || capacity.blocked}
+                disabled={submitting || cardDisabledSubmit || capacity.blocked || expired || refreshing}
               >
+                {submitting && <span className="mm-btn-spinner" aria-hidden="true" />}
                 {submitting
                   ? "Processing payment…"
                   : method === "cash"
                     ? "Confirm booking (cash)"
                     : `Pay ${money(quote.total, quote.currency)}`}
               </button>
+              {submitting && (
+                <p role="status" className="text-14 color-grey mt-10" style={{ marginBottom: 0 }}>
+                  Confirming your booking — this usually takes a moment. Please don&rsquo;t close this page.
+                </p>
+              )}
             </div>
           </div>
           <OrderSummary />

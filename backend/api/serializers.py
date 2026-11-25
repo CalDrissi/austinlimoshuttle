@@ -44,12 +44,21 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
     scraper the one mailbox the business cannot afford to have flooded.
     """
 
+    # Office minimum booking lead (hours). Published so the search widget can
+    # stop OFFERING pickup times the server would reject anyway.
+    min_booking_lead_hours = serializers.SerializerMethodField()
+
+    def get_min_booking_lead_hours(self, obj) -> int:
+        from pricing.models import PricingSettings
+
+        return PricingSettings.load().min_booking_lead_hours
+
     class Meta:
         model = SiteSettings
         fields = [
             "contact_email", "contact_phone",
             "facebook", "instagram", "twitter", "linkedin",
-            "google_maps_api_key",
+            "google_maps_api_key", "min_booking_lead_hours",
         ]
         read_only_fields = fields
 

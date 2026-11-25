@@ -1119,3 +1119,35 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
   .blv-card { flex: 0 0 86%; max-width: 86%; width: auto; scroll-snap-align: center; }
   .blv-card-media { width: 100%; }
 }
+
+/* --- booking-flow fix batch 1 (H2/H5/H7/H8/H9) --------------------------- */
+
+/* header pills are buttons now (they open the in-place trip editor) */
+button.fh-pill { cursor: pointer; font: inherit; }
+button.fh-pill:focus-visible { outline: 2px solid #0f63bd; outline-offset: 2px; }
+
+/* expired-quote recovery on the payment step */
+.mm-quote-expired {
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+  border: 1px solid #f0c7a6; background: #fdf6ee; border-radius: 12px;
+  padding: 14px 16px; margin: 4px 0 10px; font-size: 14.5px; color: #0f1319;
+}
+
+/* in-button progress spinner for payment confirm */
+.mm-btn-spinner {
+  display: inline-block; width: 15px; height: 15px; margin-right: 9px;
+  vertical-align: -2px; border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff; border-radius: 50%;
+  animation: mm-btn-spin 0.7s linear infinite;
+}
+@keyframes mm-btn-spin { to { transform: rotate(360deg); } }
+
+/* booker rows: selection check, press feedback, visible keyboard focus */
+.blv-booker-check { margin-left: auto; display: inline-flex; flex: 0 0 auto; }
+.blv-booker:active { transform: scale(0.99); }
+.blv-booker:focus-visible { outline: 2px solid #0f63bd; outline-offset: 2px; }
+
+/* keyboard-driven time/duration listbox: active (focused) row */
+.blw-list:focus-visible { outline: 2px solid #3b82d7; outline-offset: 2px; border-radius: 8px; }
+.blw-list-item.act { background: rgba(255, 255, 255, 0.14); }
+.blw-list-item.sel.act { background: #0f63bd; }

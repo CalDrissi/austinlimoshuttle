@@ -961,6 +961,44 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Booking-flow fix campaign, batch 1 (H1–H9 from the 3-audit sweep)</span><span class="tbl">frontend · api · notifications</span></div>
+    <table>
+      <tr><td><b>H1 identity.</b> Signing in mid-flow now <b>replaces</b> the booker identity: the store gained
+      <code>adoptAccountIdentity()</code>/<code>clearAccountIdentity()</code> (keyed by account email), applied by
+      <code>FlowHeader</code> whenever auth state changes; the passenger step overwrites (not backfills) its fields
+      from the account; the payment step <b>omits <code>guest_*</code></b> entirely for signed-in bookers, so a
+      booking can no longer be created under a previous guest's name/email.</td></tr>
+      <tr><td><b>H2 in-flow trip edit.</b> The header pills open the existing <code>TripEditor</code> as an overlay
+      on the current step (Save &amp; reprice → <code>applyRequote</code>); they no longer navigate to <code>/</code>
+      and the empty-widget trap is gone.</td></tr>
+      <tr><td><b>H3 hidden Meet&amp;Greet.</b> Switching the search widget (or TripEditor) to hourly resets/strips
+      <code>meetGreet</code>, so an hourly quote can no longer carry the fee invisibly.</td></tr>
+      <tr><td><b>H4 stale quote.</b> The vehicle page re-points the selected quote at the fresh
+      <code>QuoteResult</code> (price + token) on every refetch; a vanished vehicle clears the selection
+      (<code>setQuote</code> now accepts <code>null</code>).</td></tr>
+      <tr><td><b>H5 quote expiry.</b> A <code>quote_token</code> field error at booking create shows a "Your quote
+      expired" panel on the payment step with one-click <b>Get fresh prices</b> (re-quote + <code>applyRequote</code>,
+      user stays on the step, details intact), plus a subtle price-validity note.</td></tr>
+      <tr><td><b>H6 quote errors.</b> The widget and vehicle page surface the server's actual message (lead-time,
+      distance lookup, no vehicle) instead of a blanket "check your addresses"; the widget's time list filters out
+      slots before Austin-now + the office minimum lead for today (new read-only
+      <code>min_booking_lead_hours</code> on <code>GET /api/site-settings/</code>), and a date change clears a
+      now-stranded time.</td></tr>
+      <tr><td><b>H7 payment feedback + slow pay-cash.</b> Confirm shows a spinner + reassurance line.
+      <code>notifications.events.booking_confirmed</code> now fans out (email + SMS + ops alert) on a daemon thread
+      started at transaction commit — the 31s synchronous SMTP/PDF block is off the request path; EmailLog still
+      records every send; <code>NOTIFICATIONS_SYNC=True</code> keeps tests inline (new
+      <code>notifications/tests/test_events.py</code>).</td></tr>
+      <tr><td><b>H8 keyboard pickers.</b> Time/duration lists are a real listbox (container focus +
+      <code>aria-activedescendant</code>, Arrow/Home/End/Enter/Escape, focus returns to the trigger); the calendar
+      moves focus into the day grid on open.</td></tr>
+      <tr><td><b>H9 booker rows.</b> Every booker row is a real button with <code>aria-pressed</code>, a selection
+      check mark and press feedback; the guest row is no longer a <code>role=note</code> div and the misleading
+      chevron on "Book for a guest" is gone.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Flight number removed product-wide (owner decision)</span><span class="tbl">frontend · api · bookings · dashboard · driver · notifications</span></div>
     <table>
       <tr><td><b>Owner decision: the business does not collect flight numbers.</b> Every flight-number input and

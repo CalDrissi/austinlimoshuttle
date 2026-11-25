@@ -16,6 +16,8 @@ export interface SiteSettings {
   twitter: string;
   linkedin: string;
   google_maps_api_key: string;
+  /** Office minimum booking lead (hours); the widget hides earlier time slots. */
+  min_booking_lead_hours: number;
 }
 
 const EMPTY: SiteSettings = {
@@ -26,6 +28,7 @@ const EMPTY: SiteSettings = {
   twitter: "",
   linkedin: "",
   google_maps_api_key: "",
+  min_booking_lead_hours: 0,
 };
 
 const http = {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
@@ -56,12 +56,18 @@ export default function BookingPassengerPage() {
     if (hydrated && !quote) router.replace("/booking/vehicle");
   }, [hydrated, quote, router]);
 
+  // A signed-in booker's identity IS the account: replace (don't just backfill)
+  // whatever guest details were typed before sign-in, once per account, so the
+  // step shows — and the booking carries — the account's name and email.
+  const appliedAccount = useRef<string | null>(null);
   useEffect(() => {
-    if (user && detailsReady) {
-      setName((n) => n || `${user.first_name} ${user.last_name}`.trim());
-      setEmail((e) => e || user.email);
-      setPhone((p) => p || user.phone || "");
-    }
+    if (!user) { appliedAccount.current = null; return; }
+    if (!detailsReady || appliedAccount.current === user.email) return;
+    appliedAccount.current = user.email;
+    setName(`${user.first_name} ${user.last_name}`.trim());
+    setEmail(user.email);
+    // Keep a phone the booker already typed when the account has none on file.
+    setPhone((p) => user.phone || p);
   }, [user, detailsReady]);
 
   // Persist as the passenger types so the summary and back navigation stay live.
