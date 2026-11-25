@@ -756,9 +756,9 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Request · RegisterRequest</div><div class="fieldgrid"><span class="r">email<span class="ty"> email</span></span><span class="r">password<span class="ty"> str</span></span><span>first_name<span class="ty"> str</span></span><span>last_name<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span></div>
       <div class="lab">Response 201 · User</div><div class="codes"><span class="code ok">201</span><span class="code">202</span><span class="code">400</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/auth/me/</span><span class="au session">session</span></div>
-    <div class="ep-b"><p class="sm">The current signed-in user.</p>
+    <div class="ep-b"><p class="sm">The current signed-in user. Anonymous → <b>204</b> (no body, no console noise); PATCH still requires a session (403 anonymous).</p>
       <div class="lab">Response 200 · User</div><div class="fieldgrid"><span class="r">email<span class="ty"> email</span></span><span class="r">first_name<span class="ty"> str</span></span><span class="r">last_name<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span></div>
-      <div class="codes"><span class="code ok">200</span><span class="code">403</span></div></div></div>
+      <div class="codes"><span class="code ok">200</span><span class="code ok">204</span><span class="code">403</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/auth/logout/</span><span class="au session">session</span></div>
     <div class="ep-b"><p class="sm">Sign out; clears the cookie.</p><div class="lab">Response 204</div><div class="codes"><span class="code ok">204</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/auth/password-reset/</span><span class="au">public</span></div>
@@ -946,6 +946,41 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · E2E round-1 defect batch: cash refunds without Stripe, cash awaiting-collection, guest name vs placard, quiet /auth/me, min-fare label, overview count</span><span class="tbl">payments · bookings · api · dashboard · frontend</span></div>
+    <table>
+      <tr><td><b>BUG-1 — cash refunds no longer require Stripe.</b> <code>payments.gateway.refund()</code> now routes
+      by payment method: a <code>Provider.CASH</code> payment records a <b>manual refund</b> (a <code>Refund</code> row
+      with no <code>stripe_refund_id</code>, money handed back to the customer) without touching — or needing —
+      Stripe configuration; card payments refund at Stripe exactly as before. All existing validation (succeeded-only,
+      remaining-amount ceiling) applies to both. Covers the cancellation-approval path AND the stand-alone refund
+      screen, since both call <code>gateway.refund</code>. <code>BookingCancellationRequest.approve()</code> writes a
+      method-aware history line: cash → <i>“Cancellation approved by staff; cash refund $X to be returned to
+      customer”</i>; the client cancellation email still shows the refund amount for both methods.</td></tr>
+      <tr><td><b>BUG-5 — cash is awaiting-collection until staff say otherwise.</b>
+      <code>POST /api/bookings/&lt;ref&gt;/pay-cash/</code> now records the cash payment as
+      <code>Status.PROCESSING</code> (awaiting collection), matching the staff manual-booking path; it only becomes
+      <code>succeeded</code> via the existing “Mark cash collected” action. Paid-to-date (the refund ceiling snapshot
+      on a cancellation request) therefore reflects money actually in hand: $0 while awaiting, the full fare once
+      collected. The endpoint is also idempotent now — a retried confirm returns 200 without recording a second
+      payment. Back-office payments table already badges <i>Cash — awaiting collection</i>.</td></tr>
+      <tr><td><b>BUG-3 — customer name is the booker, never the placard.</b> New <code>Booking.guest_name</code>
+      column (migration <code>bookings.0010</code>), persisted from the storefront’s contact name on guest checkout.
+      <code>Booking.customer_name</code> now resolves account name → <code>guest_name</code> → <i>“Guest”</i> and
+      never falls back to <code>pickup_sign</code>; driver screens keep preferring the placard explicitly.</td></tr>
+      <tr><td><b>BUG-4 — anonymous <code>GET /api/auth/me/</code> is a quiet 204.</b> Previously 403, which the
+      browser logged as a failed request on every storefront page an anonymous visitor opened. Anonymous GET → 204
+      (no body); anonymous PATCH still 403. The frontend treats the empty response as signed-out.</td></tr>
+      <tr><td><b>BUG-2 — minimum-fare line reads as what it is.</b> The engine’s floor line amount is the TOP-UP, not
+      the floor (<code>$3.90</code>, not <code>$150.00</code>), so the lines always sum to the total — but the old
+      label (<i>“Minimum fare $150.00”</i>) made the row look irreconcilable. Relabelled to
+      <i>“Minimum fare adjustment (to $150.00)”</i> in <code>pricing.engine.quote()</code>, so the back-office fare
+      table reconciles at a glance after an amendment reprice.</td></tr>
+      <tr><td><b>POLISH — account Overview counts.</b> “Completed / past” on the storefront account Overview now
+      excludes cancelled bookings (they still count in “Total bookings” and list under My bookings).</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Email package P1–P5: driver job sheet, client acks, trip thank-you, SMTP retry, reminder cron</span><span class="tbl">notifications · dashboard · api · ops</span></div>

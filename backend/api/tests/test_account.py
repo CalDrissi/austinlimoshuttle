@@ -49,6 +49,30 @@ def auth(client, user):
 
 
 @pytest.mark.django_db
+class TestAuthMe:
+    """
+    Every storefront page asks "who am I?" on load. Anonymous must be a quiet
+    2xx (204, no body) -- a 403 here lands in the browser console as a failed
+    request on every page a signed-out visitor opens.
+    """
+
+    def test_anonymous_get_is_a_quiet_204(self, client, db):
+        response = client.get(reverse("api:me"))
+        assert response.status_code == 204
+        assert not response.content
+
+    def test_signed_in_get_returns_the_profile(self, auth, user):
+        response = auth.get(reverse("api:me"))
+        assert response.status_code == 200
+        assert response.json()["email"] == "owner@example.com"
+
+    def test_anonymous_patch_is_still_rejected(self, client, db):
+        response = client.patch(reverse("api:me"), {"first_name": "X"},
+                                content_type="application/json")
+        assert response.status_code == 403
+
+
+@pytest.mark.django_db
 class TestProfileEdit:
     def test_requires_authentication(self, client):
         response = client.patch(reverse("api:account_profile"),

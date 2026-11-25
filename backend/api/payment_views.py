@@ -163,9 +163,11 @@ def create_intent(request):
     summary="Confirm a booking for cash / pay-on-arrival",
     description=(
         "Confirms a pending booking without an online payment — the fare is "
-        "collected by the driver. Records a cash payment for the booking's own "
-        "amount (never a client-supplied one) and moves the booking to "
-        "`confirmed`.\n\n"
+        "collected by the driver. Records an awaiting-collection cash payment "
+        "for the booking's own amount (never a client-supplied one) and moves "
+        "the booking to `confirmed`. The payment only becomes `succeeded` when "
+        "staff mark the cash collected in the back office, so paid-to-date "
+        "reflects money actually received.\n\n"
         "Scoped like the other reference endpoints: a signed-in customer may "
         "only settle their own booking; a guest booking is settled by whoever "
         "holds the reference."
@@ -197,14 +199,23 @@ def pay_cash(request, reference):
     if booking.payments.filter(status=Payment.Status.SUCCEEDED).exists():
         return Response({"detail": "This booking is already paid."},
                         status=status.HTTP_409_CONFLICT)
+    # A retried confirm (double click, flaky network) must not record the fare
+    # twice: an awaiting-collection cash payment already covers this booking.
+    if booking.payments.filter(
+        provider=Payment.Provider.CASH, status=Payment.Status.PROCESSING,
+    ).exists():
+        return Response(BookingStatusSerializer(booking).data)
 
     with transaction.atomic():
+        # Awaiting collection, NOT succeeded: the money changes hands with the
+        # driver, so staff mark it collected in the back office. Recording it
+        # as paid here would poison paid-to-date (and therefore refunds).
         Payment.objects.create(
             booking=booking,
             provider=Payment.Provider.CASH,
             amount=booking.total,
             currency=booking.currency,
-            status=Payment.Status.SUCCEEDED,
+            status=Payment.Status.PROCESSING,
         )
         if booking.status == Booking.Status.PENDING:
             BookingStatusChange.objects.create(

@@ -243,6 +243,92 @@ class TestApprove:
 
 
 @pytest.mark.django_db
+class TestApproveCash:
+    """
+    A cash fare never touched Stripe, so approving its cancellation must not
+    call (or even require) the Stripe gateway -- deliberately no `configured`
+    fixture here. The refund is recorded as a manual (hand-back) refund.
+    """
+
+    @pytest.fixture
+    def cash_booking(self, booking):
+        payment = booking.payments.get()
+        payment.provider = Payment.Provider.CASH
+        payment.payment_intent_id = ""
+        payment.save(update_fields=["provider", "payment_intent_id"])
+        return booking
+
+    def test_partial_cash_refund_approves_without_stripe(
+        self, client, roles, cash_booking
+    ):
+        staff_in(MANAGER)
+        client.login(username="manager@example.com", password=PASSWORD)
+        req = _request(cash_booking)
+
+        with patch("payments.gateway._client") as stub:
+            response = client.post(
+                reverse("dashboard:cancellation_detail", args=[req.pk]),
+                {"action": "approve", "refund_amount": "45.10"},
+            )
+            stub.assert_not_called()
+        assert response.status_code == 302
+
+        req.refresh_from_db()
+        cash_booking.refresh_from_db()
+        assert req.status == BookingCancellationRequest.Status.APPROVED
+        assert req.refund_amount == Decimal("45.10")
+        assert cash_booking.status == Booking.Status.CANCELLED
+        # Recorded as a manual refund: real amount, no Stripe reference.
+        refund = Refund.objects.get()
+        assert refund.amount == Decimal("45.10")
+        assert refund.stripe_refund_id == ""
+        assert refund.created_by.email == "manager@example.com"
+        # The history explains how the money goes back.
+        note = cash_booking.status_changes.first().note
+        assert "cash refund $45.10 to be returned to customer" in note
+        # Customer still gets the cancellation email with the refund amount.
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.BOOKING_CANCELLED, booking=cash_booking,
+        ).exists()
+
+    def test_full_cash_refund_approves_without_stripe(
+        self, client, roles, cash_booking
+    ):
+        staff_in(MANAGER)
+        client.login(username="manager@example.com", password=PASSWORD)
+        req = _request(cash_booking)
+
+        response = client.post(
+            reverse("dashboard:cancellation_detail", args=[req.pk]),
+            {"action": "approve", "refund_amount": "145.10"},
+        )
+        assert response.status_code == 302
+        req.refresh_from_db()
+        cash_booking.refresh_from_db()
+        assert req.status == BookingCancellationRequest.Status.APPROVED
+        assert cash_booking.status == Booking.Status.CANCELLED
+        assert Refund.objects.get().amount == Decimal("145.10")
+
+    def test_card_history_note_keeps_stripe_wording(
+        self, client, roles, configured, booking
+    ):
+        """The card path is untouched: refunded via Stripe, noted as refunded."""
+        staff_in(MANAGER)
+        client.login(username="manager@example.com", password=PASSWORD)
+        req = _request(booking)
+
+        with patch("payments.gateway._client", return_value=_stub_client()):
+            client.post(
+                reverse("dashboard:cancellation_detail", args=[req.pk]),
+                {"action": "approve", "refund_amount": "45.10"},
+            )
+        booking.refresh_from_db()
+        note = booking.status_changes.first().note
+        assert "refunded 45.10 USD" in note
+        assert "cash" not in note.lower()
+
+
+@pytest.mark.django_db
 class TestDecline:
     def test_decline_records_reason_and_leaves_booking(self, client, roles, booking):
         staff_in(DISPATCHER)

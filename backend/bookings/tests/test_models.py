@@ -133,12 +133,21 @@ class TestCustomerName:
     def test_uses_the_account_name(self, booking):
         assert booking.customer_name == "Sam Ray"
 
-    def test_guest_booking_falls_back_to_the_placard_name(self, vehicle):
+    def test_guest_booking_uses_the_contact_name_not_the_placard(self, vehicle):
         guest = Booking.objects.create(
             vehicle=vehicle, pickup_address="a", pickup_at=timezone.now(),
-            pickup_sign="J. Okafor",
+            guest_name="J. Okafor", pickup_sign="Mr Placard",
         )
         assert guest.customer_name == "J. Okafor"
+
+    def test_guest_booking_without_a_name_is_just_guest(self, vehicle):
+        """The placard is the passenger's sign, not the booker -- never shown
+        as the customer."""
+        guest = Booking.objects.create(
+            vehicle=vehicle, pickup_address="a", pickup_at=timezone.now(),
+            pickup_sign="Mr Placard",
+        )
+        assert guest.customer_name == "Guest"
 
 
 @pytest.mark.django_db

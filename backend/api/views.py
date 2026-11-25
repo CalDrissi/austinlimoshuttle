@@ -452,6 +452,7 @@ def create_booking(request):
             pickup_sign=data.get("pickup_sign") or data.get("guest_name", ""),
             notes=data.get("notes", ""),
             guest_email=data.get("guest_email", "") if customer is None else "",
+            guest_name=data.get("guest_name", "") if customer is None else "",
             guest_phone=data.get("guest_phone", "") if customer is None else "",
             # Every figure below comes from the server-side recomputation.
             subtotal=recomputed.subtotal,
@@ -1429,15 +1430,23 @@ def auth_verify_code(request):
 @extend_schema(
     tags=["auth"],
     summary="Read or update the signed-in customer",
-    description="GET returns the current profile. PATCH updates the editable "
-                "fields (first_name, last_name, phone). Email is the login "
-                "identifier and is not editable here.",
+    description="GET returns the current profile, or **204** with no body for "
+                "an anonymous visitor — every storefront page asks \"who am "
+                "I?\" on load, and an error status would land in the browser "
+                "console as noise. PATCH updates the editable fields "
+                "(first_name, last_name, phone) and requires a session. Email "
+                "is the login identifier and is not editable here.",
     request=UserSerializer,
-    responses={200: UserSerializer, 403: DetailSerializer},
+    responses={200: UserSerializer, 204: None, 403: DetailSerializer},
 )
 @api_view(["GET", "PATCH"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def auth_me(request):
+    if not request.user.is_authenticated:
+        if request.method == "PATCH":
+            return Response({"detail": "Not signed in."},
+                            status=status.HTTP_403_FORBIDDEN)
+        return Response(status=status.HTTP_204_NO_CONTENT)
     user = request.user
     if request.method == "PATCH":
         data = request.data

@@ -284,9 +284,12 @@ def quote(
     # 4. minimum fare floor, applied last ---------------------------------
     if vehicle.minimum_fare > 0 and running < vehicle.minimum_fare:
         adjustment = money(vehicle.minimum_fare - running)
+        # The line's amount is the TOP-UP, not the floor itself, so the lines
+        # keep summing to the total -- the label must say so or the row reads
+        # as a contradiction ("Minimum fare $150.00 ... $3.90").
         lines.append(Line(
             BookingPriceLine.Kind.MINIMUM,
-            f"Minimum fare ${vehicle.minimum_fare:.2f}",
+            f"Minimum fare adjustment (to ${vehicle.minimum_fare:.2f})",
             adjustment,
         ))
         running = money(vehicle.minimum_fare)

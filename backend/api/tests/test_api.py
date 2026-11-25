@@ -264,6 +264,28 @@ class TestQuoteTokenIntegrity:
         )
         assert response.status_code == 201
 
+    def test_guest_name_is_stored_separately_from_the_placard(
+        self, client, vehicle, future
+    ):
+        """
+        The back office shows the BOOKER, not the driver's placard: a guest
+        booking for someone else must keep the contact name and the pickup
+        sign apart.
+        """
+        token = get_quote(client, future).json()["quotes"][0]["quote_token"]
+        response = client.post(
+            reverse("api:create_booking"),
+            {"quote_token": token, "guest_email": "g@example.com",
+             "guest_phone": "+15125550000", "guest_name": "Grace Guest",
+             "pickup_sign": "Mr Placard"},
+            content_type="application/json",
+        )
+        assert response.status_code == 201
+        booking = Booking.objects.get()
+        assert booking.guest_name == "Grace Guest"
+        assert booking.pickup_sign == "Mr Placard"
+        assert booking.customer_name == "Grace Guest"  # never the placard
+
     def test_surcharge_is_recomputed_at_booking_time(self, client, vehicle, future):
         """
         A quote issued before a surcharge existed must not lock in the old price

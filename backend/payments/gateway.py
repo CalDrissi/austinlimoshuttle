@@ -530,10 +530,11 @@ def refund(payment: Payment, *, amount: Decimal | None = None, reason: str = "",
     """
     Refund a payment, in full or in part.
 
-    Partial refunds cover a cancellation net of its fee.
+    Partial refunds cover a cancellation net of its fee. Routed by payment
+    method: Stripe payments are refunded at Stripe; a CASH payment never
+    touched Stripe, so it is recorded as a manual refund (the money is handed
+    back to the customer) without requiring any Stripe configuration.
     """
-    config = _settings()
-
     if payment.status != Payment.Status.SUCCEEDED:
         raise PaymentGatewayError("Only a successful payment can be refunded.")
 
@@ -547,6 +548,16 @@ def refund(payment: Payment, *, amount: Decimal | None = None, reason: str = "",
         raise PaymentGatewayError(
             f"Only {remaining} {payment.currency} remains available to refund."
         )
+
+    if payment.provider == Payment.Provider.CASH:
+        return Refund.objects.create(
+            payment=payment,
+            amount=amount,
+            reason=reason,
+            created_by=created_by,
+        )
+
+    config = _settings()
 
     try:
         stripe_refund = _client(config).refunds.create(params={

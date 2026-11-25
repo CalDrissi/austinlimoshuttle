@@ -13,6 +13,30 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-25 — E2E round-1 defect batch (cash semantics, quiet /auth/me, guest_name)
+- Owner: @bugfix-round1
+- Change (four interfaces moved):
+  - `payments.gateway.refund(payment, ...)` now routes by method: `Provider.CASH` payments record a
+    manual `Refund` (blank `stripe_refund_id`) with **no Stripe call and no PaymentSettings
+    required**; Stripe payments behave exactly as before. Validation (succeeded-only, remaining
+    ceiling) unchanged for both. `BookingCancellationRequest.approve()` writes a method-aware
+    history note (cash → "cash refund $X to be returned to customer").
+  - `POST /api/bookings/<ref>/pay-cash/` records the cash payment as `Status.PROCESSING`
+    (awaiting collection), **not** `SUCCEEDED`; only the dashboard "Mark cash collected" action
+    flips it. Paid-to-date / cancellation `paid_amount` snapshots now see $0 until collection.
+    The endpoint is idempotent: a repeat call returns 200 and records nothing new.
+  - `GET /api/auth/me/` anonymous → **204 no body** (was 403). PATCH anonymous stays 403. Clients
+    must treat an empty 2xx as signed-out (storefront `useAuth` does).
+  - New `Booking.guest_name` column (migration `bookings.0010`), set from guest checkout's contact
+    name. `Booking.customer_name` = account name → `guest_name` → "Guest"; it **never** returns
+    `pickup_sign` any more — read `pickup_sign` directly where the placard is wanted (driver
+    screens already do).
+- Affects: @payments-gateway, @payments-api, @dashboard-bookings, @bookings-core, @api-core,
+  @frontend-account, @frontend-booking
+- Migration: run `bookings.0010`. Any code that inferred "paid" from the existence of a cash
+  payment must filter `status=SUCCEEDED`. Tests asserting 403 from anonymous GET /auth/me/ or
+  `customer_name == pickup_sign` are wrong now.
+
 ## 2026-11-25 — Email package P1–P5 (new sends fanning out of other lanes' entry points)
 - Owner: @notifications
 - Change: four new client/driver-facing emails, all via `notifications.mailer` (never raise, logged

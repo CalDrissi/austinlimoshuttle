@@ -387,6 +387,32 @@ class TestRefunds:
         client.refunds.create.return_value = MagicMock(id=refund_id)
         return client
 
+    def test_cash_refund_needs_no_stripe(self, booking, db):
+        """
+        A cash payment never touched Stripe: refunding it records a manual
+        refund with no gateway call and no configuration -- deliberately no
+        `configured` fixture here.
+        """
+        paid_cash = Payment.objects.create(
+            booking=booking, provider=Payment.Provider.CASH,
+            amount=Decimal("145.10"), status=Payment.Status.SUCCEEDED,
+        )
+        with patch("payments.gateway._client") as stub:
+            refund = gateway.refund(paid_cash, amount=Decimal("45.10"),
+                                    reason="cancelled")
+            stub.assert_not_called()
+        assert refund.amount == Decimal("45.10")
+        assert refund.stripe_refund_id == ""
+
+    def test_cash_refund_still_validates_the_remaining_amount(self, booking, db):
+        paid_cash = Payment.objects.create(
+            booking=booking, provider=Payment.Provider.CASH,
+            amount=Decimal("145.10"), status=Payment.Status.SUCCEEDED,
+        )
+        gateway.refund(paid_cash, amount=Decimal("100.00"))
+        with pytest.raises(gateway.PaymentGatewayError):
+            gateway.refund(paid_cash, amount=Decimal("100.00"))
+
     def test_full_refund(self, paid, configured):
         with patch("payments.gateway._client", return_value=self.stub_refund()):
             refund = gateway.refund(paid, reason="cancelled")

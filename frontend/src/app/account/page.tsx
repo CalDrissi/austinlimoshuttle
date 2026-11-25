@@ -267,6 +267,8 @@ function AccountDashboard() {
 
   const upcoming = bookings.filter(isUpcoming).sort((a, b) => +new Date(a.pickup_at) - +new Date(b.pickup_at));
   const past = bookings.filter((b) => !isUpcoming(b));
+  // A cancelled booking never took place — it belongs in "Total", not "Completed / past".
+  const completedPast = past.filter((b) => b.status !== "cancelled");
   const initials = (user.first_name?.[0] || user.email[0] || "?").toUpperCase();
 
   const navBtn = (id: Tab, label: string) => (
@@ -303,7 +305,7 @@ function AccountDashboard() {
                 <div className="mm-acct-kpis">
                   <div className="mm-acct-kpi"><div className="v">{upcoming.length}</div><div className="l">Upcoming rides</div></div>
                   <div className="mm-acct-kpi"><div className="v">{bookings.length}</div><div className="l">Total bookings</div></div>
-                  <div className="mm-acct-kpi"><div className="v">{past.length}</div><div className="l">Completed / past</div></div>
+                  <div className="mm-acct-kpi"><div className="v">{completedPast.length}</div><div className="l">Completed / past</div></div>
                 </div>
                 <h5 className="text-18-medium mb-15">Next ride</h5>
                 {loadingBookings && <p className="color-grey">Loading…</p>}
