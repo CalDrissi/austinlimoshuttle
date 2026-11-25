@@ -113,6 +113,20 @@ class TestRouting:
         client_mail = mail.outbox[1]
         assert "https://pay.stripe.com/receipts/test-receipt" in client_mail.body
 
+    def test_repeated_completed_pings_thank_the_client_only_once(
+        self, booking, driver, configured
+    ):
+        # A double-tapped "Completed" button records two events; the office
+        # hears both, the customer must not get two thank-yous.
+        DriverTripEvent.record(booking, "completed", driver=driver)
+        DriverTripEvent.record(booking, "completed", driver=driver)
+
+        client_mails = [m for m in mail.outbox if m.to == [CLIENT]]
+        assert len(client_mails) == 1
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.TRIP_COMPLETED_CLIENT, succeeded=True,
+        ).count() == 1
+
     def test_completed_without_client_email_sends_ops_notice_only(
         self, driver, configured
     ):

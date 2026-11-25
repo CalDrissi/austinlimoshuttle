@@ -7,13 +7,10 @@
   enjoyed the ride.
 </p>
 
+{% include "notifications/email/_itinerary.html" %}
+
 <table style="width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 20px">
-  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Reference</td><td style="padding:6px 0"><strong>{{ booking.reference }}</strong></td></tr>
-  <tr><td style="padding:6px 0;color:#5b636d">Pickup</td><td style="padding:6px 0">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
-  <tr><td style="padding:6px 0;color:#5b636d">From</td><td style="padding:6px 0">{{ booking.pickup_address }}</td></tr>
-  {% if booking.dropoff_address %}<tr><td style="padding:6px 0;color:#5b636d">To</td><td style="padding:6px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
-  <tr><td style="padding:6px 0;color:#5b636d">Vehicle</td><td style="padding:6px 0">{{ booking.vehicle_name_snapshot }}</td></tr>
-  <tr><td style="padding:6px 0;color:#5b636d">Total</td><td style="padding:6px 0"><strong>${{ booking.total }} {{ booking.currency }}</strong></td></tr>
+  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Total</td><td style="padding:6px 0"><strong>${{ booking.total }} {{ booking.currency }}</strong></td></tr>
 </table>
 
 {% if receipt_url %}

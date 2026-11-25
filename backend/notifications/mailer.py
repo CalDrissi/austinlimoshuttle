@@ -28,12 +28,14 @@ logger = logging.getLogger(__name__)
 # One retry, short pause, fresh connection. A mail server that dropped the
 # connection mid-session (shared hosting recycles them aggressively) usually
 # accepts the very next attempt; anything beyond one retry just delays the
-# caller for a server that is actually down.
+# caller for a server that is actually down. TimeoutError is deliberately NOT
+# here: every send runs synchronously inside a request, so retrying a timeout
+# doubles an already-long block, and a timeout after DATA may mean the server
+# actually accepted the message -- resending would deliver it twice.
 _TRANSIENT_SMTP_ERRORS = (
     smtplib.SMTPServerDisconnected,
     smtplib.SMTPConnectError,
     ConnectionError,
-    TimeoutError,
 )
 _RETRY_BACKOFF_SECONDS = 2
 
@@ -160,10 +162,13 @@ def send_driver_job_notification(booking) -> bool:
     if not driver or not driver.email:
         return False
 
+    # localtime: the body's |date filter renders site time, and a subject line
+    # six hours off is the one a driver plans their day from.
+    pickup_local = timezone.localtime(booking.pickup_at)
     return _send(
         kind=EmailLog.Kind.DRIVER_JOB_ASSIGNED,
         to=[driver.email],
-        subject=f"New job — {booking.reference}, {booking.pickup_at:%a %d %b %H:%M}",
+        subject=f"New job — {booking.reference}, {pickup_local:%a %d %b %H:%M}",
         template="driver_job_assigned",
         context={"booking": booking, "driver": driver},
         booking=booking,
@@ -441,10 +446,11 @@ def send_ops_new_booking(booking) -> bool:
     if not config.ops_notification_email:
         return False
 
+    pickup_local = timezone.localtime(booking.pickup_at)
     return _send(
         kind=EmailLog.Kind.OPS_NEW_BOOKING,
         to=[config.ops_notification_email],
-        subject=f"New booking {booking.reference} — {booking.pickup_at:%a %d %b, %H:%M}",
+        subject=f"New booking {booking.reference} — {pickup_local:%a %d %b, %H:%M}",
         template="ops_new_booking",
         context={"booking": booking},
         booking=booking,
@@ -491,11 +497,12 @@ def send_trip_status_update(event) -> bool:
     booking = event.booking
     config = EmailSettings.load()
 
-    # "Completed" is the one event where the office and the customer get
-    # different messages: an operational notice for dispatch, a thank-you with
-    # the receipt for the rider.
+    # "Completed" is the one client-facing event where the office and the
+    # customer get different messages: an operational notice for dispatch, a
+    # thank-you with the receipt for the rider (sent separately below).
+    to_client = _TRIP_EVENT_TO_CLIENT.get(event_type, False)
     recipients = [config.ops_notification_email]
-    if _TRIP_EVENT_TO_CLIENT.get(event_type) and event_type != "completed":
+    if to_client and event_type != "completed":
         recipients.append(_customer_email(booking))
 
     driver = event.driver or booking.driver
@@ -517,7 +524,7 @@ def send_trip_status_update(event) -> bool:
         booking=booking,
     )
 
-    if event_type == "completed" and _TRIP_EVENT_TO_CLIENT["completed"]:
+    if to_client and event_type == "completed":
         send_trip_completed_client(booking, driver=driver)
 
     return ok
@@ -528,10 +535,17 @@ def send_trip_completed_client(booking, *, driver=None) -> bool:
     Thank the customer once the driver marks the trip complete.
 
     Carries the Stripe receipt link when a card payment exists; a cash booking
-    simply sends without the receipt line.
+    simply sends without the receipt line. Deduplicated on EmailLog like the
+    pickup reminder: a driver double-tapping "Completed" on a flaky connection
+    records two events, and the customer must not get two thank-yous.
     """
     email = _customer_email(booking)
     if not email:
+        return False
+
+    if EmailLog.objects.filter(
+        kind=EmailLog.Kind.TRIP_COMPLETED_CLIENT, booking=booking, succeeded=True,
+    ).exists():
         return False
 
     from payments.models import Payment

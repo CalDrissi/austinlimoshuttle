@@ -21,8 +21,10 @@ LOG=/var/log/limo-pickup-reminders.log
 JOB="0 * * * * cd $APP_DIR && docker compose -f docker-compose.prod.yml exec -T backend python manage.py send_pickup_reminders >> $LOG 2>&1 $MARKER"
 
 # Replace any previously installed copy of this job, keep everything else.
+# `grep -v` exits 1 when it filters every line (a crontab holding only our
+# job), which pipefail would turn into a bogus failure -- hence `|| true`.
 current="$(crontab -l 2>/dev/null || true)"
-printf '%s\n' "$current" | grep -vF "$MARKER" | { cat; echo "$JOB"; } | crontab -
+{ printf '%s\n' "$current" | grep -vF "$MARKER" || true; echo "$JOB"; } | crontab -
 
 echo "Installed hourly pickup-reminder cron:"
 crontab -l | grep -F "$MARKER"

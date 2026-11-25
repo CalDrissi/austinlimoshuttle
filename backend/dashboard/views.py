@@ -117,6 +117,14 @@ def home(request):
 
     upcoming = Booking.objects.for_dispatch().upcoming()
 
+    # Failed sends from the last 7 days: old failures have either been dealt
+    # with or stopped mattering, and a count that never resets trains staff to
+    # ignore the tile. Messages suppressed because email is switched off are
+    # excluded -- that is configuration working as intended, not a failure.
+    failed_emails = EmailLog.objects.filter(
+        succeeded=False, sent_at__gte=week_ago,
+    ).exclude(error="Email is switched off in settings.")
+
     context = {
         "today_count": upcoming.filter(pickup_at__lte=today_end).count(),
         "week_count": upcoming.filter(pickup_at__lte=now + timedelta(days=7)).count(),
@@ -128,15 +136,8 @@ def home(request):
             status__in=[Booking.Status.CONFIRMED, Booking.Status.COMPLETED],
         ).aggregate(total=Sum("total"))["total"],
         "next_pickups": upcoming.order_by("pickup_at")[:8],
-        # Failed sends from the last 7 days: old failures have either been dealt
-        # with or stopped mattering, and a count that never resets trains staff
-        # to ignore the tile.
-        "failed_emails": EmailLog.objects.filter(
-            succeeded=False, sent_at__gte=week_ago,
-        ).count(),
-        "recent_failed_emails": EmailLog.objects.filter(
-            succeeded=False, sent_at__gte=week_ago,
-        ).select_related("booking")[:5],
+        "failed_emails": failed_emails.count(),
+        "recent_failed_emails": failed_emails.select_related("booking")[:5],
         "roles": role_names(request.user),
         "is_manager": is_manager(request.user),
     }
