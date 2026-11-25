@@ -837,3 +837,29 @@ img {
   .blf-btn { width: 100%; padding: 13px 26px; }
   .blf-strip { flex-direction: column; align-items: flex-start; gap: 8px; }
 }
+
+/* Light checkbox (passenger step "booking for someone else") — restored after
+   the hero widget moved to its own .blw-check. */
+.mm-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; user-select: none; }
+.mm-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.mm-check .mm-check-box {
+  width: 20px; height: 20px; border: 1.5px solid #c9ced3; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center; transition: .12s; flex: 0 0 auto;
+  background: #fff;
+}
+.mm-check input:checked + .mm-check-box { background: #0f1319; border-color: #0f1319; }
+.mm-check input:checked + .mm-check-box::after {
+  content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+  transform: rotate(45deg); margin-top: -2px;
+}
+.mm-check input:focus-visible + .mm-check-box { box-shadow: 0 0 0 3px rgba(15, 99, 189, 0.2); }
+.mm-check .mm-check-label { font-size: 13.5px; font-weight: 500; color: #0f1319; }
+
+/* Confirmation page: template tiles/cards in the flow's language. */
+.mm-flow .box-info-book-border,
+.mm-flow .box-booking-border {
+  border: 1px solid #e3e7eb; border-radius: 14px; background: #fff;
+}
+.mm-flow .box-booking-border h6 { margin-bottom: 10px; }
+.mm-flow .btn.btn-border { border-radius: 999px; border-color: #c9ced3; color: #0f1319; }
+.mm-flow .btn.btn-border:hover { background: #0f1319; border-color: #0f1319; color: #fff; }
