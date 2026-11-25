@@ -6,6 +6,7 @@ decisions go in `CONTRACTS.md`, not here. The read-only code map is the graphify
 
 ## In flight
 _One line per active task: `@handle — branch — what / status`._
+- 2026-11-25 09:00 @flow-fix-1 — deploy/local-preview-all→main (45c5670) — BATCH 1 of the booking-flow fix campaign (H1–H9) landed + deployed (both fast lanes) + live-proven on testmode. Test data created during verification: bookings MMVR4YTY + C8PQBEPC and account flowfix.bravo.1125@example.com. booking_confirmed now fans out on a background thread (NOTIFICATIONS_SYNC=True keeps tests inline); /api/site-settings/ gained read-only min_booking_lead_hours. SMTP itself still flaky (see @notifications spamhaus entry) — those failures land in EmailLog as designed.
 - 2026-11-03 @dashboard-bookings — agent/dashboard-bookings/c2c-manual-booking — Phase 4b: migrated manual booking `city` mode to free-form + distance (quote(city_to_city=True)), dropped CityRoute from dashboard/views.py. Also edited @dashboard-forms' `ManualBookingForm` (removed `city_route` field, city now requires a drop-off) for this cohesive change. Dashboard suite 100 green. Awaiting merge gate.
 
 - 2026-11-25 @bugfix-round1 — CalDrissi/bugfix-round1-e2e-defects — fixing the 5 E2E defects + 1 polish in one batch (cash refunds w/o Stripe, cash awaiting-collection, guest_name vs placard, quiet /auth/me 204, min-fare label, overview count). New migration bookings.0010 (guest_name). See CONTRACTS.md 2026-11-25 E2E round-1 entry. Full gate then deploy both sides.
