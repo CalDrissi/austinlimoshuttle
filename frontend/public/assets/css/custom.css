@@ -792,84 +792,181 @@ img {
 .mm-flow .btn.btn-border { border-radius: 999px; border-color: #c9ced3; color: #0f1319; }
 .mm-flow .btn.btn-border:hover { background: #0f1319; border-color: #0f1319; color: #fff; }
 
-/* -------- vehicle step (.blv): trip pills, class card grid, rail, sticky CTA -------- */
-.blv-pills {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  flex-wrap: wrap; margin-bottom: 14px;
+/* ===================================================================== *
+ * Booking-flow header (.fh) — Blacklane anatomy: warm off-white band,   *
+ * logo left, trip-summary pills centred, hamburger right.               *
+ * ===================================================================== */
+.fh {
+  position: sticky; top: 0; z-index: 1000;
+  background: #fbf8f2; border-bottom: 1px solid #d9d4c9;
 }
-.blv-pill {
-  display: inline-flex; align-items: center; gap: 8px; max-width: 480px;
-  border: 1px solid #e3e7eb; border-radius: 999px; background: #fff;
-  padding: 8px 16px; font-size: 13.5px; color: #0f1319; min-width: 0;
+.fh, .fh button { font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.fh-row {
+  display: flex; align-items: center; gap: 12px;
+  max-width: 1440px; margin: 0 auto; height: 84px; padding: 0 28px;
 }
-.blv-pill b {
-  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 190px;
+.fh-logo { flex: 0 0 auto; display: inline-flex; align-items: center; }
+.fh-logo img { width: 104px; height: auto; }
+.fh-pills {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
 }
-.blv-pill em { font-style: normal; color: #6e6e73; }
-.blv-pill-arrow { color: #6e6e73; flex: 0 0 auto; }
-.blv-pill-edit {
-  font-size: 13.5px; font-weight: 600; color: #0f63bd;
-  text-decoration: underline; text-underline-offset: 3px; padding: 4px 6px;
+.fh-pill {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 0;
+  background: #fff; border: 1px solid #d9d4c9; border-radius: 10px;
+  height: 40px; padding: 0 14px; font-size: 14px; color: #0f1319;
+  transition: border-color .15s;
 }
-.blv-pill-edit:hover { color: #0d4a8c; }
+.fh-pill:hover { border-color: #9b958a; color: #0f1319; }
+.fh-pill b {
+  font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 200px;
+}
+.fh-pill em { font-style: normal; color: #6e6e73; white-space: nowrap; }
+.fh-pill-icon { display: inline-flex; color: #6e6e73; flex: 0 0 auto; }
+.fh-seg { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.fh-pill-when .fh-seg + .fh-seg { border-left: 1px solid #e3ded3; padding-left: 10px; margin-left: 2px; }
+.fh-menu { flex: 0 0 auto; margin-left: auto; position: relative; }
+.fh-burger {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border: 0; border-radius: 10px;
+  background: transparent; color: #0f1319; cursor: pointer;
+}
+.fh-burger:hover { background: #f0ece3; }
+.fh-menu-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 1001;
+  min-width: 230px; background: #fff; border: 1px solid #e3e7eb; border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(15, 19, 25, 0.14); padding: 8px;
+  display: flex; flex-direction: column;
+}
+.fh-menu-panel a, .fh-menu-panel button {
+  display: block; width: 100%; text-align: left; padding: 10px 12px;
+  border: 0; border-radius: 8px; background: transparent;
+  font-size: 14.5px; color: #0f1319; cursor: pointer;
+}
+.fh-menu-panel a:hover, .fh-menu-panel button:hover { background: #f5f3ee; color: #0f1319; }
+.fh-menu-panel hr { border: 0; border-top: 1px solid #eef1f3; margin: 6px 4px; }
+
+@media (max-width: 991.98px) {
+  .fh-row { height: 60px; padding: 0 12px; gap: 8px; }
+  .fh-logo img { width: 74px; }
+  .fh-pill { height: 36px; padding: 0 10px; font-size: 13px; gap: 6px; }
+  .fh-pill b { max-width: 110px; }
+  .fh-pill-when { display: none; } /* live keeps only the route pill on phones */
+  .fh-burger { width: 40px; height: 40px; }
+}
+
+/* -------- vehicle step (.blv): light page, horizontal class row, rail, sticky CTA --------
+   Proportions measured on live blacklane.com/en/booking @1440:
+   full-bleed container w/ 48px side padding; left col ~856px; rail 440px;
+   cards 422x514 (img 400x404 cover) in a non-wrapping row; map 370 tall. */
+.mm-flow { background: #fbf8f2; min-height: 100vh; }
+.blv { padding: 24px 0 64px; }
+.blv-page { max-width: 1440px; margin: 0 auto; padding: 0 48px; }
 
 .blv-title {
   font-family: Fraunces, Georgia, "Times New Roman", serif;
-  font-size: 27px; font-weight: 500; letter-spacing: 0; color: #0f1319;
-  margin-bottom: 20px;
+  font-size: 24px; line-height: 32px; font-weight: 400; letter-spacing: 0.25px;
+  color: #000; margin-bottom: 32px;
 }
 
-.blv-layout { display: flex; gap: 28px; align-items: flex-start; }
+.blv-layout { display: flex; gap: 48px; align-items: flex-start; }
 .blv-main { flex: 1 1 auto; min-width: 0; }
 
-/* class cards */
-.blv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 16px; }
+/* class cards — ONE horizontal row (live is a slider, not a wrapping grid) */
+.blv-rowwrap { position: relative; }
+.blv-grid {
+  display: flex; flex-wrap: nowrap; gap: 16px;
+  overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; padding: 4px;
+  /* bleed the 4px padding so card shadows aren't clipped */
+  margin: -4px;
+}
+.blv-grid::-webkit-scrollbar { display: none; }
 .blv-card {
+  flex: 0 0 422px; width: 422px; min-width: 0; scroll-snap-align: start;
   display: flex; flex-direction: column; text-align: left; cursor: pointer;
-  background: #fff; border: 2px solid #e8e4da; border-radius: 16px; padding: 10px;
+  background: #fff; border: 3px solid transparent; border-radius: 16px; padding: 8px;
+  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
   transition: border-color .15s, box-shadow .15s;
 }
-.blv-card:hover { border-color: #c9ced3; box-shadow: 0 8px 26px rgba(15, 19, 25, 0.08); }
-.blv-card.on { border-color: #0f63bd; box-shadow: 0 0 0 1px #0f63bd; }
+.blv-card:hover { box-shadow: 0 6px 20px rgba(6, 10, 13, 0.16); }
+.blv-card.on { border-color: #0f63bd; }
 .blv-card-media {
-  display: block; border-radius: 11px; background: #f1efe9; overflow: hidden;
-  margin-bottom: 10px;
+  display: block; border-radius: 10px; overflow: hidden;
+  background: linear-gradient(180deg, #f6e7d8 0%, #efe6dc 55%, #e7e3de 100%);
 }
+/* Our fleet photos are 4:3 (studio shots framed to the bumpers) — contain, not
+   cover: a square crop would clip the cars. Cutout PNGs letterbox on the tint. */
 .blv-card-media img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; display: block; }
 .blv-card-row {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  padding: 0 4px;
+  padding: 14px 10px 0;
 }
-.blv-card-name { font-size: 15.5px; font-weight: 600; color: #0f1319; min-width: 0; overflow-wrap: anywhere; }
-.blv-card-price { font-size: 15px; font-weight: 600; color: #0f1319; white-space: nowrap; }
-.blv-card-caps { display: flex; gap: 14px; padding: 5px 4px 2px; }
-.blv-card-caps span { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; color: #6e6e73; }
+.blv-card-name { font-size: 16px; font-weight: 500; color: #000; min-width: 0; overflow-wrap: anywhere; }
+.blv-card-price { font-size: 16px; font-weight: 500; color: #000; white-space: nowrap; }
+.blv-card-caps { display: flex; gap: 16px; padding: 8px 10px 10px; }
+.blv-card-caps span { display: inline-flex; align-items: center; gap: 4px; font-size: 15px; color: #0f1319; }
+.blv-card-caps svg { color: #44474c; }
 
-.blv-more { margin-top: 18px; }
-.blv-explore { font-size: 14.5px; font-weight: 600; color: #0f1319; text-decoration: underline; text-underline-offset: 3px; }
+/* prev/next affordance — circular, vertically centred on the row, only when it overflows */
+.blv-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 5;
+  width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #fff; color: #0f1319; box-shadow: 0 2px 10px rgba(6, 10, 13, 0.22);
+}
+.blv-nav:hover { background: #f5f3ee; }
+.blv-nav-prev { left: -16px; }
+.blv-nav-next { right: -16px; }
+
+/* phones only: Blacklane shows "<model> or similar" under the carousel */
+.blv-orsim-mobile { display: none; }
+
+.blv-more { margin-top: 32px; }
+.blv-explore {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 0; background: transparent; cursor: pointer; padding: 4px 0;
+  font-size: 16px; font-weight: 400; color: #0f1319;
+}
 .blv-explore:hover { color: #0f63bd; }
 .blv-desc { font-size: 15px; line-height: 1.6; color: #4b4b50; margin: 12px 0 0; max-width: 640px; }
 
-/* right rail */
-.blv-rail { flex: 0 0 330px; position: sticky; top: 96px; }
-.blv-rail-map { border: 1px solid #e3e7eb; border-radius: 14px; overflow: hidden; margin-bottom: 14px; }
+/* right rail — 440px, map on top (370 tall), white panel below */
+.blv-rail { flex: 0 0 440px; position: sticky; top: 104px; }
+.blv-rail-map { border-radius: 16px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12); }
+.blv-rail-map .mm-itinerary-map { margin-top: 0; border: 0; border-radius: 16px; height: 370px; }
 .blv-railcard {
-  border: 1px solid #e3e7eb; border-radius: 14px; background: #fff; padding: 18px;
-  box-shadow: 0 10px 30px rgba(15, 19, 25, 0.05);
+  border-radius: 16px; background: #fff; padding: 20px 24px;
+  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
 }
 .blv-rail-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.blv-rail-name { font-size: 17px; font-weight: 600; color: #0f1319; }
-.blv-rail-price { font-size: 17px; font-weight: 700; color: #0f1319; white-space: nowrap; }
-.blv-rail-sub { font-size: 13.5px; color: #6e6e73; margin-top: 2px; }
-.blv-rail-hr { border: 0; border-top: 1px solid #eef1f3; margin: 14px 0; }
-.blv-rail-note { font-size: 13px; color: #6e6e73; margin-bottom: 14px; }
+.blv-rail-name { font-size: 18px; font-weight: 500; color: #000; }
+.blv-rail-price { font-size: 18px; font-weight: 500; color: #000; white-space: nowrap; }
+.blv-rail-sub { font-size: 14px; color: #6e6e73; margin-top: 2px; }
+
+/* booker rows (Book for myself / for a guest) */
+.blv-bookers { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.blv-booker {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: #fff; border: 2px solid #eef1f3; border-radius: 16px; padding: 14px 16px;
+  cursor: pointer; transition: border-color .15s;
+}
+.blv-booker.on { border-color: #0f63bd; }
+.blv-booker-icon { display: inline-flex; color: #0f1319; flex: 0 0 auto; }
+.blv-booker-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.blv-booker-title { font-size: 15px; font-weight: 500; color: #0f1319; }
+.blv-booker-sub { font-size: 13px; color: #6e6e73; }
+.blv-booker-chevron { margin-left: auto; color: #6e6e73; display: inline-flex; }
+
+.blv-rail-hr { border: 0; border-top: 1px solid #eef1f3; margin: 16px 0 12px; }
+.blv-rail-note { font-size: 14px; color: #6e6e73; margin-bottom: 12px; }
 .blv-rail-empty { font-size: 14.5px; color: #6e6e73; }
 
 .blv-cta {
   display: block; width: 100%; border: 0; border-radius: 999px; cursor: pointer;
-  background: #0f63bd; color: #fff; font-size: 15.5px; font-weight: 600;
-  padding: 14px 24px; transition: background .15s;
+  background: #0f63bd; color: #fff; font-size: 16px; font-weight: 500;
+  padding: 12px 24px; transition: background .15s;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .blv-cta:hover { background: #0d4a8c; }
@@ -877,30 +974,35 @@ img {
 /* sticky bottom CTA bar (phones) */
 .blv-sticky {
   display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
-  background: #fff; border-top: 1px solid #e3e7eb;
+  background: #fbf8f2; border-top: 1px solid #e3ded3;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  box-shadow: 0 -8px 30px rgba(15, 19, 25, 0.1);
+}
+
+/* mid widths: rail narrows before stacking */
+@media (max-width: 1279.98px) {
+  .blv-page { padding: 0 24px; }
+  .blv-layout { gap: 28px; }
+  .blv-rail { flex: 0 0 360px; }
+  .blv-rail-map .mm-itinerary-map { height: 260px; }
+  .blv-card { flex-basis: 360px; width: 360px; }
 }
 
 @media (max-width: 991.98px) {
-  .blv-layout { flex-direction: column; }
-  .blv-rail { position: static; flex: none; width: 100%; }
-  /* the rail card duplicates the sticky bar on phones — keep the map, drop the card */
-  .blv-railcard { display: none; }
+  /* stretch (not flex-start) so .blv-main takes the container width instead of
+     its content's intrinsic width — otherwise card images inflate the column */
+  .blv-layout { flex-direction: column; align-items: stretch; }
+  .blv-main { width: 100%; max-width: 100%; }
+  /* live shows no map and no rail card on phones — the sticky bar takes over */
+  .blv-rail { display: none; }
   .blv-sticky { display: block; }
   .blv { padding-bottom: 96px; } /* room for the sticky bar */
   .blv-title { text-align: center; }
+  .blv-orsim-mobile { display: block; font-size: 14px; color: #6e6e73; margin-top: 14px; }
+  .blv-nav { display: none; } /* touch scrolling carries the row */
 }
 @media (max-width: 767.98px) {
+  .blv-page { padding: 0 16px; }
   /* swipeable class carousel with a peek of the next card */
-  .blv-grid {
-    display: flex; overflow-x: auto; gap: 12px; padding-bottom: 6px;
-    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
-  }
-  .blv-grid::-webkit-scrollbar { display: none; }
-  /* min-width:0 stops the intrinsic image width from inflating the flex item */
-  .blv-card { flex: 0 0 80%; max-width: 80%; min-width: 0; scroll-snap-align: center; }
+  .blv-card { flex: 0 0 86%; max-width: 86%; width: auto; scroll-snap-align: center; }
   .blv-card-media { width: 100%; }
-  .blv-pills { justify-content: center; }
-  .blv-pill b { max-width: 120px; }
 }
