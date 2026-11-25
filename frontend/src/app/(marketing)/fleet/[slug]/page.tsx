@@ -42,6 +42,12 @@ export default function FleetDetailPage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "notfound">("loading");
 
+  // Client component, so the route can't export metadata — title the page
+  // after the vehicle once it loads.
+  useEffect(() => {
+    if (vehicle?.name) document.title = `${vehicle.name} | M&M Austin Limousine`;
+  }, [vehicle]);
+
   useEffect(() => {
     if (!slug) return;
     let active = true;

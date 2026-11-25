@@ -10,6 +10,11 @@ export default function FleetPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Client component, so the route can't export metadata — set the title here.
+  useEffect(() => {
+    document.title = "Our Fleet | M&M Austin Limousine";
+  }, []);
+
   useEffect(() => {
     let active = true;
     catalogService
@@ -27,8 +32,9 @@ export default function FleetPage() {
           <h1 className="heading-44-medium color-white mb-5 wow fadeInDown">Our Fleet</h1>
           <div className="box-breadcrumb wow fadeInUp">
             <ul>
-              <li> <Link href="/">Home</Link></li>
-              <li> <Link href="/fleet">Our Fleet</Link></li>
+              <li><Link href="/">Home</Link></li>
+              {/* Current page: plain text, not a self-link. */}
+              <li>Our Fleet</li>
             </ul>
           </div>
         </div>

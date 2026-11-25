@@ -7,10 +7,10 @@ if we can't accommodate it).
 Requested changes:
 {% for row in changes %}  {{ row.label }}: {{ row.old|default:"—" }} -> {{ row.new|default:"—" }}
 {% endfor %}{% if price_delta %}
-If approved, your total would move from ${{ amendment.old_total }} {{ amendment.currency }}
-to ${{ amendment.new_total }} {{ amendment.currency }} (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta }}).
+If approved, your total would move from ${{ amendment.old_total|floatformat:2 }}
+to ${{ amendment.new_total|floatformat:2 }} (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta|floatformat:2 }}).
 {% endif %}
 Your booking stands exactly as it was until we confirm the change.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

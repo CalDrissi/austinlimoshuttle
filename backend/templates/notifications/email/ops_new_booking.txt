@@ -1,11 +1,11 @@
 {% autoescape off %}NEW BOOKING - {{ booking.reference }}
 
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
 Passengers: {{ booking.passenger_count }}
 
 Customer  : {{ booking.customer_name }}{% if booking.contact_email %} ({{ booking.contact_email }}){% endif %}
-Total     : ${{ booking.total }} {{ booking.currency }}
+Total     : ${{ booking.total|floatformat:2 }}
 {% endautoescape %}

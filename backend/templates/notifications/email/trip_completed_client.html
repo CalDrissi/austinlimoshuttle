@@ -10,7 +10,7 @@
 {% include "notifications/email/_itinerary.html" %}
 
 <table style="width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 20px">
-  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Total</td><td style="padding:6px 0"><strong>${{ booking.total }} {{ booking.currency }}</strong></td></tr>
+  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Total</td><td style="padding:6px 0"><strong>${{ booking.total|floatformat:2 }}</strong></td></tr>
 </table>
 
 {% if receipt_url %}

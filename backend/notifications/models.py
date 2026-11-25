@@ -38,7 +38,7 @@ class EmailSettings(models.Model):
     )
 
     from_name = models.CharField(
-        max_length=120, blank=True, default="Austin Limo Shuttle",
+        max_length=120, blank=True, default="M&M Austin Limousine",
         help_text="Display name on outgoing mail.",
     )
     from_email = models.EmailField(

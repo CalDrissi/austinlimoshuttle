@@ -18,15 +18,15 @@
 </style>
 </head>
 <body>
-  <div class="brand">Austin Limo Shuttle</div>
+  <div class="brand">M&amp;M Austin Limousine</div>
   <h1>Booking confirmation</h1>
   <div class="ref">{{ booking.reference }}</div>
 
   <table>
-    <tr><td class="k">Pickup</td><td>{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+    <tr><td class="k">Pickup</td><td>{{ booking.pickup_at|date:"l, F j, Y, g:i A" }}</td></tr>
     <tr><td class="k">From</td><td>{{ booking.pickup_address }}</td></tr>
     {% if booking.dropoff_address %}<tr><td class="k">To</td><td>{{ booking.dropoff_address }}</td></tr>{% endif %}
-    {% if booking.distance_miles %}<tr><td class="k">Distance</td><td>{{ booking.distance_miles }} miles</td></tr>{% endif %}
+    {% if booking.distance_miles %}<tr><td class="k">Distance</td><td>{{ booking.distance_miles|floatformat:1 }} miles</td></tr>{% endif %}
     {% if booking.hours %}<tr><td class="k">Duration</td><td>{{ booking.hours }} hours</td></tr>{% endif %}
     <tr><td class="k">Vehicle</td><td>{{ booking.vehicle_name_snapshot }}</td></tr>
     <tr><td class="k">Passengers</td><td>{{ booking.passenger_count }}</td></tr>
@@ -36,12 +36,13 @@
 
   <table class="totals">
     <tr class="total-row"><td>Total fare</td>
-        <td class="right">${{ booking.total }} {{ booking.currency }}</td></tr>
+        <td class="right">${{ booking.total|floatformat:2 }}</td></tr>
+    {% if payment_line %}<tr><td class="k">Payment</td><td class="right">{{ payment_line }}</td></tr>{% endif %}
   </table>
 
   <div class="foot">
     Please have this reference to hand: {{ booking.reference }}.<br>
-    Austin Limo Shuttle
+    M&amp;M Austin Limousine{% if site.contact_phone %} · {{ site.contact_phone }}{% endif %}{% if site_url %} · {{ site_url }}{% endif %}
   </div>
 </body>
 </html>

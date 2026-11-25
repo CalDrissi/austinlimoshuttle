@@ -3,5 +3,5 @@
 The trip has been marked completed by the driver.
 
 {% include "notifications/email/_trip_details.txt" %}
-Austin Limo Shuttle — operations notice
+M&M Austin Limousine — operations notice
 {% endautoescape %}

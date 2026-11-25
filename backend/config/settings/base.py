@@ -204,6 +204,11 @@ DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL",
 # dashboard's public origin so the link is clickable from a mail client.
 DASHBOARD_BASE_URL = env("DJANGO_DASHBOARD_BASE_URL", default="").rstrip("/")
 
+# Absolute base URL of the public storefront, used for customer-facing links in
+# email bodies (logo, "manage your booking", the driver portal). Blank in dev,
+# which simply hides those links rather than rendering dead relative ones.
+PUBLIC_SITE_URL = env("DJANGO_PUBLIC_SITE_URL", default="").rstrip("/")
+
 # --------------------------------------------------------------------------
 # REST framework
 # --------------------------------------------------------------------------

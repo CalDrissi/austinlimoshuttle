@@ -20,3 +20,4 @@ _`@handle — needs X from @other-handle / coordinator`._
 
 ## Verifier verdicts
 _`branch — code-verifier: pass/fail — business-verifier: pass/fail — merged? reverted?`._
+- 2026-11-25 @email-polish — email+chrome polish batch in flight (branch CalDrissi/email-fix-gaps-coverage): autoescape-off removed from HTML emails (XSS test added), M&M rebrand + logo + links (new DJANGO_PUBLIC_SITE_URL), SiteSettings.contact_phone wired into email ctx, US datetimes, $X.XX money, business days, receipt PDF rebrand+payment line, EmailLog read-only admin, footer auth-aware + real fleet links, fleet titles/breadcrumb, widget drop-off copy. Live DB edits pending: contact_phone → +1 (512) 577-1003 (owner to confirm), Sprinter description, from_name.

@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useQuery } from "@tanstack/react-query";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
+import { useAuth } from "@/hooks/useAuth";
 import { telHref } from "@/lib/api/site.service";
+import { catalogService } from "@/lib/api/catalog.service";
 
 /**
  * Site footer.
@@ -24,16 +27,17 @@ const SERVICE_AREAS = [
   "Houston",
 ];
 
-/** Mirrors the fleet in the backend — no invented vehicle classes. */
-const FLEET = [
-  { label: "Business Class", slug: "business-class" },
-  { label: "Business SUV", slug: "business-suv" },
-  { label: "Chrysler 300 Limousine", slug: "chrysler-300-limousine" },
-  { label: "Mercedes Sprinter", slug: "mercedes-sprinter" },
-];
-
 export default function Footer() {
   const site = useSiteSettings();
+  const { user } = useAuth();
+
+  // The real fleet, not a hardcoded copy that drifts when the office renames a
+  // vehicle. Same query key as the fleet page, so this is usually a cache hit.
+  const { data: fleet } = useQuery({
+    queryKey: ["vehicles"],
+    queryFn: () => catalogService.listVehicles(),
+    staleTime: 60 * 60 * 1000,
+  });
 
   const socials = [
     { url: site?.facebook, className: "icon-facebook", label: "Facebook" },
@@ -87,17 +91,20 @@ export default function Footer() {
             <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Our Fleet</h5>
               <ul className="menu-footer">
-                {FLEET.map((v) => (
-                  <li key={v.slug}><Link href="/fleet">{v.label}</Link></li>
+                {(fleet ?? []).map((v) => (
+                  <li key={v.slug}><Link href={`/fleet/${v.slug}`}>{v.name}</Link></li>
                 ))}
+                <li><Link href="/fleet">View the full fleet</Link></li>
               </ul>
             </div>
 
             <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Where We Drive</h5>
+              {/* Plain text: there are no per-city pages, and a city name that
+                  links somewhere else is a lie waiting to be clicked. */}
               <ul className="menu-footer">
                 {SERVICE_AREAS.map((area) => (
-                  <li key={area}><Link href="/fleet">{area}</Link></li>
+                  <li key={area}><span className="color-grey">{area}</span></li>
                 ))}
               </ul>
             </div>
@@ -106,8 +113,17 @@ export default function Footer() {
               <h5 className="text-18-medium color-white mb-20">Book &amp; Manage</h5>
               <ul className="menu-footer">
                 <li><Link href="/booking/vehicle">Get a quote</Link></li>
-                <li><Link href="/login">Sign in</Link></li>
-                <li><Link href="/register">Create an account</Link></li>
+                {user ? (
+                  <>
+                    <li><Link href="/account">My account</Link></li>
+                    <li><Link href="/account?tab=bookings">My bookings</Link></li>
+                  </>
+                ) : (
+                  <>
+                    <li><Link href="/login">Sign in</Link></li>
+                    <li><Link href="/register">Create an account</Link></li>
+                  </>
+                )}
                 {site?.contact_email && (
                   <li><a href={`mailto:${site.contact_email}`}>{site.contact_email}</a></li>
                 )}

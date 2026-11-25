@@ -3,15 +3,15 @@
 Good news -- the change you requested to booking {{ booking.reference }} has been
 approved and applied.
 
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}Passengers: {{ booking.passenger_count }}
 Vehicle   : {{ booking.vehicle_name_snapshot }}
 
-New total : ${{ booking.total }} {{ booking.currency }}{% if price_delta %} ({% if price_delta >= 0 %}+{% endif %}${{ price_delta }} vs before){% endif %}
+New total : ${{ booking.total|floatformat:2 }}{% if price_delta %} ({% if price_delta >= 0 %}+{% endif %}${{ price_delta|floatformat:2 }} vs before){% endif %}
 
 If anything here looks wrong, reply to this email and we'll sort it out.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

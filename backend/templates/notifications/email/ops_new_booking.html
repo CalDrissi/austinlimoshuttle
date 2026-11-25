@@ -1,8 +1,9 @@
 {% extends "notifications/email/_base.html" %}
+{% block footer_hint %}{% endblock %}
 {% block body %}
 <h1 style="font-size:20px;margin:0 0 6px">New booking — {{ booking.reference }}</h1>
 {% include "notifications/email/_itinerary.html" %}
 <p style="margin:0 0 6px"><strong>Customer:</strong> {{ booking.customer_name }}
   {% if booking.contact_email %}({{ booking.contact_email }}){% endif %}</p>
-<p style="margin:0"><strong>Total:</strong> ${{ booking.total }} {{ booking.currency }}</p>
+<p style="margin:0"><strong>Total:</strong> ${{ booking.total|floatformat:2 }}</p>
 {% endblock %}

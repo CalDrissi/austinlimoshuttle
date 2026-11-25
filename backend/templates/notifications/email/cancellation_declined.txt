@@ -7,12 +7,12 @@ Reason: {{ reason }}
 {% endif %}
 Your booking is unchanged:
 
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
-{% endif %}Total     : ${{ booking.total }} {{ booking.currency }}
+{% endif %}Total     : ${{ booking.total|floatformat:2 }}
 
 If you still need to cancel, reply to this email or call us and we'll help.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

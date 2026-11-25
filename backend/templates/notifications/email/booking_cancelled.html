@@ -2,17 +2,17 @@
 {% block body %}
 <h1 style="font-size:20px;margin:0 0 6px">Your booking is cancelled</h1>
 <p style="margin:0 0 20px;color:#5b636d">
-  Booking {{ booking.reference }} for {{ booking.pickup_at|date:"l j F Y, H:i" }} has been cancelled.
+  Booking {{ booking.reference }} for {{ booking.pickup_at|date:"l, F j, Y, g:i A" }} has been cancelled.
 </p>
 
 {% if refund_amount %}
   <div style="background:#e8f4ef;border-radius:8px;padding:16px;margin:0 0 20px">
-    A refund of <strong>${{ refund_amount }}</strong> has been issued. It usually
-    reaches your statement within five to ten working days.
+    A refund of <strong>${{ refund_amount|floatformat:2 }}</strong> has been issued. It usually
+    reaches your statement within five to ten business days.
   </div>
 {% elif booking.cancellation_fee %}
   <p style="margin:0 0 20px;color:#5b636d">
-    A cancellation fee of ${{ booking.cancellation_fee }} applied.
+    A cancellation fee of ${{ booking.cancellation_fee|floatformat:2 }} applied.
   </p>
 {% endif %}
 

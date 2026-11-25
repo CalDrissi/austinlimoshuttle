@@ -1,11 +1,11 @@
 {% autoescape off %}Your pickup is tomorrow
 
 Reference : {{ booking.reference }}
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
 {% if booking.driver %}Driver    : {{ booking.driver.full_name }}{% if booking.driver.phone %} ({{ booking.driver.phone }}){% endif %}
 {% endif %}
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

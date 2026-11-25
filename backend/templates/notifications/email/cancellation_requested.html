@@ -1,4 +1,5 @@
 {% extends "notifications/email/_base.html" %}
+{% block footer_hint %}{% endblock %}
 {% block body %}
 <h1 style="font-size:20px;margin:0 0 6px">Cancellation requested — {{ booking.reference }}</h1>
 <p style="margin:0 0 16px;color:#5b636d">
@@ -8,14 +9,14 @@
 </p>
 
 <table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
-  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l, F j, Y, g:i A" }}</td></tr>
   <tr><td style="padding:4px 0;color:#5b636d">From</td><td style="padding:4px 0">{{ booking.pickup_address }}</td></tr>
   {% if booking.dropoff_address %}<tr><td style="padding:4px 0;color:#5b636d">To</td><td style="padding:4px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
 </table>
 
 <div style="background:#f4f6f8;border-radius:8px;padding:16px;margin:0 0 20px">
-  Booking total: <strong>${{ booking.total }} {{ booking.currency }}</strong><br>
-  Paid to date: <strong>${{ cancellation.paid_amount }} {{ cancellation.currency }}</strong>
+  Booking total: <strong>${{ booking.total|floatformat:2 }}</strong><br>
+  Paid to date: <strong>${{ cancellation.paid_amount|floatformat:2 }}</strong>
 </div>
 
 <p style="margin:0 0 16px;color:#5b636d;font-size:14px">
