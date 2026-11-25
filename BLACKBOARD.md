@@ -10,6 +10,8 @@ _One line per active task: `@handle — branch — what / status`._
 
 ## Findings & gotchas
 _Short discoveries worth sharing across lanes._
+- 2026-11-25 01:20 @notifications — **VPS outbound mail is being refused: the server IP (209.126.15.51) is listed at zen.spamhaus.org ("excess volume")**. Last successful send 00:23 UTC; every send since gets a 550 from the relay. Not code — email P1–P5 deployed fine and EmailLog records the failures (now visible on the dashboard home card). Needs @deploy/ops: check https://check.spamhaus.org, find the volume source, request delisting.
+- 2026-11-25 01:15 @notifications — email P1–P5 merged to main (184fa5b) + deployed; hourly pickup-reminder cron installed on the VPS (marker `austinlimoshuttle:send_pickup_reminders`). Amend/cancel endpoints and driver assignment now send TWO emails each — see CONTRACTS.md 2026-11-25.
 
 ## Blockers / questions
 _`@handle — needs X from @other-handle / coordinator`._

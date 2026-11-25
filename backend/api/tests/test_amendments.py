@@ -248,13 +248,18 @@ class TestAmendRequestNotifies:
         )
         assert response.status_code == 201
 
-        assert len(mail.outbox) == 1
+        # Two messages: the staff alert, then the customer's acknowledgement.
+        assert len(mail.outbox) == 2
         recipients = set(mail.outbox[0].to)
         assert "dispatch@austinlimoshuttle.com" in recipients
         assert "manager@austinlimoshuttle.com" in recipients
         assert "ops@austinlimoshuttle.com" in recipients
+        assert mail.outbox[1].to == [owner.email]
         assert EmailLog.objects.filter(
             kind=EmailLog.Kind.AMENDMENT_REQUESTED, succeeded=True
+        ).exists()
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.AMENDMENT_RECEIVED, succeeded=True
         ).exists()
 
     def test_admin_falls_back_to_superuser_when_unset(

@@ -697,13 +697,13 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Request · PatchedCancelBooking</div><div class="fieldgrid"><span>action<span class="ty"> enum (cancel)</span></span></div>
       <div class="lab">Response 200 · Booking</div><div class="codes"><span class="code ok">200</span><span class="code">400</span><span class="code">404</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/amend-request/</span><span class="au session">session</span></div>
-    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending change request</b> — the booking is <b>not</b> modified. Enforces the office-set amendment window (rejects once pickup is inside <code>PricingSettings.amendment_window_hours</code>), rejects a second open request, and re-prices when the pickup time moves. Emails all active staff + a configured admin/contact address. The pending request also appears on the booking's own detail/list via <code>pending_amendment</code>.</p>
+    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending change request</b> — the booking is <b>not</b> modified. Enforces the office-set amendment window (rejects once pickup is inside <code>PricingSettings.amendment_window_hours</code>), rejects a second open request, and re-prices when the pickup time moves. Emails all active staff + a configured admin/contact address, <b>and the customer an acknowledgement</b> (<code>amendment_received</code> — explicit that nothing has changed yet). The pending request also appears on the booking's own detail/list via <code>pending_amendment</code>.</p>
       <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="lab">Request · BookingAmend (all optional)</div><div class="fieldgrid"><span>passenger_count<span class="ty"> int</span></span><span>luggage_count<span class="ty"> int</span></span><span>flight_number<span class="ty"> str</span></span><span>pickup_sign<span class="ty"> str</span></span><span>notes<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span><span>pickup_at<span class="ty"> datetime</span></span></div>
       <div class="lab">Response 201 · BookingAmendmentRequest {id, booking_reference, status, status_display, requested_changes, changes[], old_total, new_subtotal, new_surcharge_total, new_tax, new_total, currency, price_delta, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
       <div class="codes"><span class="code ok">201</span><span class="code">400</span><span class="code">404</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/account/bookings/{reference}/cancel-request/</span><span class="au session">session</span></div>
-    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending cancellation request</b> — the booking is <b>not</b> cancelled. Enforces the office-set cancellation window (rejects once pickup is inside <code>PricingSettings.cancellation_window_hours</code>: "…within X hours of pickup."), rejects a terminal (cancelled/completed) booking, and rejects a second open request. Snapshots the amount paid (the succeeded payment, else 0) as <code>paid_amount</code> — the default & ceiling for the staff-set refund. Emails all active staff + a configured admin/contact address. The pending request also appears on the booking's own detail/list via <code>pending_cancellation</code>. Approval + the staff-set refund are back-office only (<b>Dashboard → Cancellations</b>); the refund is <b>not</b> automatic.</p>
+    <div class="ep-b"><p class="sm"><b>Owner-only.</b> Files a <b>pending cancellation request</b> — the booking is <b>not</b> cancelled. Enforces the office-set cancellation window (rejects once pickup is inside <code>PricingSettings.cancellation_window_hours</code>: "…within X hours of pickup."), rejects a terminal (cancelled/completed) booking, and rejects a second open request. Snapshots the amount paid (the succeeded payment, else 0) as <code>paid_amount</code> — the default & ceiling for the staff-set refund. Emails all active staff + a configured admin/contact address, <b>and the customer an acknowledgement</b> (<code>cancellation_received</code> — explicit that the booking is NOT cancelled yet). The pending request also appears on the booking's own detail/list via <code>pending_cancellation</code>. Approval + the staff-set refund are back-office only (<b>Dashboard → Cancellations</b>); the refund is <b>not</b> automatic.</p>
       <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="lab">Request · (no body)</div>
       <div class="lab">Response 201 · BookingCancellationRequest {id, booking_reference, status, status_display, paid_amount, refund_amount, currency, requested_at, reviewed_at, reviewed_by, decline_reason}</div>
@@ -946,6 +946,44 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Email package P1–P5: driver job sheet, client acks, trip thank-you, SMTP retry, reminder cron</span><span class="tbl">notifications · dashboard · api · ops</span></div>
+    <table>
+      <tr><td><b>P1 — driver job sheet.</b> Assigning a driver now also emails <b>the driver</b>
+      (<code>mailer.send_driver_job_notification</code>, new <code>EmailLog.Kind.DRIVER_JOB_ASSIGNED</code>, templates
+      <code>driver_job_assigned.html/.txt</code>): pickup time/route, passenger name + phone, placard, flight and
+      customer notes. Fired beside the existing customer driver-assigned email in
+      <code>dashboard.views.booking_update</code>; a driver with no email on file is skipped quietly
+      (assignment never depends on the mail). Migration <code>notifications.0006</code> (choices only).</td></tr>
+      <tr><td><b>P2 — reminder cron.</b> New executable <code>scripts/install-reminder-cron.sh</code>: installs an
+      <b>hourly host cron</b> on the VPS running <code>manage.py send_pickup_reminders</code> via
+      <code>docker compose -f docker-compose.prod.yml exec -T backend</code>. Idempotent (marker-comment replace,
+      never duplicates). The command itself was already dedupe-safe via <code>EmailLog</code>; it was simply never
+      scheduled on the VPS before — reminders now actually go out.</td></tr>
+      <tr><td><b>P3 — client acknowledgements.</b> Filing an amendment or cancellation request now also emails the
+      <b>customer</b> an acknowledgement (<code>send_amendment_received</code> / <code>send_cancellation_received</code>,
+      kinds <code>AMENDMENT_RECEIVED</code>/<code>CANCELLATION_RECEIVED</code>, templates
+      <code>amendment_received</code>/<code>cancellation_received</code>), fired in <code>api.views.amend_request</code>
+      and <code>api.views.cancel_request</code> right after the staff alert. Both are explicit that <b>nothing has
+      changed/cancelled yet</b> until staff review.</td></tr>
+      <tr><td><b>P4 — trip-completed thank-you.</b> <code>_TRIP_EVENT_TO_CLIENT["completed"]</code> is now true: the
+      office keeps its operational notice, and the customer gets a separate thank-you
+      (<code>send_trip_completed_client</code>, kind <code>TRIP_COMPLETED_CLIENT</code>, template
+      <code>trip_completed_client</code>) with the trip summary, total and the Stripe <code>receipt_url</code> of the
+      succeeded payment when one exists. Deduplicated on <code>EmailLog</code> — a double-tapped "Completed"
+      records two events but thanks the customer once.</td></tr>
+      <tr><td><b>P5 — resilience + visibility.</b> <code>mailer._send()</code> now retries <b>once</b> (2s backoff,
+      fresh connection) on transient SMTP failures (<code>SMTPServerDisconnected</code>/<code>SMTPConnectError</code>/
+      connection resets — deliberately <b>not</b> timeouts, which would double an already-long synchronous block and
+      can mean the server accepted the message); permanent errors still fail immediately and everything still never
+      raises. The dashboard home surfaces <b>failed sends from the last 7 days</b> (count + 5 most recent with kind,
+      recipient, booking link and error; switched-off-in-settings suppressions excluded; managers get a link to Email
+      settings). Tests:
+      <code>notifications/tests/test_driver_job_email.py</code> plus updated trip-status/amendment/cancellation/API
+      suites.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-23 · Prod infra: run Next.js on the host via pm2 (out of Docker); gate-free frontend deploy</span><span class="tbl">ops · deploy · frontend</span></div>

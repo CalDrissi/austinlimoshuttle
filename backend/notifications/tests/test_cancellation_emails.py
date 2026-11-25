@@ -83,6 +83,26 @@ class TestEmails:
             kind=EmailLog.Kind.CANCELLATION_REQUESTED
         ).exists()
 
+    def test_received_ack_goes_to_the_customer(self, cancellation, email_on):
+        assert mailer.send_cancellation_received(cancellation)
+        message = mail.outbox[0]
+        assert message.to == [cancellation.booking.contact_email]
+        assert "received your cancellation request" in message.subject
+        assert "NOT CANCELLED" in message.body  # the booking still stands
+        assert "145.10" in message.body  # what was paid
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.CANCELLATION_RECEIVED, succeeded=True
+        ).exists()
+
+    def test_received_ack_skips_a_booking_with_no_address(self, cancellation, email_on):
+        booking = cancellation.booking
+        booking.customer = None
+        booking.guest_email = ""
+        booking.save()
+
+        assert mailer.send_cancellation_received(cancellation) is False
+        assert mail.outbox == []
+
     def test_declined_email_carries_the_reason(self, cancellation, email_on):
         cancellation.decline_reason = "This fare is non-refundable."
         cancellation.save(update_fields=["decline_reason"])

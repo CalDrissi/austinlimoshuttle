@@ -1,0 +1,17 @@
+{% autoescape off %}Thanks for riding with us
+
+Your trip {{ booking.reference }} is complete. We hope {% if driver %}{{ driver.full_name }} took good care of you and {% endif %}you enjoyed the ride.
+
+Reference : {{ booking.reference }}
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
+Total     : ${{ booking.total }} {{ booking.currency }}
+{% if receipt_url %}
+Your receipt: {{ receipt_url }}
+{% endif %}
+We'd love to drive you again -- just reply to this email or book online any time.
+
+Austin Limo Shuttle
+{% endautoescape %}

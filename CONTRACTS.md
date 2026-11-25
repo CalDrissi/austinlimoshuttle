@@ -13,6 +13,27 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-25 — Email package P1–P5 (new sends fanning out of other lanes' entry points)
+- Owner: @notifications
+- Change: four new client/driver-facing emails, all via `notifications.mailer` (never raise, logged
+  to `EmailLog` with new `Kind` values; migration `notifications.0006`):
+  - `send_driver_job_notification(booking)` → TO `booking.driver.email` (skips quietly when blank);
+    fired beside `send_driver_assigned` in `dashboard.views.booking_update` on driver assignment.
+  - `send_amendment_received(amendment)` / `send_cancellation_received(cancellation)` → customer
+    acknowledgements; fired in `api.views.amend_request` / `api.views.cancel_request` right after
+    the staff alert (those endpoints now send TWO emails; tests asserting `len(mail.outbox) == 1`
+    after them are wrong).
+  - `_TRIP_EVENT_TO_CLIENT["completed"]` is now `True`: a `completed` DriverTripEvent still emails
+    ops the operational notice, and ALSO sends the customer a separate thank-you
+    (`send_trip_completed_client`, deduplicated on `EmailLog` per booking — repeat pings thank once).
+  - `mailer._send()` retries once (2s backoff, fresh connection) on
+    `SMTPServerDisconnected`/`SMTPConnectError`/`ConnectionError`; NOT on timeouts.
+- Affects: @api-core (amend/cancel endpoints' side effects), @dashboard-bookings (booking_update
+  side effects; home view shows failed-email count/list), @driver-portal (completed ping now
+  customer-visible), @deploy (hourly VPS cron via `scripts/install-reminder-cron.sh`).
+- Migration: dependents need no code change; do not add duplicate client acks or thank-yous in
+  other lanes — route any new booking email through `notifications.mailer`.
+
 ## 2026-11-03 — Free-form city-to-city API (quote request/response + token; city-routes endpoint removed)
 - Owner: @api-core
 - Affects: @frontend-booking (quote + booking requests), @api-quotes (quote token now carries

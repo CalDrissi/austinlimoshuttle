@@ -1,0 +1,16 @@
+{% autoescape off %}We received your change request
+
+Thanks -- your request to change booking {{ booking.reference }} is with our
+team. Nothing has changed yet: we'll email you as soon as it's confirmed (or
+if we can't accommodate it).
+
+Requested changes:
+{% for row in changes %}  {{ row.label }}: {{ row.old|default:"—" }} -> {{ row.new|default:"—" }}
+{% endfor %}{% if price_delta %}
+If approved, your total would move from ${{ amendment.old_total }} {{ amendment.currency }}
+to ${{ amendment.new_total }} {{ amendment.currency }} (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta }}).
+{% endif %}
+Your booking stands exactly as it was until we confirm the change.
+
+Austin Limo Shuttle
+{% endautoescape %}

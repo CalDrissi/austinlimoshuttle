@@ -13,6 +13,8 @@ what a text-only client sees is not an afterthought.
 from __future__ import annotations
 
 import logging
+import smtplib
+import time
 
 from django.core.mail import EmailMultiAlternatives, get_connection
 from django.template.loader import render_to_string
@@ -22,6 +24,20 @@ from .models import EmailLog, EmailSettings
 from .pdf import render_booking_pdf
 
 logger = logging.getLogger(__name__)
+
+# One retry, short pause, fresh connection. A mail server that dropped the
+# connection mid-session (shared hosting recycles them aggressively) usually
+# accepts the very next attempt; anything beyond one retry just delays the
+# caller for a server that is actually down. TimeoutError is deliberately NOT
+# here: every send runs synchronously inside a request, so retrying a timeout
+# doubles an already-long block, and a timeout after DATA may mean the server
+# actually accepted the message -- resending would deliver it twice.
+_TRANSIENT_SMTP_ERRORS = (
+    smtplib.SMTPServerDisconnected,
+    smtplib.SMTPConnectError,
+    ConnectionError,
+)
+_RETRY_BACKOFF_SECONDS = 2
 
 
 def _send(
@@ -70,7 +86,17 @@ def _send(
             attached = True
 
     try:
-        message.send(fail_silently=False)
+        try:
+            message.send(fail_silently=False)
+        except _TRANSIENT_SMTP_ERRORS:
+            logger.warning(
+                "Transient SMTP failure sending %s to %s; retrying once",
+                kind, recipients,
+            )
+            time.sleep(_RETRY_BACKOFF_SECONDS)
+            # The old connection is what just died -- retry on a fresh one.
+            message.connection = get_connection()
+            message.send(fail_silently=False)
     except Exception as exc:
         logger.exception("Failed to send %s to %s", kind, recipients)
         EmailLog.objects.create(
@@ -118,6 +144,33 @@ def send_driver_assigned(booking) -> bool:
         subject=f"Your driver for {booking.reference}",
         template="driver_assigned",
         context={"booking": booking, "driver": booking.driver},
+        booking=booking,
+    )
+
+
+def send_driver_job_notification(booking) -> bool:
+    """
+    The driver's own copy of an assignment -- the job sheet.
+
+    The customer email above says who is coming; this one tells the chauffeur
+    where to be and when, with the passenger's name and phone so they can call
+    from the kerb. A driver without an email address on file is skipped quietly:
+    plenty of drivers are dispatched by phone, and assignment must not depend on
+    this message going out.
+    """
+    driver = booking.driver
+    if not driver or not driver.email:
+        return False
+
+    # localtime: the body's |date filter renders site time, and a subject line
+    # six hours off is the one a driver plans their day from.
+    pickup_local = timezone.localtime(booking.pickup_at)
+    return _send(
+        kind=EmailLog.Kind.DRIVER_JOB_ASSIGNED,
+        to=[driver.email],
+        subject=f"New job — {booking.reference}, {pickup_local:%a %d %b %H:%M}",
+        template="driver_job_assigned",
+        context={"booking": booking, "driver": driver},
         booking=booking,
     )
 
@@ -244,6 +297,34 @@ def send_amendment_requested(amendment) -> bool:
     )
 
 
+def send_amendment_received(amendment) -> bool:
+    """
+    Acknowledge the customer's change request the moment it is filed.
+
+    Staff review can take hours; without this the customer stares at an inbox
+    wondering whether the request even went through. Plainly states that nothing
+    has changed yet and that a confirmation (or decline) follows.
+    """
+    booking = amendment.booking
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    return _send(
+        kind=EmailLog.Kind.AMENDMENT_RECEIVED,
+        to=[email],
+        subject=f"We received your change request — {booking.reference}",
+        template="amendment_received",
+        context={
+            "booking": booking,
+            "amendment": amendment,
+            "changes": amendment.changed_fields(),
+            "price_delta": amendment.price_delta,
+        },
+        booking=booking,
+    )
+
+
 def send_amendment_approved(amendment) -> bool:
     """Tell the customer their requested change is confirmed, with the new fare."""
     booking = amendment.booking
@@ -312,6 +393,29 @@ def send_cancellation_requested(cancellation) -> bool:
     )
 
 
+def send_cancellation_received(cancellation) -> bool:
+    """
+    Acknowledge the customer's cancellation request the moment it is filed.
+
+    Explicit that the booking still stands until staff approve -- the worst
+    outcome would be a customer who believes they cancelled, skips the pickup,
+    and is charged for a no-show.
+    """
+    booking = cancellation.booking
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    return _send(
+        kind=EmailLog.Kind.CANCELLATION_RECEIVED,
+        to=[email],
+        subject=f"We received your cancellation request — {booking.reference}",
+        template="cancellation_received",
+        context={"booking": booking, "cancellation": cancellation},
+        booking=booking,
+    )
+
+
 def send_cancellation_declined(cancellation) -> bool:
     """Tell the customer their cancellation request was declined; booking stands."""
     booking = cancellation.booking
@@ -342,10 +446,11 @@ def send_ops_new_booking(booking) -> bool:
     if not config.ops_notification_email:
         return False
 
+    pickup_local = timezone.localtime(booking.pickup_at)
     return _send(
         kind=EmailLog.Kind.OPS_NEW_BOOKING,
         to=[config.ops_notification_email],
-        subject=f"New booking {booking.reference} — {booking.pickup_at:%a %d %b, %H:%M}",
+        subject=f"New booking {booking.reference} — {pickup_local:%a %d %b, %H:%M}",
         template="ops_new_booking",
         context={"booking": booking},
         booking=booking,
@@ -356,13 +461,15 @@ def send_ops_new_booking(booking) -> bool:
 
 # Who hears about each live trip ping. "On the way" / "Arrived" are the moments
 # a waiting rider cares about, so they reach the customer as well as the office.
-# "On board" / "Completed" are operational checkpoints -- the office tracks them,
-# but the customer is already in the car, so we don't buzz their inbox.
+# "On board" is an operational checkpoint -- the office tracks it, but the
+# customer is already in the car, so we don't buzz their inbox. "Completed"
+# reaches the customer too, but as its own thank-you message (with the receipt),
+# not a copy of the operational notice.
 _TRIP_EVENT_TO_CLIENT = {
     "on_way": True,
     "arrived": True,
     "on_board": False,
-    "completed": False,
+    "completed": True,
 }
 
 _TRIP_EVENT_SUBJECT = {
@@ -390,14 +497,18 @@ def send_trip_status_update(event) -> bool:
     booking = event.booking
     config = EmailSettings.load()
 
+    # "Completed" is the one client-facing event where the office and the
+    # customer get different messages: an operational notice for dispatch, a
+    # thank-you with the receipt for the rider (sent separately below).
+    to_client = _TRIP_EVENT_TO_CLIENT.get(event_type, False)
     recipients = [config.ops_notification_email]
-    if _TRIP_EVENT_TO_CLIENT.get(event_type):
+    if to_client and event_type != "completed":
         recipients.append(_customer_email(booking))
 
     driver = event.driver or booking.driver
     has_location = event.latitude is not None and event.longitude is not None
 
-    return _send(
+    ok = _send(
         kind=EmailLog.Kind.TRIP_STATUS,
         to=recipients,
         subject=_TRIP_EVENT_SUBJECT[event_type].format(ref=booking.reference),
@@ -409,6 +520,48 @@ def send_trip_status_update(event) -> bool:
             "driver_name": driver.full_name if driver else "",
             "status_label": event.get_event_type_display(),
             "has_location": has_location,
+        },
+        booking=booking,
+    )
+
+    if to_client and event_type == "completed":
+        send_trip_completed_client(booking, driver=driver)
+
+    return ok
+
+
+def send_trip_completed_client(booking, *, driver=None) -> bool:
+    """
+    Thank the customer once the driver marks the trip complete.
+
+    Carries the Stripe receipt link when a card payment exists; a cash booking
+    simply sends without the receipt line. Deduplicated on EmailLog like the
+    pickup reminder: a driver double-tapping "Completed" on a flaky connection
+    records two events, and the customer must not get two thank-yous.
+    """
+    email = _customer_email(booking)
+    if not email:
+        return False
+
+    if EmailLog.objects.filter(
+        kind=EmailLog.Kind.TRIP_COMPLETED_CLIENT, booking=booking, succeeded=True,
+    ).exists():
+        return False
+
+    from payments.models import Payment
+
+    payment = booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
+    receipt_url = payment.receipt_url if payment else ""
+
+    return _send(
+        kind=EmailLog.Kind.TRIP_COMPLETED_CLIENT,
+        to=[email],
+        subject=f"Thanks for riding with us — {booking.reference}",
+        template="trip_completed_client",
+        context={
+            "booking": booking,
+            "driver": driver or booking.driver,
+            "receipt_url": receipt_url,
         },
         booking=booking,
     )
