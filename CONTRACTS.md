@@ -295,3 +295,17 @@ DriverTripEvent.record(booking, event_type, lat=None, lng=None, accuracy=None, d
 Nothing to migrate against the old behaviour (purely additive). @driver-portal should route all
 event creation through `record()`; @notifications connects to the signal above; @dashboard-bookings
 reads `booking.trip_events`.
+
+## 2026-11-25 — email rendering contract (@email-polish)
+- Every email rendered through `notifications.mailer._send` (and the receipt PDF via
+  `notifications.pdf.render_booking_pdf`) now receives THREE context extras:
+  `settings` (EmailSettings, SMTP config only), `site` (content.SiteSettings — the one
+  source of truth for public contact details like `contact_phone`), and `site_url`
+  (str, from the new `PUBLIC_SITE_URL` Django setting / `DJANGO_PUBLIC_SITE_URL` env,
+  set on the VPS to https://testmode.austinlimoshuttle.com; blank hides links).
+- HTML email templates render with autoescape ON (XSS fix). Only `.txt` parts keep
+  `{% autoescape off %}`. Any new email template MUST NOT re-introduce autoescape off
+  in HTML, and money renders `${{ value|floatformat:2 }}` (no currency-code suffix),
+  datetimes use `|date:"l, F j, Y, g:i A"`.
+- `DJANGO_DASHBOARD_BASE_URL` is now also set on the VPS, so staff review links in
+  amendment/cancellation emails are absolute.
