@@ -32,19 +32,11 @@ function ArrowIcon() {
     </svg>
   );
 }
-function PlaneIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
-    </svg>
-  );
-}
 
 /** Blacklane-style booking-flow header: logo left, trip-summary pills centred,
  *  hamburger menu right. The pills are read-only — clicking returns home to edit. */
 export default function FlowHeader() {
   const search = useBookingStore((s) => s.search);
-  const flight = useBookingStore((s) => s.trip.flightNumber);
   const hydrated = useHydrated();
   const { user } = useAuth();
   const site = useSiteSettings();
@@ -98,12 +90,6 @@ export default function FlowHeader() {
             </Link>
             <Link href="/" className="fh-pill fh-pill-when" title="Edit your trip">
               <span className="fh-seg">{pillDate(search.date)}</span>
-              {search.tripType !== "hourly" && (
-                <span className="fh-seg">
-                  <span className="fh-pill-icon"><PlaneIcon /></span>
-                  {flight ? flight : <em>Add flight no.</em>}
-                </span>
-              )}
               <span className="fh-seg">
                 <span className="fh-pill-icon"><ArrowIcon /></span>
                 {search.time}
