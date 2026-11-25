@@ -15,8 +15,6 @@ export interface Search {
    */
   tripType: "transfer" | "hourly" | "city";
   pickupAddress: string;
-  pickupCoordinates?: { lat: number; lng: number };
-  dropoffCoordinates?: { lat: number; lng: number };
   dropoffAddress: string; // empty for an hourly hire
   hours?: number; // set for an hourly hire
   date: string; // YYYY-MM-DD
@@ -62,6 +60,15 @@ interface BookingState {
   contact: Contact;
   /** Set once POST /bookings/ succeeds. */
   reference: string | null;
+  /**
+   * A booking that exists on the server but hasn't been paid/confirmed yet,
+   * with a fingerprint of the quote+details it was created from. The payment
+   * step reuses it on a retry (same fingerprint) and VOIDS it when the
+   * customer changes trip or identity (different fingerprint) — otherwise the
+   * abandoned draft sits in the back office as pending work forever.
+   */
+  unpaid: { reference: string; fingerprint: string } | null;
+  setUnpaid: (unpaid: { reference: string; fingerprint: string } | null) => void;
 
   preselectedVehicleId: number | null;
   setPreselectedVehicle: (id: number | null) => void;
@@ -72,7 +79,6 @@ interface BookingState {
   setReference: (reference: string) => void;
   /** Clear the in-progress selections but keep the booking reference. */
   clearDraft: () => void;
-  reset: () => void;
 }
 
 const initial = {
@@ -84,6 +90,7 @@ const initial = {
   contact: {} as Contact,
   contactOwner: null,
   reference: null,
+  unpaid: null,
 };
 
 export const useBookingStore = create<BookingState>()(
@@ -92,7 +99,11 @@ export const useBookingStore = create<BookingState>()(
       ...initial,
       // A new search invalidates any vehicle chosen for the previous one --
       // otherwise the Ride Summary shows a stale price until a vehicle is picked.
-      setSearch: (search, preselectedVehicleId = null) => set({ search, preselectedVehicleId, quote: null, journey: null }),
+      // It also starts the TRIP details fresh (pax/luggage/sign/notes): those
+      // belonged to the previous trip and must not bleed into a new one. An
+      // in-flow edit goes through applyRequote, which keeps them.
+      setSearch: (search, preselectedVehicleId = null) =>
+        set({ search, preselectedVehicleId, quote: null, journey: null, trip: { passengerCount: 1, luggageCount: 0 } }),
       setPreselectedVehicle: (preselectedVehicleId) => set({ preselectedVehicleId }),
       setJourney: (journey) => set({ journey }),
       applyRequote: (search, response) => set((s) => ({ search, journey: response.journey, quote: response.quotes.find((q) => q.vehicle_id === s.quote?.vehicle_id) ?? null })),
@@ -118,9 +129,9 @@ export const useBookingStore = create<BookingState>()(
       clearAccountIdentity: () =>
         set((s) => (s.contactOwner ? { contactOwner: null, contact: {} } : s)),
       setReference: (reference) => set({ reference }),
+      setUnpaid: (unpaid) => set({ unpaid }),
       clearDraft: () =>
         set({ search: null, preselectedVehicleId: null, journey: null, quote: null, trip: { passengerCount: 1, luggageCount: 0 }, contact: {}, contactOwner: null }),
-      reset: () => set(initial),
     }),
     {
       name: "mm-booking",

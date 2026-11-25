@@ -12,15 +12,12 @@ import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { paymentService } from "@/lib/api/payment.service";
 import { ApiRequestError } from "@/lib/api/client";
 import { useCapacity } from "@/lib/booking/useCapacity";
+import { saveConfirmationSnapshot } from "@/lib/booking/confirmation";
+import { money } from "@/lib/format";
 import OrderSummary from "@/components/booking/OrderSummary";
 import type { PaymentConfig } from "@/types/api";
 
 type Method = "cash" | "card";
-
-function money(amount: string, currency: string) {
-  const symbol = currency === "USD" ? "$" : `${currency} `;
-  return `${symbol}${Number(amount).toFixed(2)}`;
-}
 
 // Stripe.js is loaded once per publishable key and reused across renders and
 // navigation — loadStripe injects a script tag, so calling it repeatedly is wasteful.
@@ -62,9 +59,13 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   const { user } = useAuth();
 
   const quote = useBookingStore((s) => s.quote);
+  const search = useBookingStore((s) => s.search);
   const trip = useBookingStore((s) => s.trip);
   const contact = useBookingStore((s) => s.contact);
   const setReference = useBookingStore((s) => s.setReference);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerCode, setOfferCode] = useState("");
+  const [offerMsg, setOfferMsg] = useState("");
 
   // Default to card once we know it's available (config loads async), unless the
   // customer has already picked a method themselves.
@@ -85,9 +86,30 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   // The booking is created on the first confirm and reused on retry, so a
   // declined card doesn't leave a trail of duplicate pending bookings.
   const [createdRef, setCreatedRef] = useState("");
-  useEffect(() => { setCreatedRef(""); setExpired(false); }, [quote?.quote_token, trip, contact]);
+  const setUnpaid = useBookingStore((s) => s.setUnpaid);
   const hydrated = useHydrated();
   const capacity = useCapacity();
+
+  // The created-but-unpaid booking is only valid for the exact quote +
+  // details it was created from. Same fingerprint -> adopt it (retry after a
+  // declined card, or coming back to this step). Different -> the customer
+  // changed their trip or identity, so VOID the stale pending on the server
+  // instead of leaving it as phantom work for the office.
+  const fingerprint = JSON.stringify({ t: quote?.quote_token, trip, contact });
+  useEffect(() => {
+    setExpired(false);
+    const unpaid = useBookingStore.getState().unpaid;
+    if (unpaid && unpaid.fingerprint === fingerprint) {
+      setCreatedRef(unpaid.reference);
+      return;
+    }
+    setCreatedRef("");
+    if (unpaid) {
+      setUnpaid(null);
+      // Best-effort: a 409 means it got confirmed/paid after all — leave it.
+      bookingService.voidPending(unpaid.reference).catch(() => {});
+    }
+  }, [fingerprint, setUnpaid]);
 
   useEffect(() => {
     if (hydrated && !quote) router.replace("/booking/vehicle");
@@ -132,6 +154,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
         reference = booking.reference;
         setCreatedRef(reference);
         setReference(reference);
+        setUnpaid({ reference, fingerprint });
       }
 
       if (method === "cash") {
@@ -163,9 +186,31 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
         // succeeded / processing — the webhook is what actually confirms the booking.
       }
 
+      // Settled: the pending is no longer voidable work, and the confirmation
+      // page must survive a refresh after the draft store is cleared.
+      setUnpaid(null);
+      saveConfirmationSnapshot(reference, {
+        search: useBookingStore.getState().search,
+        vehicleName: quote.vehicle_name, total: quote.total, currency: quote.currency,
+        contact, trip, method,
+      });
       void qc.invalidateQueries({ queryKey: ["my-bookings"] });
       router.push("/booking/confirmation");
     } catch (e) {
+      if (e instanceof ApiRequestError && e.status === 409 && createdRef) {
+        // Already settled (double submit, second tab, back-button replay):
+        // the right destination is this booking's confirmation, not an error.
+        setUnpaid(null);
+        setReference(createdRef);
+        saveConfirmationSnapshot(createdRef, {
+          search: useBookingStore.getState().search,
+          vehicleName: quote.vehicle_name, total: quote.total, currency: quote.currency,
+          contact, trip, method,
+        });
+        void qc.invalidateQueries({ queryKey: ["my-bookings"] });
+        router.push("/booking/confirmation");
+        return;
+      }
       if (e instanceof ApiRequestError && e.fieldError("quote_token")) {
         setExpired(true); // dedicated recovery UI below; no generic error
       } else if (e instanceof ApiRequestError && e.status === 503) {
@@ -237,9 +282,33 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           <div className="d-flex justify-content-between heading-20-medium">
             <span>Total</span><span>{money(quote.total, quote.currency)}</span>
           </div>
+          {search?.tripType === "hourly" && !!search.hours && (
+            <p className="text-14 color-grey" style={{ margin: "4px 0 0", textAlign: "right" }}>
+              for {search.hours} hour{search.hours === 1 ? "" : "s"} at your disposal
+            </p>
+          )}
           <p className="text-13 color-grey" style={{ margin: "8px 0 0" }}>
             Quoted prices are held for a short time — if yours expires we&rsquo;ll refresh it right here.
           </p>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <button type="button" className="btn btn-link" style={{ padding: 0 }}
+                  aria-expanded={offerOpen}
+                  onClick={() => { setOfferOpen((open) => !open); setOfferMsg(""); }}>
+            Have an offer code?
+          </button>
+          {offerOpen && (
+            <div style={{ display: "flex", gap: 8, marginTop: 8, maxWidth: 360 }}>
+              <input className="form-control" placeholder="Offer code" value={offerCode}
+                     onChange={(e) => { setOfferCode(e.target.value); setOfferMsg(""); }} />
+              <button type="button" className="btn btn-border"
+                      onClick={() => setOfferMsg(offerCode.trim() ? "This code is not valid." : "Enter an offer code.")}>
+                Apply
+              </button>
+            </div>
+          )}
+          {offerOpen && offerMsg && <p role="alert" className="text-14" style={{ color: "#c0392b", margin: "6px 0 0" }}>{offerMsg}</p>}
         </div>
 
         <h5 className="text-16-medium mb-10">How would you like to pay?</h5>

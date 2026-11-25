@@ -23,6 +23,8 @@ urlpatterns = [
          name="booking_receipt"),
     path("bookings/<str:reference>/pay-cash/", payment_views.pay_cash,
          name="pay_cash"),
+    path("bookings/<str:reference>/void/", payment_views.void_pending,
+         name="void_pending"),
 
     # Customer account
     path("account/bookings/", views.my_bookings, name="my_bookings"),

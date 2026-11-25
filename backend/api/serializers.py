@@ -270,6 +270,7 @@ class BookingSerializer(serializers.ModelSerializer):
         model = Booking
         fields = [
             "reference", "status", "status_display", "trip_type",
+            "is_city_to_city",
             "pickup_address", "dropoff_address", "pickup_at",
             "distance_miles", "duration_minutes", "hours",
             "passenger_count", "luggage_count", "flight_number", "pickup_sign",

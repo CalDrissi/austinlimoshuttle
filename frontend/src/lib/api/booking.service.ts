@@ -14,6 +14,14 @@ export const bookingService = {
   status: (reference: string) =>
     apiGet<BookingStatus>(`/bookings/${reference}/status/`),
 
+  /**
+   * Void an unpaid pending booking this session created and then replaced
+   * (trip or identity changed before paying). 409s — already confirmed or
+   * paid — are the caller's cue to leave it alone.
+   */
+  voidPending: (reference: string) =>
+    apiPost<BookingStatus>(`/bookings/${reference}/void/`, {}),
+
   /** Signed-in customer's own bookings. */
   mine: () => apiGet<Booking[]>("/account/bookings/"),
   mineDetail: (reference: string) =>

@@ -18,7 +18,7 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     }
     setBusy(true); setError("");
     try {
-      const next = { ...draft, pickupCoordinates: undefined, dropoffCoordinates: undefined,
+      const next = { ...draft,
         // Meet & Greet is a point-to-point extra; an hourly hire must never carry it.
         meetGreet: draft.tripType === "hourly" ? false : draft.meetGreet,
         dropoffAddress: draft.tripType === "hourly" ? "" : draft.dropoffAddress.trim(), pickupAddress: draft.pickupAddress.trim() };

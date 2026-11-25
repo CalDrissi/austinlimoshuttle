@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { telHref } from "@/lib/api/site.service";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
+import { formatTime } from "@/lib/format";
 import TripEditor from "@/components/booking/TripEditor";
 
 /** "Austin-Bergstrom International Airport (AUS), Presidential Blvd…" -> "Austin-Bergstrom International Airport (AUS)" */
@@ -115,7 +116,7 @@ export default function FlowHeader() {
               <span className="fh-seg">{pillDate(search.date)}</span>
               <span className="fh-seg">
                 <span className="fh-pill-icon"><ArrowIcon /></span>
-                {search.time}
+                {formatTime(search.time)}
               </span>
             </button>
           </div>

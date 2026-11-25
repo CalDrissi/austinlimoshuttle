@@ -26,7 +26,7 @@
         <dl class="kv">
           <dt>Pickup</dt><dd>{{ booking.pickup_address }}</dd>
           <dt>Destination</dt><dd>{{ booking.dropoff_address|default:"—" }}</dd>
-          <dt>Type</dt><dd>{{ booking.get_trip_type_display }}</dd>
+          <dt>Type</dt><dd>{% if booking.is_city_to_city %}City-to-city{% else %}{{ booking.get_trip_type_display }}{% endif %}</dd>
           {% if booking.distance_miles %}<dt>Distance</dt><dd>{{ booking.distance_miles }} miles</dd>{% endif %}
           {% if booking.hours %}<dt>Hours booked</dt><dd>{{ booking.hours }}</dd>{% endif %}
           <dt>Passengers / luggage</dt><dd>{{ booking.passenger_count }} / {{ booking.luggage_count }}</dd>

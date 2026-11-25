@@ -258,6 +258,71 @@ def pay_cash(request, reference):
 
 
 @extend_schema(
+    tags=["bookings"],
+    summary="Void an unpaid pending booking",
+    description=(
+        "Cancels a booking that is still `pending` and has no settled or "
+        "awaiting-collection payment. The storefront calls this when the "
+        "customer changes their trip or contact identity after a booking was "
+        "created but before paying — the replaced draft would otherwise sit in "
+        "the back office as pending work forever.\n\n"
+        "Scoped like the other reference endpoints: the reference is the "
+        "capability (guest checkout has no session); a signed-in customer may "
+        "only void their own. Idempotent: an already-cancelled booking "
+        "returns 200. A confirmed or paid booking returns **409** — that is a "
+        "cancellation request, not a void."
+    ),
+    request=None,
+    responses={
+        200: BookingStatusSerializer,
+        404: DetailSerializer,
+        409: OpenApiResponse(DetailSerializer,
+                             description="Already confirmed or paid."),
+    },
+)
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([AnonRateThrottle])
+def void_pending(request, reference):
+    """Void an unpaid pending booking the customer abandoned mid-flow."""
+    booking = Booking.objects.filter(reference=reference).first()
+    if booking is None:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.customer_id and request.user.is_authenticated \
+            and booking.customer_id != request.user.id:
+        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if booking.status == Booking.Status.CANCELLED:
+        # Idempotent: a retried void finds the work already done.
+        return Response(BookingStatusSerializer(booking).data)
+
+    with transaction.atomic():
+        booking = Booking.objects.select_for_update().get(pk=booking.pk)
+        # Anything beyond "pending with no money in motion" is out of scope:
+        # a paid or confirmed booking goes through the cancellation-request
+        # flow, where staff decide refunds.
+        if booking.status != Booking.Status.PENDING or booking.payments.filter(
+            status__in=[Payment.Status.SUCCEEDED, Payment.Status.PROCESSING],
+        ).exists():
+            return Response(
+                {"detail": "This booking is already confirmed or paid — "
+                           "request a cancellation instead."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        BookingStatusChange.objects.create(
+            booking=booking,
+            from_status=booking.status,
+            to_status=Booking.Status.CANCELLED,
+            note="Voided — the customer changed their trip before paying",
+        )
+        booking.status = Booking.Status.CANCELLED
+        booking.save(update_fields=["status", "updated_at"])
+
+    return Response(BookingStatusSerializer(booking).data)
+
+
+@extend_schema(
     tags=["payments"],
     summary="Stripe webhook (not for frontend use)",
     description=(

@@ -1156,3 +1156,13 @@ button.fh-pill:focus-visible { outline: 2px solid #0f63bd; outline-offset: 2px; 
 .blw-list:focus-visible { outline: 2px solid #3b82d7; outline-offset: 2px; border-radius: 8px; }
 .blw-list-item.act { background: rgba(255, 255, 255, 0.14); }
 .blw-list-item.sel.act { background: #0f63bd; }
+
+/* ===================================================================== *
+ * Flow-fix batch 2                                                       *
+ * ===================================================================== */
+
+/* Stepper: gated (not-yet-reachable) and settled steps look inert — no hover
+   invitation, dimmed icon — while visited steps stay obviously clickable. */
+.box-booking-tabs .item-tab > div > .box-tab-step.locked { opacity: 0.55; }
+.box-booking-tabs .item-tab > div > .box-tab-step.locked:hover { background: transparent; }
+.box-booking-tabs .item-tab > div { cursor: default; }

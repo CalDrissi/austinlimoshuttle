@@ -112,7 +112,9 @@ export default function Footer() {
             <div className="col-lg-4 col-md-6 mb-30">
               <h5 className="text-18-medium color-white mb-20">Book &amp; Manage</h5>
               <ul className="menu-footer">
-                <li><Link href="/booking/vehicle">Get a quote</Link></li>
+                {/* The quote starts with the search widget on the home page —
+                    deep-linking into the funnel lands on an empty step. */}
+                <li><Link href="/">Get a quote</Link></li>
                 {user ? (
                   <>
                     <li><Link href="/account">My account</Link></li>

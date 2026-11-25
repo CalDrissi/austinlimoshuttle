@@ -10,21 +10,15 @@ import type { BookingAmendRequest } from "@/lib/api/booking.service";
 import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
+import { money, formatDateTime } from "@/lib/format";
 import type { Booking } from "@/types/api";
 
 type Tab = "overview" | "bookings" | "profile";
 
-function money(a: string, c: string) {
-  return `${c === "USD" ? "$" : c + " "}${Number(a).toFixed(2)}`;
-}
-function when(iso: string) {
-  // Pickup times are Austin wall-clock; render them in the business timezone so
-  // the card matches the edit form regardless of the viewer's browser timezone.
-  return new Date(iso).toLocaleString("en-US", {
-    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
-    timeZone: "America/Chicago",
-  });
-}
+// Pickup times are Austin wall-clock; the shared formatter renders them in the
+// business timezone so the card matches the edit form regardless of the
+// viewer's browser timezone.
+const when = formatDateTime;
 function isUpcoming(b: Booking) {
   return b.status !== "cancelled" && b.status !== "completed" && new Date(b.pickup_at) > new Date();
 }
@@ -106,7 +100,7 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       <div className="mm-ride-top">
         <div>
           <div className="route">{b.pickup_address} → {b.dropoff_address || "Hourly hire"}</div>
-          <div className="meta">{when(b.pickup_at)} · {b.vehicle_name} · {money(b.total, b.currency)} · Ref {b.reference}</div>
+          <div className="meta">{when(b.pickup_at)} · {b.is_city_to_city ? "City-to-city · " : ""}{b.vehicle_name} · {money(b.total, b.currency)} · Ref {b.reference}</div>
           <div className="meta">Passengers {b.passenger_count} · Luggage {b.luggage_count}</div>
         </div>
         <span className={`mm-badge ${b.status}`}>{b.status_display}</span>

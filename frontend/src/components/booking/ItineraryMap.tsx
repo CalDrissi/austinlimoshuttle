@@ -19,33 +19,40 @@ export default function ItineraryMap({ search }: { search: Search }) {
     async function initialize() {
       try {
         const google = await loadGoogleMaps();
-        const [{ Map }, { Geocoder }, { Marker }] = await Promise.all([
+        const [{ Map }, { Geocoder }, { AdvancedMarkerElement, PinElement }] = await Promise.all([
           google.maps.importLibrary("maps"),
           google.maps.importLibrary("geocoding"),
           google.maps.importLibrary("marker"),
         ]);
         const geocoder = new Geocoder();
-        async function locate(address: string, coordinates?: { lat: number; lng: number }) {
-          if (coordinates && Number.isFinite(coordinates.lat) && Number.isFinite(coordinates.lng)
-            && Math.abs(coordinates.lat) <= 90 && Math.abs(coordinates.lng) <= 180) return coordinates;
+        async function locate(address: string) {
           const { results } = await geocoder.geocode({ address });
           if (!results?.[0]) throw new Error("Address not found");
           return results[0].geometry.location;
         }
         const [pickup, dropoff] = await Promise.all([
-          locate(search.pickupAddress, search.pickupCoordinates),
-          destination ? locate(destination, search.dropoffCoordinates) : Promise.resolve(null),
+          locate(search.pickupAddress),
+          destination ? locate(destination) : Promise.resolve(null),
         ]);
         if (cancelled || !container.current) return;
         const map = new Map(container.current, {
           center: pickup, zoom: 13, mapTypeControl: false, streetViewControl: false,
           fullscreenControl: false, gestureHandling: "cooperative",
+          // AdvancedMarkerElement (the non-deprecated marker) requires a map id;
+          // Google's shared DEMO_MAP_ID is the documented one for default styling.
+          mapId: "DEMO_MAP_ID",
         });
         const bounds = new google.maps.LatLngBounds();
-        [[pickup, "A", search.pickupAddress], [dropoff, "B", destination]].forEach(([position, label, title]) => {
+        [[pickup, "A", search.pickupAddress], [dropoff, "B", destination]].forEach(([position, glyph, title]) => {
           if (!position) return;
           bounds.extend(position);
-          overlays.push(new Marker({ map, position, title, label: { text: label, color: "#ffffff" } }));
+          const pin = new PinElement({
+            glyph: glyph as string, glyphColor: "#ffffff",
+            background: "#111111", borderColor: "#111111",
+          });
+          overlays.push(new AdvancedMarkerElement({
+            map, position, title: title as string, content: pin.element,
+          }));
         });
         const fit = () => { if (dropoff) map.fitBounds(bounds, 40); else map.setCenter(pickup); };
         fit();
@@ -76,9 +83,13 @@ export default function ItineraryMap({ search }: { search: Search }) {
     return () => {
       cancelled = true;
       observer?.disconnect();
-      overlays.forEach((overlay) => overlay.setMap(null));
+      // AdvancedMarkerElement detaches via `.map = null`; polylines via setMap.
+      overlays.forEach((overlay) => {
+        if (typeof overlay.setMap === "function") overlay.setMap(null);
+        else overlay.map = null;
+      });
     };
-  }, [search.pickupAddress, destination, search.pickupCoordinates, search.dropoffCoordinates]);
+  }, [search.pickupAddress, destination]);
 
   if (unavailable) return <p className="text-14 mm-map-unavailable mt-20">Map unavailable</p>;
   return <div ref={container} className="mm-itinerary-map mt-20" role="region"

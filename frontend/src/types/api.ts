@@ -154,6 +154,8 @@ export interface Booking {
   status: BookingStatusValue;
   status_display: string;
   trip_type: string;
+  /** Booked as a free-form city-to-city (intercity) journey. */
+  is_city_to_city: boolean;
   pickup_address: string;
   dropoff_address: string;
   pickup_at: string;

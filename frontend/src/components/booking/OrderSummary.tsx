@@ -4,25 +4,38 @@ import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useBookingStore } from "@/lib/booking/store";
 import { catalogService } from "@/lib/api/catalog.service";
+import { money, formatDate, formatTime } from "@/lib/format";
 import ItineraryMap from "./ItineraryMap";
 import TripEditor from "./TripEditor";
-import type { Journey } from "@/types/api";
 
-function money(amount: string, currency: string) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(amount));
-}
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return <section style={{borderTop:"1px solid #e5e7eb", paddingTop:16, marginTop:16}}><h3 className="text-16-medium" style={{marginBottom:10}}>{title}</h3>{children}</section>;
 }
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div style={{display:"flex", justifyContent:"space-between", gap:12, marginBottom:7, overflowWrap:"anywhere"}}><span className="color-grey">{label}</span><span style={{textAlign:"right"}}>{children}</span></div>;
 }
-export default function OrderSummary({ journey: suppliedJourney }: { journey?: Journey | null }) {
-  const { search, quote, trip, contact, journey: savedJourney } = useBookingStore();
+
+/** Loose address equality: the resolved address counts as "the same" when the
+ *  typed text survives in it (Places picks usually do). Only a material
+ *  difference earns an "interpreted as" line — otherwise it's noise. */
+export function materiallyDiffers(typed: string, resolved: string): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const t = norm(typed);
+  const r = norm(resolved);
+  if (!t || !r) return false;
+  return t !== r && !r.includes(t) && !t.includes(r);
+}
+
+function Interpreted({ typed, resolved }: { typed: string; resolved?: string }) {
+  if (!resolved || !materiallyDiffers(typed, resolved)) return null;
+  return <span className="text-13 color-grey" style={{display:"block", fontWeight:400}}>interpreted as {resolved}</span>;
+}
+
+export default function OrderSummary() {
+  const { search, quote, trip, contact, journey } = useBookingStore();
   const [editing, setEditing] = useState(false);
   const { data: vehicles } = useQuery({ queryKey: ["vehicles"], queryFn: () => catalogService.listVehicles(), staleTime: 0 });
   if (!search) return null;
-  const journey = savedJourney ?? suppliedJourney;
   const vehicle = vehicles?.find((v) => v.id === quote?.vehicle_id);
   const paxOver = !!vehicle?.passenger_capacity && trip.passengerCount > vehicle.passenger_capacity;
   const lugOver = !!vehicle?.luggage_capacity && trip.luggageCount > vehicle.luggage_capacity;
@@ -33,8 +46,11 @@ export default function OrderSummary({ journey: suppliedJourney }: { journey?: J
       {editing && <TripEditor search={search} onClose={() => setEditing(false)} />}
       <Group title="Trip">
         <Row label="Type">{search.tripType === "city" ? "City-to-City" : search.tripType === "hourly" ? `Hourly · ${search.hours} hours` : "Transfer"}</Row>
-        <ul className="mm-summary-routes" aria-label="Itinerary"><li><span className="location-item">A</span><span className="info-location text-14-medium">{search.pickupAddress}</span></li>{search.tripType !== "hourly" && <li><span className="location-item">B</span><span className="info-location text-14-medium">{search.dropoffAddress}</span></li>}</ul>
-        <Row label="Date">{search.date}</Row><Row label="Time">{search.time} (Austin)</Row>
+        <ul className="mm-summary-routes" aria-label="Itinerary">
+          <li><span className="location-item">A</span><span className="info-location text-14-medium">{search.pickupAddress}<Interpreted typed={search.pickupAddress} resolved={journey?.pickup_address} /></span></li>
+          {search.tripType !== "hourly" && <li><span className="location-item">B</span><span className="info-location text-14-medium">{search.dropoffAddress}<Interpreted typed={search.dropoffAddress} resolved={journey?.dropoff_address} /></span></li>}
+        </ul>
+        <Row label="Date">{formatDate(search.date)}</Row><Row label="Time">{formatTime(search.time)} (Austin)</Row>
         {journey && <><Row label="Distance">{Number(journey.distance_miles).toFixed(1)} miles</Row><Row label="Duration">{journey.duration_minutes} min</Row></>}
         <Row label="Meet & Greet">{search.meetGreet ? "Yes" : "No"}</Row>
         <ItineraryMap search={search} />
@@ -54,7 +70,7 @@ export default function OrderSummary({ journey: suppliedJourney }: { journey?: J
         {!contact.name && !contact.email && !contact.phone && <span className="color-grey">Add your details in the passenger step</span>}
         {trip.forSomeoneElse && <><Row label="Passenger">{trip.passengerName || "Not entered"}</Row>{trip.passengerPhone && <Row label="Passenger phone">{trip.passengerPhone}</Row>}</>}
       </Group>
-      <Group title="Total">{quote ? <><p className="text-20-medium">{money(quote.total, quote.currency)}</p><p className="color-grey">Taxes &amp; fees included</p></> : "Select a vehicle to see your fare"}</Group>
+      <Group title="Total">{quote ? <><p className="text-20-medium">{money(quote.total, quote.currency)}{search.tripType === "hourly" && !!search.hours && <span className="text-14 color-grey" style={{fontWeight:400}}> for {search.hours} hours</span>}</p><p className="color-grey">Taxes &amp; fees included</p></> : "Select a vehicle to see your fare"}</Group>
     </div>
   </aside>;
 }

@@ -13,6 +13,26 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 
 ---
 
+## 2026-11-25 — Void endpoint for abandoned pendings + `is_city_to_city` exposed
+- Owner: @flow-fix-2
+- Change (two interfaces):
+  - New `POST /api/bookings/<reference>/void/` — cancels a booking that is still `pending` **and**
+    has no `succeeded`/`processing` payment (status change note "Voided — the customer changed
+    their trip before paying"). Reference-capability scoped exactly like `status`/`pay-cash`
+    (guest checkout has no session; a signed-in customer can only void their own → 404 otherwise).
+    Idempotent on already-cancelled (200); confirmed/paid → **409** (that's the
+    cancellation-request flow, not a void). The storefront calls it when the customer changes
+    trip/identity after a booking was created but before paying; the draft's
+    `{reference, fingerprint}` is held in the zustand store (`unpaid`) so a matching retry
+    REUSES the booking instead of voiding it.
+  - `BookingSerializer` (account/booking payloads) now carries read-only `is_city_to_city`
+    (model field existed since `bookings.0006`; no migration). Storefront account + confirmation
+    and back-office booking detail label such trips "City-to-city".
+- Affects: @payments-api, @bookings-core, @dashboard-bookings (voided drafts arrive as CANCELLED
+  with the note above — don't chase them), @frontend-booking, @frontend-account
+- Migration: none. Dashboards treating every CANCELLED as a customer cancellation should treat
+  the "Voided —" note as noise, not churn.
+
 ## 2026-11-25 — E2E round-1 defect batch (cash semantics, quiet /auth/me, guest_name)
 - Owner: @bugfix-round1
 - Change (four interfaces moved):
