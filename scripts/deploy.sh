@@ -36,3 +36,5 @@ echo "Deployed $commit ($lane)"
 # Backup is independent of the deploy result and runs after its lock is released.
 nohup bash scripts/mirror-github.sh "$commit" </dev/null >>/tmp/austinlimoshuttle-mirror.log 2>&1 9>&- &
 REMOTE
+
+# Direct deploy verification marker.
