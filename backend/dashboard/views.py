@@ -1593,22 +1593,30 @@ def managed_edit(request, slug, pk=None):
         ]
 
         if form.is_valid() and all(fs.is_valid() for fs in formsets):
-            with transaction.atomic():
-                saved = form.save()
-                for fs in formsets:
-                    fs.instance = saved
-                    fs.save()
+            # Checks that need the form and its inlines together -- e.g. an
+            # active vehicle must have a usable rate card. The hook may add
+            # form errors (blocking the save) and may return warnings.
+            warnings = entry.cross_clean(form, formsets) if entry.cross_clean else []
 
-            logger.info(
-                "%s %s %s by %s",
-                entry.label, saved.pk, "created" if pk is None else "updated",
-                request.user.email,
-            )
-            messages.success(
-                request,
-                f"{entry.label} “{saved}” {'created' if pk is None else 'saved'}.",
-            )
-            return redirect("dashboard:managed_list", slug=slug)
+            if form.is_valid():
+                with transaction.atomic():
+                    saved = form.save()
+                    for fs in formsets:
+                        fs.instance = saved
+                        fs.save()
+
+                logger.info(
+                    "%s %s %s by %s",
+                    entry.label, saved.pk, "created" if pk is None else "updated",
+                    request.user.email,
+                )
+                messages.success(
+                    request,
+                    f"{entry.label} “{saved}” {'created' if pk is None else 'saved'}.",
+                )
+                for warning in warnings:
+                    messages.warning(request, warning)
+                return redirect("dashboard:managed_list", slug=slug)
 
         messages.error(request, "Please correct the errors below.")
     else:

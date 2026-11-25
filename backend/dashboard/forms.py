@@ -6,6 +6,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
+from django.utils.text import slugify
 
 from bookings.models import Booking, Driver
 from content.models import Banner, GalleryImage, Page, SiteSettings, Testimonial
@@ -505,6 +506,26 @@ class VehicleForm(BootstrapFormMixin, forms.ModelForm):
             "city_to_city_min_miles": "City-to-city minimum distance (miles)",
         }
         help_texts = {
+            "slug": (
+                "The vehicle's web address on the storefront (/fleet/<slug>/). "
+                "Leave blank to generate it from the name. Changing it later "
+                "breaks existing links."
+            ),
+            "photo": (
+                "Shown on the storefront fleet and booking pages. Until one is "
+                "uploaded, customers see a generic placeholder."
+            ),
+            "passenger_capacity": "Maximum passengers. 0 = no limit enforced.",
+            "luggage_capacity": "Maximum bags. 0 = no limit enforced.",
+            "hourly_rate": (
+                "Rate per hour for hourly hire. 0 = this vehicle is not "
+                "offered for hourly hire."
+            ),
+            "display_order": "Lower numbers appear first on the storefront and in quotes.",
+            "is_active": (
+                "Active vehicles appear on the storefront. A vehicle also needs "
+                "a rate card (or an hourly rate) before it can appear in quotes."
+            ),
             "city_to_city_min_miles": (
                 "At or above this trip distance the City-to-city card below is "
                 "used instead of the rate card. Leave blank to never offer "
@@ -515,6 +536,95 @@ class VehicleForm(BootstrapFormMixin, forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 3}),
             "features": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["slug"].required = False  # generated from the name when blank
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("slug") and cleaned.get("name"):
+            base = slugify(cleaned["name"])[:130] or "vehicle"
+            slug = base
+            existing = Vehicle.objects.exclude(pk=self.instance.pk)
+            suffix = 2
+            while existing.filter(slug=slug).exists():
+                slug = f"{base}-{suffix}"
+                suffix += 1
+            cleaned["slug"] = self.instance.slug = slug
+        return cleaned
+
+
+def _live_rows(formset) -> int:
+    """Rows an inline formset would leave after save (ignores deleted/blank)."""
+    return sum(
+        1 for f in formset.forms
+        if f.cleaned_data and not f.cleaned_data.get("DELETE")
+    )
+
+
+def vehicle_cross_clean(form, formsets) -> list[str]:
+    """
+    A vehicle's bookability depends on the form AND its rate-card inlines
+    together, which neither can validate alone. The Escalade incident: a
+    vehicle existed, showed on the storefront, but had no rate card -- the
+    quote engine silently omitted it and it could never be booked.
+
+    Blocks an ACTIVE vehicle that could never be quoted at all (no distance
+    bands and no hourly rate). Everything survivable-but-surprising comes back
+    as warnings shown after the save.
+    """
+    bands = next(fs for fs in formsets if fs.model is DistanceBand)
+    intercity = next(fs for fs in formsets if fs.model is IntercityBand)
+    band_rows = _live_rows(bands)
+    intercity_rows = _live_rows(intercity)
+
+    cleaned = form.cleaned_data
+    is_active = cleaned.get("is_active")
+    hourly_rate = cleaned.get("hourly_rate") or Decimal("0")
+    c2c_min = cleaned.get("city_to_city_min_miles")
+
+    if is_active and band_rows == 0 and hourly_rate <= 0:
+        form.add_error(
+            "is_active",
+            "This vehicle has no rate card and no hourly rate, so it will not "
+            "appear in quotes and can never be booked. Add a rate card below, "
+            "or untick Active to save it as a draft.",
+        )
+        return []
+
+    warnings: list[str] = []
+    name = cleaned.get("name") or "This vehicle"
+
+    if band_rows == 0:
+        if is_active:
+            warnings.append(
+                f"{name} has no rate card: it will be quoted for hourly hire "
+                f"only and will NOT appear in transfer or city-to-city quotes."
+            )
+        else:
+            warnings.append(
+                f"{name} is saved as an inactive draft with no rate card. It "
+                f"will not appear in quotes until a rate card is added and it "
+                f"is made active."
+            )
+    if intercity_rows > 0 and c2c_min is None:
+        warnings.append(
+            f"{name} has a city-to-city card but no city-to-city minimum "
+            f"distance, so that card will never be used. Set the minimum "
+            f"(0 = any distance) to switch it on."
+        )
+    if intercity_rows == 0 and c2c_min is not None:
+        warnings.append(
+            f"{name} has a city-to-city minimum distance but no city-to-city "
+            f"card, so city-to-city trips will fall back to the normal rate card."
+        )
+    if is_active and not cleaned.get("photo") and not form.instance.photo:
+        warnings.append(
+            f"{name} has no photo: the storefront will show a generic "
+            f"placeholder until one is uploaded."
+        )
+    return warnings
 
 
 class DistanceBandForm(BootstrapFormMixin, forms.ModelForm):

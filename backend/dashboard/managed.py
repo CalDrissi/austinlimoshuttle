@@ -71,6 +71,7 @@ register(Managed(
     search_fields=["name", "slug"],
     ordering=["display_order", "name"],
     prefetch_related=["bands", "intercity_bands"],
+    cross_clean=forms.vehicle_cross_clean,
     inlines=[
         Inline(
             forms.DistanceBandFormSet,

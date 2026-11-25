@@ -948,6 +948,36 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Add-vehicle form completeness: unquotable-vehicle guard, slug autogeneration, help texts</span><span class="tbl">dashboard</span></div>
+    <table>
+      <tr><td><b>Unquotable-vehicle guard (the Escalade id8 class of bug).</b> A vehicle could be saved
+      <i>active</i> with no rate card and no hourly rate: it showed on the storefront fleet page but
+      <code>pricing.engine.quote_all()</code> silently omitted it from every quote, so it could never be booked and
+      nobody was told. The managed registry (<code>dashboard.crud.Managed</code>) now carries an optional
+      <code>cross_clean(form, formsets)</code> hook — validation that needs the record form and its inline formsets
+      together, which neither can see alone. <code>managed_edit</code> calls it once both are individually valid; it
+      may add form errors (blocking the save) and returns warning strings surfaced via
+      <code>messages.warning</code> after a save that proceeds. The vehicles entry wires
+      <code>dashboard.forms.vehicle_cross_clean</code>: an <b>active</b> vehicle with zero distance bands AND no
+      hourly rate is <b>blocked</b> (“…will not appear in quotes and can never be booked. Add a rate card below, or
+      untick Active to save it as a draft.”). Non-fatal but surprising states save with a warning: active with hourly
+      rate only (hourly quotes only, never transfer/city-to-city), inactive draft with no card, a city-to-city card
+      with no minimum distance (dormant card), a minimum distance with no city-to-city card (falls back to the normal
+      card), and an active vehicle with no photo (storefront shows the generic placeholder).</td></tr>
+      <tr><td><b>Slug autogeneration.</b> <code>VehicleForm.slug</code> is optional on the form: left blank it is
+      slugified from the name with a numeric suffix on collision. The field keeps its warning that changing it later
+      breaks existing storefront links (<code>/fleet/&lt;slug&gt;/</code>).</td></tr>
+      <tr><td><b>Field audit + help texts.</b> Audited model vs form vs <code>/api/vehicles/</code> serializer: every
+      storefront-consumed field (name, slug, description, features, photo, capacities, minimum fare) was already
+      editable, and <code>legacy_car_id</code> is deliberately import-only — the real gap was the missing quotability
+      validation above. Added help texts: photo placeholder behaviour, capacities (0 = no limit), hourly rate
+      (0 = not offered hourly), display order, and what Active does and does not guarantee.</td></tr>
+      <tr><td><b>Tests.</b> <code>dashboard/tests/test_dashboard.py::TestVehicleCompleteness</code> — block,
+      each warning, slug generation and collision handling (9 tests).</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-25 · E2E round-1 defect batch: cash refunds without Stripe, cash awaiting-collection, guest name vs placard, quiet /auth/me, min-fare label, overview count</span><span class="tbl">payments · bookings · api · dashboard · frontend</span></div>
     <table>
       <tr><td><b>BUG-1 — cash refunds no longer require Stripe.</b> <code>payments.gateway.refund()</code> now routes
