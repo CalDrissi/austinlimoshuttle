@@ -40,6 +40,32 @@ _TRANSIENT_SMTP_ERRORS = (
 _RETRY_BACKOFF_SECONDS = 2
 
 
+def _site_settings():
+    """
+    SiteSettings is the one source of truth for the public contact details
+    (phone, email) that templates show in the footer. EmailSettings stays what
+    it is: SMTP transport config.
+    """
+    try:
+        from content.models import SiteSettings
+        return SiteSettings.load()
+    except Exception:  # never let footer decoration break a send
+        return None
+
+
+def _site_url() -> str:
+    """Absolute public site base for links in email bodies ('' hides them)."""
+    from django.conf import settings as django_settings
+
+    return (getattr(django_settings, "PUBLIC_SITE_URL", "") or "").rstrip("/")
+
+
+def _us_short(dt) -> str:
+    """'Sat Nov 28, 1:30 PM' — subject-line datetime, US style."""
+    hour = dt.strftime("%I").lstrip("0") or "12"
+    return f"{dt:%a %b} {dt.day}, {hour}:{dt:%M} {dt:%p}"
+
+
 def _send(
     *,
     kind: str,
@@ -64,7 +90,12 @@ def _send(
         )
         return False
 
-    context = {**context, "settings": config}
+    context = {
+        **context,
+        "settings": config,
+        "site": _site_settings(),
+        "site_url": _site_url(),
+    }
 
     text_body = render_to_string(f"notifications/email/{template}.txt", context)
     html_body = render_to_string(f"notifications/email/{template}.html", context)
@@ -168,7 +199,7 @@ def send_driver_job_notification(booking) -> bool:
     return _send(
         kind=EmailLog.Kind.DRIVER_JOB_ASSIGNED,
         to=[driver.email],
-        subject=f"New job — {booking.reference}, {pickup_local:%a %d %b %H:%M}",
+        subject=f"New job — {booking.reference}, {_us_short(pickup_local)}",
         template="driver_job_assigned",
         context={"booking": booking, "driver": driver},
         booking=booking,
@@ -450,7 +481,7 @@ def send_ops_new_booking(booking) -> bool:
     return _send(
         kind=EmailLog.Kind.OPS_NEW_BOOKING,
         to=[config.ops_notification_email],
-        subject=f"New booking {booking.reference} — {pickup_local:%a %d %b, %H:%M}",
+        subject=f"New booking {booking.reference} — {_us_short(pickup_local)}",
         template="ops_new_booking",
         context={"booking": booking},
         booking=booking,
@@ -578,7 +609,7 @@ def send_test_message(to_email: str) -> tuple[bool, str]:
     ok = _send(
         kind=EmailLog.Kind.TEST,
         to=[to_email],
-        subject="Austin Limo Shuttle — test message",
+        subject="M&M Austin Limousine — test message",
         template="test_message",
         context={"sent_at": timezone.now()},
     )

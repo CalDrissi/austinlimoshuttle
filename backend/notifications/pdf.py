@@ -20,6 +20,30 @@ from django.template.loader import render_to_string
 logger = logging.getLogger(__name__)
 
 
+def _payment_line(booking) -> str:
+    """
+    How the fare is (or will be) paid, restated on the receipt so a customer
+    holding the PDF knows whether their chauffeur expects cash.
+    """
+    try:
+        from payments.models import Payment
+
+        payment = (
+            booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
+            or booking.payments.order_by("-id").first()
+        )
+        if payment is None:
+            return ""
+        if payment.provider == Payment.Provider.CASH:
+            return "Cash — pay your chauffeur"
+        if payment.status == Payment.Status.SUCCEEDED:
+            return "Card — paid"
+    except Exception:  # the receipt must render even if payments misbehave
+        logger.exception("Could not derive the payment line for %s",
+                         booking.reference)
+    return ""
+
+
 def render_booking_pdf(booking) -> bytes | None:
     """
     Produce a confirmation PDF, or None if it cannot be rendered.
@@ -33,8 +57,16 @@ def render_booking_pdf(booking) -> bytes | None:
         logger.warning("xhtml2pdf is not installed; sending without an attachment")
         return None
 
+    from .mailer import _site_settings, _site_url
+
     html = render_to_string(
-        "notifications/pdf/booking_confirmation.html", {"booking": booking},
+        "notifications/pdf/booking_confirmation.html",
+        {
+            "booking": booking,
+            "payment_line": _payment_line(booking),
+            "site": _site_settings(),
+            "site_url": _site_url(),
+        },
     )
 
     buffer = BytesIO()

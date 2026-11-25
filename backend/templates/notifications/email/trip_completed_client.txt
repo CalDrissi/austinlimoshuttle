@@ -3,15 +3,15 @@
 Your trip {{ booking.reference }} is complete. We hope {% if driver %}{{ driver.full_name }} took good care of you and {% endif %}you enjoyed the ride.
 
 Reference : {{ booking.reference }}
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
-Total     : ${{ booking.total }} {{ booking.currency }}
+Total     : ${{ booking.total|floatformat:2 }}
 {% if receipt_url %}
 Your receipt: {{ receipt_url }}
 {% endif %}
 We'd love to drive you again -- just reply to this email or book online any time.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

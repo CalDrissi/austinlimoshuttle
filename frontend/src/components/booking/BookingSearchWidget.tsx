@@ -417,7 +417,15 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
     if (busy) return;
     setPane(null);
     if (!from.trim() || !date || !time) {
-      setError("Please fill in date, time and pickup.");
+      // Name the drop-off too when this trip type needs one, so the user isn't
+      // sent around a second validation loop after filling the first three.
+      const dropoffMissing =
+        (tripType === "transfer" || tripType === "city") && !to.trim();
+      setError(
+        dropoffMissing
+          ? "Please fill in date, time, pickup and drop-off."
+          : "Please fill in date, time and pickup.",
+      );
       return;
     }
     // A one-way transfer and a city-to-city trip both need a drop-off address;

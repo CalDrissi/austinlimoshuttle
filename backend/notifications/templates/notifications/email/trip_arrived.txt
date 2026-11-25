@@ -3,5 +3,5 @@
 {% if driver_name %}{{ driver_name }} is{% else %}Your driver is{% endif %} at the pickup point and ready when you are.
 
 {% include "notifications/email/_trip_details.txt" %}
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

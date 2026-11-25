@@ -3,7 +3,7 @@
 {{ driver.full_name }}, you've been assigned this trip.
 
 Reference : {{ booking.reference }}
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}{% if booking.hours %}Duration  : {{ booking.hours }} hours
@@ -16,5 +16,6 @@ Phone     : {{ booking.contact_phone }}{% endif %}
 {% if booking.notes %}
 Notes     : {{ booking.notes }}
 {% endif %}
-Austin Limo Shuttle
+{% if site_url %}Driver portal: {{ site_url }}/driver/
+{% endif %}M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

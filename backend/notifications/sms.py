@@ -98,7 +98,7 @@ def send_pickup_reminder(booking) -> bool:
 def send_test_message(to: str) -> tuple[bool, str]:
     """Send a test text and record the result on the settings row."""
     config = SmsSettings.load()
-    ok = _send(to, "Austin Limo Shuttle: your SMS is set up correctly.", kind=SmsLog.Kind.TEST)
+    ok = _send(to, "M&M Austin Limousine: your SMS is set up correctly.", kind=SmsLog.Kind.TEST)
     config.last_test_at = timezone.now()
     config.last_test_ok = ok
     config.last_test_error = "" if ok else (

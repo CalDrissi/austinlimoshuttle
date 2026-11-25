@@ -1,15 +1,15 @@
 {% autoescape off %}Your booking is cancelled
 
-Booking {{ booking.reference }} for {{ booking.pickup_at|date:"l j F Y, H:i" }} has been cancelled.
+Booking {{ booking.reference }} for {{ booking.pickup_at|date:"l, F j, Y, g:i A" }} has been cancelled.
 {% if refund_amount %}
-A refund of ${{ refund_amount }} has been issued. It usually reaches your
-statement within five to ten working days.
+A refund of ${{ refund_amount|floatformat:2 }} has been issued. It usually reaches your
+statement within five to ten business days.
 {% elif booking.cancellation_fee %}
-A cancellation fee of ${{ booking.cancellation_fee }} applied.
+A cancellation fee of ${{ booking.cancellation_fee|floatformat:2 }} applied.
 {% endif %}{% if booking.cancellation_reason %}
 Reason: {{ booking.cancellation_reason }}
 {% endif %}
 If this is unexpected, reply to this email and we'll look into it.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

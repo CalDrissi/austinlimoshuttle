@@ -4,7 +4,7 @@
 <p style="margin:0 0 20px;color:#5b636d">{{ driver.full_name }}, you've been assigned this trip.</p>
 
 <div style="background:#e8f4ef;border-radius:8px;padding:16px;margin:0 0 20px">
-  <div style="font-weight:700;font-size:16px">{{ booking.pickup_at|date:"l j F Y, H:i" }}</div>
+  <div style="font-weight:700;font-size:16px">{{ booking.pickup_at|date:"l, F j, Y, g:i A" }}</div>
   <div style="color:#5b636d;font-size:14.5px;margin-top:3px">{{ booking.pickup_address }}</div>
 </div>
 
@@ -23,3 +23,9 @@
 </div>
 {% endif %}
 {% endblock %}
+{% block footer_hint %}{% if site_url %}
+<p style="margin:26px 0 0;color:#5b636d;font-size:13px">
+  Update your trip status from the driver portal:
+  <a href="{{ site_url }}/driver/" style="color:#0f6b4f">{{ site_url }}/driver/</a>
+</p>
+{% endif %}{% endblock %}

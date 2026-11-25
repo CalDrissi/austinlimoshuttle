@@ -13,8 +13,8 @@ from django.views.static import serve as static_serve
 
 from dashboard.views import admin_login_redirect
 
-admin.site.site_header = "Austin Limo Shuttle"
-admin.site.site_title = "Austin Limo Shuttle"
+admin.site.site_header = "M&M Austin Limousine"
+admin.site.site_title = "M&M Austin Limousine"
 admin.site.index_title = "Administration"
 
 # Django's admin is a superuser-only safety net; day-to-day staff (Dispatcher,

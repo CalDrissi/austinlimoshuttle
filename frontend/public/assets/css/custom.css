@@ -1120,6 +1120,11 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
   .blv-card-media { width: 100%; }
 }
 
+/* Breadcrumb separator: the vendored rule parks the dash at right:4px of a
+   22px gap, so it hugs the NEXT crumb and reads like a stray "-" in front of
+   it. Center it in the gap instead. */
+.box-breadcrumb ul li::before { right: 9px; }
+
 /* --- booking-flow fix batch 1 (H2/H5/H7/H8/H9) --------------------------- */
 
 /* header pills are buttons now (they open the in-place trip editor) */

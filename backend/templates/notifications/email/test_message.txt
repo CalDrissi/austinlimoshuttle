@@ -1,7 +1,7 @@
 {% autoescape off %}SMTP is working.
 
-This test was sent at {{ sent_at|date:"j F Y, H:i" }}.
+This test was sent at {{ sent_at|date:"F j, Y, g:i A" }}.
 If you are reading it, the mail settings are correct.
 
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

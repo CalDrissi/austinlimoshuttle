@@ -1,8 +1,9 @@
 {% extends "notifications/email/_base.html" %}
+{% block footer_hint %}{% endblock %}
 {% block body %}
 <h1 style="font-size:20px;margin:0 0 6px">SMTP is working</h1>
 <p style="margin:0;color:#5b636d">
-  This test was sent at {{ sent_at|date:"j F Y, H:i" }}. If you are reading it,
+  This test was sent at {{ sent_at|date:"F j, Y, g:i A" }}. If you are reading it,
   the mail settings are correct.
 </p>
 {% endblock %}

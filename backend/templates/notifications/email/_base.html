@@ -1,12 +1,21 @@
-{% autoescape off %}<!doctype html>
+<!doctype html>
 <html>
 <body style="margin:0;padding:24px;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#15181c">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e7ec;border-radius:12px;padding:30px">
-    <div style="font-weight:700;color:#0f6b4f;margin-bottom:20px">Austin Limo Shuttle</div>
+    <div style="margin-bottom:20px">
+      {% if site_url %}<a href="{{ site_url }}" style="text-decoration:none"><img src="{{ site_url }}/assets/imgs/template/mm-logo.png" alt="M&amp;M Austin Limousine" width="150" style="display:block;border:0;max-width:150px;height:auto"></a>
+      {% else %}<span style="font-weight:700;color:#0f6b4f">M&amp;M Austin Limousine</span>{% endif %}
+    </div>
     {% block body %}{% endblock %}
-    <p style="margin:26px 0 0;color:#5b636d;font-size:13px;border-top:1px solid #e2e7ec;padding-top:16px">
-      Austin Limo Shuttle{% if settings.contact_phone %} · {{ settings.contact_phone }}{% endif %}
+    {% block footer_hint %}{% if site_url %}
+    <p style="margin:26px 0 0;color:#5b636d;font-size:13px">
+      View or manage your booking any time at
+      <a href="{{ site_url }}/account" style="color:#0f6b4f">{{ site_url }}/account</a>.
+    </p>
+    {% endif %}{% endblock %}
+    <p style="margin:16px 0 0;color:#5b636d;font-size:13px;border-top:1px solid #e2e7ec;padding-top:16px">
+      <strong>M&amp;M Austin Limousine</strong>{% if site.contact_phone %} · <a href="tel:{{ site.contact_phone|cut:" "|cut:"("|cut:")"|cut:"-" }}" style="color:#5b636d;text-decoration:none">{{ site.contact_phone }}</a>{% endif %}{% if site_url %} · <a href="{{ site_url }}" style="color:#0f6b4f">{{ site_url|cut:"https://"|cut:"http://" }}</a>{% endif %}
     </p>
   </div>
 </body>
-</html>{% endautoescape %}
+</html>

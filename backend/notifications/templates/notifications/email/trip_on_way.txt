@@ -3,5 +3,5 @@
 {% if driver_name %}{{ driver_name }} is heading to your pickup now.{% else %}Your driver is heading to your pickup now.{% endif %}
 
 {% include "notifications/email/_trip_details.txt" %}
-Austin Limo Shuttle
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

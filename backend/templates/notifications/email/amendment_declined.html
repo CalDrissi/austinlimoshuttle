@@ -13,10 +13,10 @@
 {% endif %}
 
 <table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px">
-  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+  <tr><td style="padding:4px 0;color:#5b636d">Pickup</td><td style="padding:4px 0;font-weight:600">{{ booking.pickup_at|date:"l, F j, Y, g:i A" }}</td></tr>
   <tr><td style="padding:4px 0;color:#5b636d">From</td><td style="padding:4px 0">{{ booking.pickup_address }}</td></tr>
   {% if booking.dropoff_address %}<tr><td style="padding:4px 0;color:#5b636d">To</td><td style="padding:4px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
-  <tr><td style="padding:4px 0;color:#5b636d">Total</td><td style="padding:4px 0">${{ booking.total }} {{ booking.currency }}</td></tr>
+  <tr><td style="padding:4px 0;color:#5b636d">Total</td><td style="padding:4px 0">${{ booking.total|floatformat:2 }}</td></tr>
 </table>
 
 <p style="margin:0;color:#5b636d;font-size:14px">

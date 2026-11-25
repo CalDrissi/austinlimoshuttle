@@ -3,7 +3,7 @@
 Thank you{% if booking.customer.first_name %}, {{ booking.customer.first_name }}{% endif %} - we have you booked in.
 
 Reference : {{ booking.reference }}
-Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}
 From      : {{ booking.pickup_address }}
 {% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
 {% endif %}{% if booking.hours %}Duration  : {{ booking.hours }} hours
@@ -12,11 +12,11 @@ Passengers: {{ booking.passenger_count }}
 {% if booking.pickup_sign %}Placard   : {{ booking.pickup_sign }}
 {% endif %}
 Fare
-  TOTAL PAID: ${{ booking.total }} {{ booking.currency }}
+  TOTAL PAID: ${{ booking.total|floatformat:2 }}
 
 A PDF copy is attached.
 
 Need to change or cancel? Reply to this email or call us, quoting {{ booking.reference }}.
 
-Austin Limo Shuttle{% if settings.contact_phone %} - {{ settings.contact_phone }}{% endif %}
+M&M Austin Limousine{% if site.contact_phone %} - {{ site.contact_phone }}{% endif %}{% if site_url %} - {{ site_url }}{% endif %}
 {% endautoescape %}

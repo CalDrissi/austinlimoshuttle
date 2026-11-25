@@ -25,9 +25,9 @@
 {% if price_delta %}
 <div style="background:#f4f6f8;border-radius:8px;padding:16px;margin:0 0 20px">
   If approved, your total would move from
-  <strong>${{ amendment.old_total }} {{ amendment.currency }}</strong> to
-  <strong>${{ amendment.new_total }} {{ amendment.currency }}</strong>
-  (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta }}).
+  <strong>${{ amendment.old_total|floatformat:2 }}</strong> to
+  <strong>${{ amendment.new_total|floatformat:2 }}</strong>
+  (change {% if price_delta >= 0 %}+{% endif %}${{ price_delta|floatformat:2 }}).
 </div>
 {% endif %}
 

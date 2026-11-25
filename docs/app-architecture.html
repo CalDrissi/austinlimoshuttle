@@ -999,6 +999,39 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   </div>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Email + site-chrome polish batch (coverage-ext findings)</span><span class="tbl">notifications · accounts · config · frontend</span></div>
+    <table>
+      <tr><td><b>Security — HTML email escaping.</b> <code>{% autoescape off %}</code> removed from every HTML email
+        template (<code>notifications/email/_base.html</code>, <code>_trip_details.html</code>, the accounts
+        <code>login_code</code>/<code>password_reset</code> emails). User-originated values (notes, placard, names,
+        addresses) now render entity-escaped in the HTML part; text/plain parts keep <code>autoescape off</code> —
+        entities would be wrong in plain text. Pinned by <code>notifications/tests/test_email_escaping.py</code>
+        (hostile <code>&lt;img onerror&gt;</code> note must arrive escaped).</td></tr>
+      <tr><td><b>Branding + links.</b> All emails (and the receipt PDF) rebranded to M&amp;M Austin Limousine with the
+        logo in the header (absolute URL off the new <code>PUBLIC_SITE_URL</code> setting, env
+        <code>DJANGO_PUBLIC_SITE_URL</code>; blank hides the links instead of rendering dead relative ones). Footer
+        carries the site URL + <code>SiteSettings.contact_phone</code> (the email context now passes
+        <code>site</code> — SiteSettings is the one source of truth for public contact details; the old
+        <code>settings.contact_phone</code> read an EmailSettings field that doesn't exist). Client emails get a
+        manage-booking hint (<code>/account</code>); the driver job sheet links the <code>/driver/</code> portal;
+        staff/ops emails suppress the customer hint via a <code>footer_hint</code> block.</td></tr>
+      <tr><td><b>Formats.</b> US-style datetimes in every template (<code>"l, F j, Y, g:i A"</code>, Austin time) and in
+        subject lines; money renders <code>$X.XX</code> (<code>floatformat:2</code>) with the "USD" suffix dropped;
+        "working days" → "business days". Receipt PDF: distance to 1 decimal and a restated payment line
+        ("Cash — pay your chauffeur" / "Card — paid") from the booking's payment rows.</td></tr>
+      <tr><td><b>Dashboard/admin.</b> <code>EmailLog</code> registered in Django admin as a read-only list (filter by
+        kind/outcome, search by recipient/subject/reference) for deliverability triage.
+        <code>EmailSettings.from_name</code> default → "M&amp;M Austin Limousine" (migration 0007).</td></tr>
+      <tr><td><b>Site chrome (frontend).</b> Footer is auth-aware (Sign in / Create account swap for My account /
+        My bookings when signed in), lists the real fleet from <code>/api/vehicles/</code> with per-vehicle
+        <code>/fleet/[slug]</code> links, and renders "Where We Drive" cities as plain text (no fake city pages).
+        Fleet pages set unique <code>document.title</code>s; the breadcrumb separator dash is centered (was hugging
+        the next crumb — the "stray -"); the booking widget's validation message names the drop-off when the trip
+        type requires one.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Flight number removed product-wide (owner decision)</span><span class="tbl">frontend · api · bookings · dashboard · driver · notifications</span></div>
     <table>
       <tr><td><b>Owner decision: the business does not collect flight numbers.</b> Every flight-number input and
