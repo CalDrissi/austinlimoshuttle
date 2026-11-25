@@ -104,6 +104,25 @@ class TestEmails:
         assert "Passengers" in body
         assert "160.00" in body
 
+    def test_received_ack_goes_to_the_customer(self, amendment, email_on):
+        assert mailer.send_amendment_received(amendment)
+        message = mail.outbox[0]
+        assert message.to == [amendment.booking.contact_email]
+        assert "received your change request" in message.subject
+        assert "Nothing has changed yet" in message.body
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.AMENDMENT_RECEIVED, succeeded=True
+        ).exists()
+
+    def test_received_ack_skips_a_booking_with_no_address(self, amendment, email_on):
+        booking = amendment.booking
+        booking.customer = None
+        booking.guest_email = ""
+        booking.save()
+
+        assert mailer.send_amendment_received(amendment) is False
+        assert mail.outbox == []
+
     def test_approved_email_goes_to_the_customer(self, amendment, email_on):
         assert mailer.send_amendment_approved(amendment)
         assert mail.outbox[0].to == [amendment.booking.contact_email]

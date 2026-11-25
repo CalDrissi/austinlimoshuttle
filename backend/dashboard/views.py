@@ -128,6 +128,15 @@ def home(request):
             status__in=[Booking.Status.CONFIRMED, Booking.Status.COMPLETED],
         ).aggregate(total=Sum("total"))["total"],
         "next_pickups": upcoming.order_by("pickup_at")[:8],
+        # Failed sends from the last 7 days: old failures have either been dealt
+        # with or stopped mattering, and a count that never resets trains staff
+        # to ignore the tile.
+        "failed_emails": EmailLog.objects.filter(
+            succeeded=False, sent_at__gte=week_ago,
+        ).count(),
+        "recent_failed_emails": EmailLog.objects.filter(
+            succeeded=False, sent_at__gte=week_ago,
+        ).select_related("booking")[:5],
         "roles": role_names(request.user),
         "is_manager": is_manager(request.user),
     }
@@ -840,6 +849,7 @@ def booking_update(request, reference):
 
         if driver_changed and booking.driver:
             mailer.send_driver_assigned(booking)
+            mailer.send_driver_job_notification(booking)
         if booking.status == Booking.Status.CANCELLED and status_changed:
             mailer.send_booking_cancelled(booking)
 

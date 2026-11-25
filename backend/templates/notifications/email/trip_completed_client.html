@@ -1,0 +1,31 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">Thanks for riding with us</h1>
+<p style="margin:0 0 20px;color:#5b636d">
+  Your trip {{ booking.reference }} is complete. We hope
+  {% if driver %}{{ driver.full_name }} took good care of you and {% endif %}you
+  enjoyed the ride.
+</p>
+
+<table style="width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 20px">
+  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Reference</td><td style="padding:6px 0"><strong>{{ booking.reference }}</strong></td></tr>
+  <tr><td style="padding:6px 0;color:#5b636d">Pickup</td><td style="padding:6px 0">{{ booking.pickup_at|date:"l j F Y, H:i" }}</td></tr>
+  <tr><td style="padding:6px 0;color:#5b636d">From</td><td style="padding:6px 0">{{ booking.pickup_address }}</td></tr>
+  {% if booking.dropoff_address %}<tr><td style="padding:6px 0;color:#5b636d">To</td><td style="padding:6px 0">{{ booking.dropoff_address }}</td></tr>{% endif %}
+  <tr><td style="padding:6px 0;color:#5b636d">Vehicle</td><td style="padding:6px 0">{{ booking.vehicle_name_snapshot }}</td></tr>
+  <tr><td style="padding:6px 0;color:#5b636d">Total</td><td style="padding:6px 0"><strong>${{ booking.total }} {{ booking.currency }}</strong></td></tr>
+</table>
+
+{% if receipt_url %}
+<p style="margin:0 0 20px">
+  <a href="{{ receipt_url }}" style="display:inline-block;background:#0f6b4f;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">
+    View your receipt
+  </a>
+</p>
+{% endif %}
+
+<p style="margin:0;color:#5b636d;font-size:14.5px">
+  We'd love to drive you again — just reply to this email or book online any
+  time.
+</p>
+{% endblock %}

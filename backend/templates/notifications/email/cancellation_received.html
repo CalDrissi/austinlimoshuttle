@@ -1,0 +1,23 @@
+{% extends "notifications/email/_base.html" %}
+{% block body %}
+<h1 style="font-size:20px;margin:0 0 6px">We received your cancellation request</h1>
+<p style="margin:0 0 16px;color:#5b636d">
+  Thanks — your request to cancel booking {{ booking.reference }} is with our
+  team for review.
+</p>
+
+<div style="background:#fdf3e7;border-radius:8px;padding:16px;margin:0 0 20px;font-size:14.5px">
+  <strong>Your booking is not cancelled yet.</strong> It stands as scheduled
+  until we confirm the cancellation — we'll email you with the outcome and any
+  refund details.
+</div>
+
+{% include "notifications/email/_itinerary.html" %}
+
+{% if cancellation.paid_amount %}
+<p style="margin:0;color:#5b636d;font-size:14.5px">
+  Paid to date: <strong>${{ cancellation.paid_amount }} {{ cancellation.currency }}</strong>.
+  Any refund is confirmed in our follow-up email.
+</p>
+{% endif %}
+{% endblock %}

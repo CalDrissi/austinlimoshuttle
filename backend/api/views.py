@@ -959,6 +959,7 @@ def amend_request(request, reference):
     )
 
     mailer.send_amendment_requested(amendment)
+    mailer.send_amendment_received(amendment)
 
     return Response(
         BookingAmendmentRequestSerializer(amendment).data,
@@ -1043,6 +1044,7 @@ def cancel_request(request, reference):
     )
 
     mailer.send_cancellation_requested(cancellation)
+    mailer.send_cancellation_received(cancellation)
 
     return Response(
         BookingCancellationRequestSerializer(cancellation).data,

@@ -948,6 +948,41 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Email package P1–P5: driver job sheet, client acks, trip thank-you, SMTP retry, reminder cron</span><span class="tbl">notifications · dashboard · api · ops</span></div>
+    <table>
+      <tr><td><b>P1 — driver job sheet.</b> Assigning a driver now also emails <b>the driver</b>
+      (<code>mailer.send_driver_job_notification</code>, new <code>EmailLog.Kind.DRIVER_JOB_ASSIGNED</code>, templates
+      <code>driver_job_assigned.html/.txt</code>): pickup time/route, passenger name + phone, placard, flight and
+      customer notes. Fired beside the existing customer driver-assigned email in
+      <code>dashboard.views.booking_update</code>; a driver with no email on file is skipped quietly
+      (assignment never depends on the mail). Migration <code>notifications.0006</code> (choices only).</td></tr>
+      <tr><td><b>P2 — reminder cron.</b> New executable <code>scripts/install-reminder-cron.sh</code>: installs an
+      <b>hourly host cron</b> on the VPS running <code>manage.py send_pickup_reminders</code> via
+      <code>docker compose -f docker-compose.prod.yml exec -T backend</code>. Idempotent (marker-comment replace,
+      never duplicates). The command itself was already dedupe-safe via <code>EmailLog</code>; it was simply never
+      scheduled on the VPS before — reminders now actually go out.</td></tr>
+      <tr><td><b>P3 — client acknowledgements.</b> Filing an amendment or cancellation request now also emails the
+      <b>customer</b> an acknowledgement (<code>send_amendment_received</code> / <code>send_cancellation_received</code>,
+      kinds <code>AMENDMENT_RECEIVED</code>/<code>CANCELLATION_RECEIVED</code>, templates
+      <code>amendment_received</code>/<code>cancellation_received</code>), fired in <code>api.views.request_amendment</code>
+      and <code>api.views.cancel_request</code> right after the staff alert. Both are explicit that <b>nothing has
+      changed/cancelled yet</b> until staff review.</td></tr>
+      <tr><td><b>P4 — trip-completed thank-you.</b> <code>_TRIP_EVENT_TO_CLIENT["completed"]</code> is now true: the
+      office keeps its operational notice, and the customer gets a separate thank-you
+      (<code>send_trip_completed_client</code>, kind <code>TRIP_COMPLETED_CLIENT</code>, template
+      <code>trip_completed_client</code>) with the trip summary, total and the Stripe <code>receipt_url</code> of the
+      succeeded payment when one exists.</td></tr>
+      <tr><td><b>P5 — resilience + visibility.</b> <code>mailer._send()</code> now retries <b>once</b> (2s backoff,
+      fresh connection) on transient SMTP failures (<code>SMTPServerDisconnected</code>/<code>SMTPConnectError</code>/
+      connection resets/timeouts); permanent errors still fail immediately and everything still never raises. The
+      dashboard home surfaces <b>failed sends from the last 7 days</b> (count + 5 most recent with kind, recipient,
+      booking link and error; managers get a link to Email settings). Tests:
+      <code>notifications/tests/test_driver_job_email.py</code> plus updated trip-status/amendment/cancellation/API
+      suites.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-23 · Prod infra: run Next.js on the host via pm2 (out of Docker); gate-free frontend deploy</span><span class="tbl">ops · deploy · frontend</span></div>
     <table>
       <tr><td><b>Why.</b> Frontend-only changes had to go through the full Docker image rebuild + merge gate to reach

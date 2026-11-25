@@ -77,9 +77,52 @@ class TestRouting:
         assert len(mail.outbox) == 1
         assert set(mail.outbox[0].to) == {OPS, CLIENT}
 
-    @pytest.mark.parametrize("event_type", ["on_board", "completed"])
-    def test_operational_events_reach_admin_only(self, booking, driver, configured, event_type):
-        DriverTripEvent.record(booking, event_type, driver=driver)
+    def test_on_board_reaches_admin_only(self, booking, driver, configured):
+        DriverTripEvent.record(booking, "on_board", driver=driver)
+
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [OPS]
+
+    def test_completed_sends_ops_notice_and_client_thank_you(
+        self, booking, driver, configured
+    ):
+        DriverTripEvent.record(booking, "completed", driver=driver)
+
+        assert len(mail.outbox) == 2
+        ops_mail, client_mail = mail.outbox
+        assert ops_mail.to == [OPS]
+        assert client_mail.to == [CLIENT]
+        assert "Thanks" in client_mail.subject
+        assert booking.reference in client_mail.body
+        assert EmailLog.objects.filter(
+            kind=EmailLog.Kind.TRIP_COMPLETED_CLIENT, succeeded=True, booking=booking,
+        ).exists()
+
+    def test_completed_thank_you_carries_the_receipt_link(
+        self, booking, driver, configured
+    ):
+        from payments.models import Payment
+
+        Payment.objects.create(
+            booking=booking, payment_intent_id="pi_done", amount=booking.total,
+            status=Payment.Status.SUCCEEDED,
+            receipt_url="https://pay.stripe.com/receipts/test-receipt",
+        )
+        DriverTripEvent.record(booking, "completed", driver=driver)
+
+        client_mail = mail.outbox[1]
+        assert "https://pay.stripe.com/receipts/test-receipt" in client_mail.body
+
+    def test_completed_without_client_email_sends_ops_notice_only(
+        self, driver, configured
+    ):
+        vehicle = Vehicle.objects.create(name="V", slug="v2", hourly_rate=50)
+        booking = Booking.objects.create(
+            vehicle=vehicle, driver=driver, pickup_address="a",
+            pickup_at=timezone.now() + timedelta(days=1),
+            total=Decimal("50.00"), guest_email="",
+        )
+        DriverTripEvent.record(booking, "completed", driver=driver)
 
         assert len(mail.outbox) == 1
         assert mail.outbox[0].to == [OPS]

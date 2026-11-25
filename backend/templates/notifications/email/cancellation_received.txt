@@ -1,0 +1,19 @@
+{% autoescape off %}We received your cancellation request
+
+Thanks -- your request to cancel booking {{ booking.reference }} is with our
+team for review.
+
+YOUR BOOKING IS NOT CANCELLED YET. It stands as scheduled until we confirm the
+cancellation -- we'll email you with the outcome and any refund details.
+
+Reference : {{ booking.reference }}
+Pickup    : {{ booking.pickup_at|date:"l j F Y, H:i" }}
+From      : {{ booking.pickup_address }}
+{% if booking.dropoff_address %}To        : {{ booking.dropoff_address }}
+{% endif %}Vehicle   : {{ booking.vehicle_name_snapshot }}
+{% if cancellation.paid_amount %}
+Paid to date: ${{ cancellation.paid_amount }} {{ cancellation.currency }}
+Any refund is confirmed in our follow-up email.
+{% endif %}
+Austin Limo Shuttle
+{% endautoescape %}
