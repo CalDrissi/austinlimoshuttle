@@ -58,6 +58,12 @@ export function loadGoogleMaps(): Promise<any> {
     return await new Promise((resolve, reject) => {
     const ready = async () => {
       try {
+        // With loading=async the script's onload can fire BEFORE the bootstrap
+        // finishes defining google.maps.importLibrary — wait for it instead of
+        // failing (that race broke the route map on every fresh page load).
+        for (let waited = 0; !w.google?.maps?.importLibrary && waited < 6000; waited += 50) {
+          await new Promise((r) => setTimeout(r, 50));
+        }
         await w.google.maps.importLibrary("places");
         resolve(w.google);
       } catch (e) {

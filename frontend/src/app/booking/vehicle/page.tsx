@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { quoteService, quoteRequest } from "@/lib/api/quote.service";
@@ -50,6 +51,21 @@ function ChevronRight() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+function TicketIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z" />
+      <path d="M13 5v2M13 11v2M13 17v2" strokeDasharray="0.1 3.4" />
+    </svg>
+  );
+}
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f63bd" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m4.5 12.5 5 5 10-11" />
     </svg>
   );
 }
@@ -146,8 +162,14 @@ export default function BookingVehiclePage() {
   const selectedQuote = useBookingStore((s) => s.quote);
   const preselectedVehicleId = useBookingStore((s) => s.preselectedVehicleId);
   const setPreselectedVehicle = useBookingStore((s) => s.setPreselectedVehicle);
+  const setTrip = useBookingStore((s) => s.setTrip);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [bookFor, setBookFor] = useState<"me" | "guest">("me");
+  // Guest is the friction-free default; a signed-in user defaults to "myself".
+  const [bookFor, setBookFor] = useState<"me" | "guest">("guest");
+  useEffect(() => { if (user) setBookFor("me"); }, [user]);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerCode, setOfferCode] = useState("");
+  const [offerMsg, setOfferMsg] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["quotes", search],
@@ -237,13 +259,59 @@ export default function BookingVehiclePage() {
                 <div className="blv-orsim-mobile">{selectedQuote.vehicle_name} or similar</div>
               )}
 
-              {selVehicle?.description && (
+              {selVehicle && (
                 <div className="blv-more">
                   <button type="button" className="blv-explore" aria-expanded={detailsOpen}
                           onClick={() => setDetailsOpen((open) => !open)}>
                     <ChevronDown up={detailsOpen} /> Explore {selVehicle.name} details
                   </button>
-                  {detailsOpen && <p className="blv-desc">{selVehicle.description}</p>}
+                  {detailsOpen && (
+                    <div className="blv-details">
+                      {selVehicle.description && <p className="blv-tagline">{selVehicle.description}</p>}
+                      <div className="blv-details-caps">
+                        <span><PaxIcon /> Up to {selVehicle.passenger_capacity || "–"} passengers</span>
+                        <span><BagIcon /> Up to {selVehicle.luggage_capacity || "–"} bags</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="blv-included">
+                <h2 className="blv-h2">What&apos;s included</h2>
+                <ul>
+                  <li><CheckIcon /> Free cancellation up to 1 hour before pickup</li>
+                  <li><CheckIcon /> 60 minutes of free wait time on airport pickups</li>
+                  <li><CheckIcon /> Flight tracking for airport transfers</li>
+                  <li><CheckIcon /> All-inclusive fares — taxes and gratuity in the price</li>
+                  <li><CheckIcon /> Licensed, insured professional chauffeur</li>
+                  <li><CheckIcon /> Assistance with luggage at pickup and drop-off</li>
+                </ul>
+              </div>
+
+              {selectedQuote && selectedQuote.lines.length > 0 && (
+                <div className="blv-breakdown">
+                  <h2 className="blv-h2">Price breakdown</h2>
+                  <div className="blv-bd-card">
+                    {selectedQuote.lines.map((line, i) => (
+                      <div className="blv-bd-row" key={i}>
+                        <span>{line.label}</span>
+                        <span>{money(line.amount, selectedQuote.currency)}</span>
+                      </div>
+                    ))}
+                    <hr className="blv-rail-hr" />
+                    <div className="blv-bd-row blv-bd-total">
+                      <span>Total</span>
+                      <span>{money(selectedQuote.total, selectedQuote.currency)}</span>
+                    </div>
+                  </div>
+                  <div className="blv-note">
+                    <p>Please note:</p>
+                    <ul>
+                      <li>Passenger and luggage capacities are safety limits — if you are unsure, choose a larger class.</li>
+                      <li>Vehicle photos are representative; you may be driven in a different vehicle of similar quality.</li>
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -263,7 +331,7 @@ export default function BookingVehiclePage() {
                       {user ? (
                         <>
                           <button type="button" className={`blv-booker${bookFor === "me" ? " on" : ""}`}
-                                  onClick={() => setBookFor("me")}>
+                                  onClick={() => { setBookFor("me"); setTrip({ forSomeoneElse: false }); }}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for myself</span>
@@ -271,7 +339,7 @@ export default function BookingVehiclePage() {
                             </span>
                           </button>
                           <button type="button" className={`blv-booker${bookFor === "guest" ? " on" : ""}`}
-                                  onClick={() => setBookFor("guest")}>
+                                  onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: true }); }}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for a guest</span>
@@ -281,18 +349,53 @@ export default function BookingVehiclePage() {
                           </button>
                         </>
                       ) : (
-                        <div className="blv-booker on" role="note">
-                          <span className="blv-booker-icon"><PersonBadgeIcon /></span>
-                          <span className="blv-booker-text">
-                            <span className="blv-booker-title">Book as guest</span>
-                            <span className="blv-booker-sub">Continue with your contact details</span>
-                          </span>
-                        </div>
+                        <>
+                          {/* Optional sign-in affordance — never gates the flow. */}
+                          <Link className="blv-booker" href="/login?next=/booking/vehicle">
+                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                            <span className="blv-booker-text">
+                              <span className="blv-booker-title">Book for myself</span>
+                              <span className="blv-booker-sub">Sign in to book with your account information</span>
+                            </span>
+                            <span className="blv-booker-chevron"><ChevronRight /></span>
+                          </Link>
+                          <div className="blv-register">
+                            New here? <Link href="/register?next=/booking/vehicle">Create an account</Link>
+                          </div>
+                          <div className="blv-booker on" role="note">
+                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                            <span className="blv-booker-text">
+                              <span className="blv-booker-title">Book for a guest</span>
+                              <span className="blv-booker-sub">Continue with your contact details</span>
+                            </span>
+                          </div>
+                        </>
                       )}
                     </div>
 
                     <hr className="blv-rail-hr" />
-                    <div className="blv-rail-note">All fees included</div>
+                    <div className="blv-offer-row">
+                      <button type="button" className="blv-offer" aria-expanded={offerOpen}
+                              onClick={() => { setOfferOpen((open) => !open); setOfferMsg(""); }}>
+                        <TicketIcon /> Apply offer
+                      </button>
+                      <span className="blv-rail-note">All fees included</span>
+                    </div>
+                    {offerOpen && (
+                      <div className="blv-offer-box">
+                        <input
+                          className="form-control"
+                          placeholder="Offer code"
+                          value={offerCode}
+                          onChange={(e) => { setOfferCode(e.target.value); setOfferMsg(""); }}
+                        />
+                        <button type="button" className="blv-offer-apply"
+                                onClick={() => setOfferMsg(offerCode.trim() ? "This code is not valid." : "Enter an offer code.")}>
+                          Apply
+                        </button>
+                        {offerMsg && <p className="blv-offer-err" role="alert">{offerMsg}</p>}
+                      </div>
+                    )}
                     <button className="blv-cta" type="button" onClick={handleContinue}>
                       Select {selectedQuote.vehicle_name}
                     </button>
