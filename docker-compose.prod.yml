@@ -1,14 +1,20 @@
 # Production stack — bound to localhost only; HestiaCP's Nginx reverse-proxies
 # the public domain to these ports. Values come from a git-ignored root .env
-# (see .env.prod.example). Run:
+# (see .env.prod.example).
 #
-#   docker compose -f docker-compose.prod.yml up -d --build
+# NOTE: ONLY MariaDB still runs in Docker. Both app processes run on the host
+# under pm2 (see ecosystem.config.js) with gate-free fast-lane deploy scripts:
+# frontend → scripts/deploy-frontend.sh, backend → scripts/deploy-backend.sh.
+# The db is published to the host loopback via docker-compose.db-hostport.yml;
+# bring it up with BOTH files (never the base file alone, which would drop the
+# port mapping the host backend depends on):
 #
-# NOTE: the Next.js frontend is NO LONGER in Docker. It runs on the host via
-# pm2 (see ecosystem.config.js + scripts/deploy-frontend.sh) so frontend
-# deploys are gate-free and build-before-restart. Nginx proxies "/" to the
-# host Next.js on 127.0.0.1:3001 and the API paths to this backend container.
-# Only db + backend remain containerized (and still go through the merge gate).
+#   docker compose -f docker-compose.prod.yml -f docker-compose.db-hostport.yml up -d db
+#
+# The backend service below is KEPT ONLY AS A ROLLBACK ARTIFACT: the stopped
+# limo-prod-backend container + image can be `docker start`ed to restore the
+# old containerized backend on :8001 if the host lane fails (stop the pm2
+# limo-backend app first — both bind 127.0.0.1:8001).
 
 services:
   db:

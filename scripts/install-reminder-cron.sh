@@ -1,30 +1,42 @@
 #!/usr/bin/env bash
 #
-# Install the hourly pickup-reminder cron on the VPS host.
+# Install the reminder crons on the VPS host (booking + pickup).
 #
-# The backend runs in Docker with no worker process, so reminders depend on a
-# host cron calling the management command inside the container. Hourly, not
-# daily: the command only mails bookings entering the 24h window that have not
-# already been reminded (EmailLog dedupe), so running often is safe and running
-# rarely means a booking made 20 hours ahead never gets one.
+# The backend runs on the host (gunicorn under pm2, no Docker — see
+# scripts/deploy-backend.sh), so the crons call the management commands
+# through the backend venv directly, as the limoweb user. Both commands
+# dedupe via EmailLog, so running often is safe and running rarely means a
+# booking entering its window never gets a reminder.
 #
 #   ssh root@<vps> 'bash /opt/austinlimoshuttle/scripts/install-reminder-cron.sh'
 #
-# Idempotent: the job is tagged with a marker comment and replaced, never
-# duplicated, on re-run.
+# Idempotent: each job is tagged with a marker comment and replaced, never
+# duplicated, on re-run. Legacy `docker compose exec backend` reminder lines
+# are removed too.
 set -euo pipefail
 
 APP_DIR=/opt/austinlimoshuttle
-MARKER="# austinlimoshuttle:send_pickup_reminders"
-LOG=/var/log/limo-pickup-reminders.log
+VENV_MANAGE="cd $APP_DIR/backend && DJANGO_SETTINGS_MODULE=config.settings.prod .venv/bin/python manage.py"
 
-JOB="0 * * * * cd $APP_DIR && docker compose -f docker-compose.prod.yml exec -T backend python manage.py send_pickup_reminders >> $LOG 2>&1 $MARKER"
+BOOKING_MARKER="# austinlimoshuttle:send_booking_reminders"
+PICKUP_MARKER="# austinlimoshuttle:send_pickup_reminders"
 
-# Replace any previously installed copy of this job, keep everything else.
-# `grep -v` exits 1 when it filters every line (a crontab holding only our
-# job), which pipefail would turn into a bogus failure -- hence `|| true`.
+BOOKING_JOB="*/15 * * * * su - limoweb -s /bin/bash -c '$VENV_MANAGE send_booking_reminders' >> /var/log/limo-sms-reminders.log 2>&1 $BOOKING_MARKER"
+PICKUP_JOB="0 * * * * su - limoweb -s /bin/bash -c '$VENV_MANAGE send_pickup_reminders' >> /var/log/limo-pickup-reminders.log 2>&1 $PICKUP_MARKER"
+
+# Replace any previously installed copy of these jobs (marker-tagged or legacy
+# docker-based), keep everything else. `grep -v` exits 1 when it filters every
+# line, which pipefail would turn into a bogus failure -- hence `|| true`.
 current="$(crontab -l 2>/dev/null || true)"
-{ printf '%s\n' "$current" | grep -vF "$MARKER" || true; echo "$JOB"; } | crontab -
+{
+  printf '%s\n' "$current" \
+    | grep -vF "$BOOKING_MARKER" \
+    | grep -vF "$PICKUP_MARKER" \
+    | grep -v "send_booking_reminders" \
+    | grep -v "send_pickup_reminders" || true
+  echo "$BOOKING_JOB"
+  echo "$PICKUP_JOB"
+} | crontab -
 
-echo "Installed hourly pickup-reminder cron:"
-crontab -l | grep -F "$MARKER"
+echo "Installed reminder crons (host venv, user limoweb):"
+crontab -l | grep -F "austinlimoshuttle:"

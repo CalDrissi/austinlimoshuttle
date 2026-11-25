@@ -392,33 +392,46 @@ docker compose exec backend pytest -m "not legacy"</pre>
     <tr><td>MariaDB</td><td><code>localhost:3307</code></td><td><code>limo-db</code></td></tr>
   </table>
 
-  <h4 style="margin-top:28px">Production topology (testmode VPS) — hybrid: Docker + host pm2</h4>
-  <p>Local dev runs the <b>whole</b> stack in Docker (above). <b>Production is a hybrid:</b> db + Django stay
-  in Docker (via <code>docker-compose.prod.yml</code>, still behind the merge gate), but the <b>Next.js
-  storefront runs on the host under <code>pm2</code></b> — it is <i>not</i> containerised in prod. HestiaCP's
-  Nginx reverse-proxies the public domain: <code>/</code> → host Next.js on <code>127.0.0.1:3001</code>, and
-  the API/back-office paths (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/ /static/ /media/</code>)
-  → the backend container on <code>127.0.0.1:8001</code>.</p>
+  <h4 style="margin-top:28px">Production topology (testmode VPS) — host pm2 apps + Docker db only</h4>
+  <p>Local dev runs the <b>whole</b> stack in Docker (above). <b>In production only MariaDB is containerised</b>
+  (<code>limo-prod-db</code>, published to the host loopback on <code>127.0.0.1:3307</code> via
+  <code>docker-compose.db-hostport.yml</code>); both app processes run <b>on the host under <code>pm2</code></b>
+  as the unprivileged <code>limoweb</code> user. HestiaCP's Nginx reverse-proxies the public domain:
+  <code>/</code> → host Next.js on <code>127.0.0.1:3001</code>, and the API/back-office paths
+  (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/ /static/ /media/</code>) → host gunicorn on
+  <code>127.0.0.1:8001</code> (WhiteNoise serves <code>/static</code>, Django serves <code>/media</code>,
+  so Nginx needs no file mappings).</p>
   <table>
     <tr><th>Surface</th><th>Runs as</th><th>Port (localhost)</th><th>Deploy path</th></tr>
-    <tr><td>Client site (Next.js)</td><td><b>host pm2</b> app <code>limo-frontend</code></td><td><code>:3001</code></td><td><b>gate-free</b>, build-before-restart</td></tr>
-    <tr><td>Backend (Django) + DB</td><td>Docker <code>limo-prod-backend</code> / <code>limo-prod-db</code></td><td><code>:8001</code></td><td>merge gate (as before)</td></tr>
+    <tr><td>Client site (Next.js)</td><td><b>host pm2</b> app <code>limo-frontend</code></td><td><code>:3001</code></td><td><code>scripts/deploy-frontend.sh</code> — build-before-restart</td></tr>
+    <tr><td>Backend (Django/gunicorn)</td><td><b>host pm2</b> app <code>limo-backend</code> (venv <code>backend/.venv</code>, py3.12)</td><td><code>:8001</code></td><td><code>scripts/deploy-backend.sh</code> — graceful SIGHUP reload</td></tr>
+    <tr><td>MariaDB 10.11</td><td>Docker <code>limo-prod-db</code></td><td><code>:3307</code> (loopback)</td><td>compose, both <code>-f</code> files</td></tr>
   </table>
-  <p>The frontend deploy is <b>gate-free and build-before-restart</b>: the live pm2 process keeps serving the
-  old build until the new one compiles, then swaps. <code>NEXT_PUBLIC_*</code> are inlined at <b>build</b> time, so
-  the deploy script sources them from the root <code>.env</code> (single source of truth) and fails loudly if the
-  API base URL is missing.</p>
-  <pre># frontend-only change — gate-free fast deploy (host):
+  <p>Both deploys are <b>gate-free fast lanes</b> (owner decision 2026-11-25 — the merge gate is retired;
+  periodic E2E verification rounds are the quality net). Each script fails safe: everything before the
+  reload (frontend build; backend pip/check/migrate/collectstatic) leaves the live app untouched, and the
+  backend reload is a graceful gunicorn SIGHUP (old workers serve until new ones boot) followed by a smoke
+  curl that exits 1 loudly on non-200. Backend env comes from the git-ignored <code>backend/.env</code>
+  (DB at <code>127.0.0.1:3307</code>, host static/media paths); reminder crons call the venv
+  <code>manage.py</code> directly (<code>scripts/install-reminder-cron.sh</code>).</p>
+  <pre># frontend change:
 bash /opt/austinlimoshuttle/scripts/deploy-frontend.sh
-#   git pull origin main → npm ci → npm run build (with .env NEXT_PUBLIC_*)
-#   → pm2 restart limo-frontend --update-env → pm2 save
+#   git pull → npm ci + next build (as limoweb, .env NEXT_PUBLIC_*) → pm2 reload
 
-# pm2 process is defined by ecosystem.config.js (PORT=3001 to match Nginx):
+# backend change:
+bash /opt/austinlimoshuttle/scripts/deploy-backend.sh
+#   git pull → pip (only if requirements changed) → manage.py check → migrate
+#   → collectstatic → pm2 sendSignal SIGHUP limo-backend → smoke /api/vehicles/
+
+# pm2 processes are defined by ecosystem.config.js (ports 3001/8001 to match Nginx):
 pm2 start /opt/austinlimoshuttle/ecosystem.config.js   # first time
 pm2 save && pm2 startup systemd                         # survive reboot
 
-# backend / db changes still go through Docker + the gate:
-docker compose -f docker-compose.prod.yml up -d --build   # db + backend only</pre>
+# db only (NEVER the base file alone — it would drop the 3307 host port):
+docker compose -f docker-compose.prod.yml -f docker-compose.db-hostport.yml up -d db
+
+# ROLLBACK to the last containerized backend (kept stopped on the VPS):
+pm2 stop limo-backend && docker start limo-prod-backend   # same :8001</pre>
 
   <!-- ============================== 4 ============================== -->
   <h2 id="apps">4 · Django apps</h2>
@@ -946,6 +959,37 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <!-- ============================== 13 ============================== -->
   <h2 id="changelog">13 · Changelog</h2>
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Prod infra: backend out of Docker onto host pm2; merge gate retired (owner decision)</span><span class="tbl">ops · deploy · backend</span></div>
+    <table>
+      <tr><td><b>Why.</b> Backend changes had to go through a Docker image rebuild + the two-verifier merge gate to
+      reach prod — minutes-to-hours for a one-line fix, while the frontend lane shipped in under a minute. The owner
+      approved removing the gate and the backend container: both app processes now deploy through host fast lanes;
+      <b>periodic E2E verification rounds replace the gate as the quality net</b>.</td></tr>
+      <tr><td><b>What.</b> Django now runs on the host: venv at <code>backend/.venv</code> (python3.12, matching the
+      old image), gunicorn <code>config.wsgi</code> with the same worker/timeout config, bound
+      <code>127.0.0.1:8001</code> under pm2 app <code>limo-backend</code> (user <code>limoweb</code>, resurrected at
+      boot by pm2-limoweb systemd). Env via the git-ignored <code>backend/.env</code>; static collected to
+      <code>backend/staticfiles</code> (WhiteNoise), media rsynced from the old <code>media_data</code> volume to
+      <code>backend/media</code>. <b>MariaDB stays in Docker</b> (<code>limo-prod-db</code>), now published to the
+      host loopback as <code>127.0.0.1:3307</code> via the new <code>docker-compose.db-hostport.yml</code> override
+      (named volume untouched). Nginx needed no changes — it already proxied all backend paths to
+      <code>127.0.0.1:8001</code>.</td></tr>
+      <tr><td><b>Deploy lane.</b> New <code>scripts/deploy-backend.sh</code>: pull → pip (only when
+      <code>backend/requirements/</code> changed) → <code>manage.py check</code> → <code>migrate</code> →
+      <code>collectstatic</code> → graceful reload (<code>pm2 sendSignal SIGHUP limo-backend</code>; old workers
+      keep serving while new ones boot) → smoke curl <code>/api/vehicles/</code>, non-200 exits 1 loudly. Any
+      failure before the reload leaves the running app untouched. Reminder crons rewritten from
+      <code>docker compose exec backend …</code> to the venv <code>manage.py</code>
+      (<code>scripts/install-reminder-cron.sh</code> reworked, installs both booking + pickup jobs).</td></tr>
+      <tr><td><b>Rollback.</b> The last containerized backend (<code>limo-prod-backend</code> container + image) is
+      kept stopped on the VPS: <code>pm2 stop limo-backend && docker start limo-prod-backend</code> restores the old
+      world on the same port. <code>docker-compose.prod.yml</code>'s backend service is kept as that rollback
+      artifact and documented as such. Protocol docs (CLAUDE.md) updated: merge-gate section replaced by the
+      fast-lane workflow.</td></tr>
+    </table>
+  </div>
 
   <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Add-vehicle form completeness: unquotable-vehicle guard, slug autogeneration, help texts</span><span class="tbl">dashboard</span></div>
