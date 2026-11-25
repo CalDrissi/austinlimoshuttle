@@ -83,9 +83,10 @@ export function LoginFields({ onSuccess, idPrefix = "login" }: {
   );
 }
 
-export function RegisterFields({ onSuccess, initialEmail = "" }: {
+export function RegisterFields({ onSuccess, initialEmail = "", idPrefix = "register" }: {
   onSuccess: () => void;
   initialEmail?: string;
+  idPrefix?: string;
 }) {
   const refreshAuth = useRefreshAuth();
   const [form, setForm] = useState({ first_name: "", last_name: "", email: initialEmail, phone: "", password: "" });
@@ -128,25 +129,25 @@ export function RegisterFields({ onSuccess, initialEmail = "" }: {
     <form className="mm-signin-form" onSubmit={submit}>
       <div className="row">
         <div className="col-6 mb-20">
-          <label className="text-14 color-grey">First name</label>
-          <input className="form-control" value={form.first_name} onChange={set("first_name")} />
+          <label htmlFor={`${idPrefix}-first-name`} className="text-14 color-grey">First name</label>
+          <input id={`${idPrefix}-first-name`} autoComplete="given-name" className="form-control" value={form.first_name} onChange={set("first_name")} />
         </div>
         <div className="col-6 mb-20">
-          <label className="text-14 color-grey">Last name</label>
-          <input className="form-control" value={form.last_name} onChange={set("last_name")} />
+          <label htmlFor={`${idPrefix}-last-name`} className="text-14 color-grey">Last name</label>
+          <input id={`${idPrefix}-last-name`} autoComplete="family-name" className="form-control" value={form.last_name} onChange={set("last_name")} />
         </div>
       </div>
       <div className="mb-20">
-        <label className="text-14 color-grey">Email</label>
-        <input type="email" className="form-control" required value={form.email} onChange={set("email")} />
+        <label htmlFor={`${idPrefix}-email`} className="text-14 color-grey">Email</label>
+        <input id={`${idPrefix}-email`} autoComplete="email" type="email" className="form-control" required value={form.email} onChange={set("email")} />
       </div>
       <div className="mb-20">
-        <label className="text-14 color-grey">Phone (optional)</label>
-        <input className="form-control" value={form.phone} onChange={set("phone")} />
+        <label htmlFor={`${idPrefix}-phone`} className="text-14 color-grey">Phone (optional)</label>
+        <input id={`${idPrefix}-phone`} autoComplete="tel" type="tel" className="form-control" value={form.phone} onChange={set("phone")} />
       </div>
       <div className="mb-20">
-        <label className="text-14 color-grey">Password</label>
-        <input type="password" className="form-control" required value={form.password} onChange={set("password")} />
+        <label htmlFor={`${idPrefix}-password`} className="text-14 color-grey">Password</label>
+        <input id={`${idPrefix}-password`} autoComplete="new-password" type="password" className="form-control" required value={form.password} onChange={set("password")} />
         <span className="text-13 color-grey">At least 10 characters.</span>
       </div>
       {error && <p className="text-14 mb-15" style={{ color: "#c0392b" }}>{error}</p>}

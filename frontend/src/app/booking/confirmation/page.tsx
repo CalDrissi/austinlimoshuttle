@@ -10,7 +10,8 @@ import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { loadConfirmationSnapshot, type ConfirmationSnapshot } from "@/lib/booking/confirmation";
 import { bookingService } from "@/lib/api/booking.service";
 import { API_BASE_URL } from "@/lib/api/config";
-import { money, formatDate, formatTime } from "@/lib/format";
+import { money, formatDate, formatTime, tripTypeLabel } from "@/lib/format";
+import AuthModal from "@/components/booking/AuthModal";
 
 // Ported from the template's booking-receved.html (box-completed-booking →
 // box-info-book-border tiles → box-booking-border list-prices), wired to the
@@ -22,6 +23,7 @@ export default function BookingConfirmationPage() {
   const site = useSiteSettings();
   const hydrated = useHydrated();
   const reference = useBookingStore((s) => s.reference);
+  const [authOpen, setAuthOpen] = useState(false);
 
   const [snap, setSnap] = useState<ConfirmationSnapshot | null>(null);
   useEffect(() => {
@@ -105,7 +107,7 @@ export default function BookingConfirmationPage() {
             </p>
           </div>
 
-          {!isLoading && !user && <div className="mm-feedback mb-20"><p>Create an account to track this ride</p><Link className="btn btn-primary" href={`/register?email=${encodeURIComponent(snap?.contact.email || "")}&next=${encodeURIComponent("/account?tab=bookings")}`}>Create an account</Link></div>}
+          {!isLoading && !user && <div className="mm-feedback mb-20"><p>Create an account to track this ride</p><button type="button" className="btn btn-primary" onClick={() => setAuthOpen(true)}>Create an account</button></div>}
           {user && <p className="text-center mb-20"><Link href="/account?tab=bookings">View My bookings</Link></p>}
           <div className="box-info-book-border">
             <div className="info-1"><span className="color-text text-14">Order Number</span><br /><span className="color-text text-14-medium">#{reference}</span></div>
@@ -132,14 +134,8 @@ export default function BookingConfirmationPage() {
               <h6 className="heading-20-medium color-text">Reservation Information</h6>
               <ul className="list-prices">
                 <li><span className="text-top">Pick Up Address</span><span className="text-bottom">{snap.search.pickupAddress}</span></li>
-                {snap.search.tripType === "hourly" ? (
-                  <li><span className="text-top">Booking type</span><span className="text-bottom">By the hour · {snap.search.hours} hour{snap.search.hours === 1 ? "" : "s"}</span></li>
-                ) : (
-                  <>
-                    <li><span className="text-top">Drop Off Address</span><span className="text-bottom">{snap.search.dropoffAddress}</span></li>
-                    {snap.search.tripType === "city" && <li><span className="text-top">Booking type</span><span className="text-bottom">City-to-city</span></li>}
-                  </>
-                )}
+                {snap.search.tripType !== "hourly" && <li><span className="text-top">Drop Off Address</span><span className="text-bottom">{snap.search.dropoffAddress}</span></li>}
+                <li><span className="text-top">Booking type</span><span className="text-bottom">{tripTypeLabel(snap.search.tripType, snap.search.hours)}</span></li>
                 <li><span className="text-top">Pick Up Date</span><span className="text-bottom">{formatDate(snap.search.date)}</span></li>
                 <li><span className="text-top">Pick Up Time</span><span className="text-bottom">{formatTime(snap.search.time)}</span></li>
                 {snap.search.meetGreet && <li><span className="text-top">Meet &amp; Greet</span><span className="text-bottom">Included</span></li>}
@@ -161,6 +157,7 @@ export default function BookingConfirmationPage() {
               <ul className="list-prices">
                 <li><span className="text-top">Name</span><span className="text-bottom">{snap.contact.name}</span></li>
                 {snap.contact.email && <li><span className="text-top">Email</span><span className="text-bottom">{snap.contact.email}</span></li>}
+                {snap.contact.phone && <li><span className="text-top">Phone</span><span className="text-bottom">{snap.contact.phone}</span></li>}
               </ul>
             </div>
           )}
@@ -183,6 +180,8 @@ export default function BookingConfirmationPage() {
           </div>
         </div>
       </div>
+
+      <AuthModal open={authOpen} initialTab="register" onClose={() => setAuthOpen(false)} />
     </section>
   );
 }

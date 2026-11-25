@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { catalogService } from "@/lib/api/catalog.service";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useCapacity } from "@/lib/booking/useCapacity";
-import OrderSummary from "@/components/booking/OrderSummary";
+import FlowRail from "@/components/booking/FlowRail";
 
 export default function BookingExtraPage() {
   const router = useRouter();
@@ -41,7 +41,6 @@ export default function BookingExtraPage() {
   const maxLug = vehicle?.luggage_capacity || null;
   const paxOver = maxPax != null && trip.passengerCount > maxPax;
   const lugOver = maxLug != null && trip.luggageCount > maxLug;
-  const over = paxOver || lugOver;
 
   const changeMeetGreet = async (checked: boolean) => {
     if (!search) return;
@@ -59,12 +58,12 @@ export default function BookingExtraPage() {
   const next = () => { if (!capacity.blocked && !busy) router.push("/booking/passenger"); };
 
   return (
-    <section className="section">
-      <div className="container-sub">
-        <div className="box-row-tab mt-50">
-          <div className="box-tab-left">
-            <div className="box-content-detail">
-              <h3 className="heading-24-medium color-text mb-10">Trip details</h3>
+    <section className="blv">
+      <div className="blv-page">
+        <div className="blv-layout">
+          <div className="blv-main">
+            <h1 className="blv-title">Trip details</h1>
+            <div className="flow-card">
               {vehicle && (maxPax || maxLug) && (
                 <p className="text-14 color-grey mb-30">
                   {quote.vehicle_name}
@@ -74,39 +73,37 @@ export default function BookingExtraPage() {
                 </p>
               )}
 
-        {search && search.tripType !== "hourly" && <div className="mb-20"><label><input type="checkbox" checked={search.meetGreet} disabled={busy} onChange={(e) => changeMeetGreet(e.target.checked)} /> Meet &amp; Greet</label>{busy && <span role="status"> Updating fare…</span>}{error && <p role="alert" style={{color:"#b42318"}}>{error}</p>}</div>}
-        <div className="row">
-          <div className="col-6 mb-20">
-            <label className="text-14 color-grey">Passengers</label>
-            <input type="number" min={1} max={maxPax ?? undefined} className="form-control"
-              style={paxOver ? { borderColor: "#c0392b" } : undefined} value={trip.passengerCount}
-              onChange={(e) => { const value = Math.floor(Number(e.target.value)); const clamped = Math.min(20, Math.max(1, value)); setCorrection(value < 1 ? "Passenger count was adjusted to 1." : value > 20 ? "Passenger count was adjusted to 20." : ""); setTrip({ passengerCount: clamped }); }} />
-            {correction && <div role="status" className="text-14">{correction}</div>}
-            {paxOver && <div className="text-14" style={{ color: "#c0392b", marginTop: 4 }}>Max {maxPax} for {quote.vehicle_name} — choose a larger vehicle.</div>}
-          </div>
-          <div className="col-6 mb-20">
-            <label className="text-14 color-grey">Luggage</label>
-            <input type="number" min={0} max={maxLug ?? undefined} className="form-control"
-              style={lugOver ? { borderColor: "#c0392b" } : undefined} value={trip.luggageCount}
-              onChange={(e) => setTrip({ luggageCount: Math.min(20, Math.max(0, Math.floor(Number(e.target.value)))) })} />
-            {lugOver && <div className="text-14" style={{ color: "#c0392b", marginTop: 4 }}>Max {maxLug} bags for {quote.vehicle_name} — choose a larger vehicle.</div>}
-          </div>
-          <div className="col-6 mb-20">
-            <label className="text-14 color-grey">Name on pickup sign (optional)</label>
-            <input type="text" className="form-control" value={trip.pickupSign ?? ""}
-              onChange={(e) => setTrip({ pickupSign: e.target.value })} />
-          </div>
-          <div className="col-12 mb-20">
-            <label className="text-14 color-grey">Notes for the driver (optional)</label>
-            <textarea className="form-control" rows={3} value={trip.notes ?? ""}
-              onChange={(e) => setTrip({ notes: e.target.value })} />
-          </div>
-        </div>
-
-              <button className="btn btn-primary hover-up mt-10" onClick={next} disabled={capacity.blocked || busy}>Continue</button>
+              {search && search.tripType !== "hourly" && <div className="mb-20"><label><input type="checkbox" checked={search.meetGreet} disabled={busy} onChange={(e) => changeMeetGreet(e.target.checked)} /> Meet &amp; Greet</label>{busy && <span role="status"> Updating fare…</span>}{error && <p role="alert" style={{color:"#b42318"}}>{error}</p>}</div>}
+              <div className="row">
+                <div className="col-6 mb-20">
+                  <label className="text-14 color-grey">Passengers</label>
+                  <input type="number" min={1} max={maxPax ?? undefined} className="form-control"
+                    style={paxOver ? { borderColor: "#c0392b" } : undefined} value={trip.passengerCount}
+                    onChange={(e) => { const value = Math.floor(Number(e.target.value)); const clamped = Math.min(20, Math.max(1, value)); setCorrection(value < 1 ? "Passenger count was adjusted to 1." : value > 20 ? "Passenger count was adjusted to 20." : ""); setTrip({ passengerCount: clamped }); }} />
+                  {correction && <div role="status" className="text-14">{correction}</div>}
+                  {paxOver && <div className="text-14" style={{ color: "#c0392b", marginTop: 4 }}>Max {maxPax} for {quote.vehicle_name} — choose a larger vehicle.</div>}
+                </div>
+                <div className="col-6 mb-20">
+                  <label className="text-14 color-grey">Luggage</label>
+                  <input type="number" min={0} max={maxLug ?? undefined} className="form-control"
+                    style={lugOver ? { borderColor: "#c0392b" } : undefined} value={trip.luggageCount}
+                    onChange={(e) => setTrip({ luggageCount: Math.min(20, Math.max(0, Math.floor(Number(e.target.value)))) })} />
+                  {lugOver && <div className="text-14" style={{ color: "#c0392b", marginTop: 4 }}>Max {maxLug} bags for {quote.vehicle_name} — choose a larger vehicle.</div>}
+                </div>
+                <div className="col-6 mb-20">
+                  <label className="text-14 color-grey">Name on pickup sign (optional)</label>
+                  <input type="text" className="form-control" value={trip.pickupSign ?? ""}
+                    onChange={(e) => setTrip({ pickupSign: e.target.value })} />
+                </div>
+                <div className="col-12 mb-20">
+                  <label className="text-14 color-grey">Notes for the driver (optional)</label>
+                  <textarea className="form-control" rows={3} value={trip.notes ?? ""}
+                    onChange={(e) => setTrip({ notes: e.target.value })} />
+                </div>
+              </div>
             </div>
           </div>
-          <OrderSummary />
+          <FlowRail step="extra" cta={{ label: "Continue", onClick: next, disabled: capacity.blocked || busy }} />
         </div>
       </div>
     </section>

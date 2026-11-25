@@ -9,9 +9,8 @@ import { useBookingStore } from "@/lib/booking/store";
 import { useAuth } from "@/hooks/useAuth";
 import { ApiRequestError } from "@/lib/api/client";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
-import ItineraryMap from "@/components/booking/ItineraryMap";
 import AuthModal from "@/components/booking/AuthModal";
-import { materiallyDiffers } from "@/components/booking/OrderSummary";
+import FlowRail from "@/components/booking/FlowRail";
 import type { QuoteResult, Vehicle } from "@/types/api";
 
 import { money } from "@/lib/format";
@@ -49,14 +48,6 @@ function ChevronRight() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m9 6 6 6-6 6" />
-    </svg>
-  );
-}
-function TicketIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a3 3 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a3 3 0 0 0 0-6z" />
-      <path d="M13 5v2M13 11v2M13 17v2" strokeDasharray="0.1 3.4" />
     </svg>
   );
 }
@@ -166,9 +157,6 @@ export default function BookingVehiclePage() {
   // Guest is the friction-free default; a signed-in user defaults to "myself".
   const [bookFor, setBookFor] = useState<"me" | "guest">("guest");
   useEffect(() => { if (user) setBookFor("me"); }, [user]);
-  const [offerOpen, setOfferOpen] = useState(false);
-  const [offerCode, setOfferCode] = useState("");
-  const [offerMsg, setOfferMsg] = useState("");
   const [authModal, setAuthModal] = useState<"login" | "register" | null>(null);
 
   const { data, isLoading, error } = useQuery({
@@ -305,124 +293,71 @@ export default function BookingVehiclePage() {
               </div>
             </div>
 
-            <aside className="blv-rail" aria-label="Your selection">
-              {search && <div className="blv-rail-map"><ItineraryMap search={search} />
-                <div className="text-14" style={{padding: "12px 16px", overflowWrap: "anywhere"}}>
-                  <div>Pickup: {search.pickupAddress}{data?.journey?.pickup_address && materiallyDiffers(search.pickupAddress, data.journey.pickup_address) && <div>interpreted as {data.journey.pickup_address}</div>}</div>
-                  {search.tripType !== "hourly" && <div>Drop-off: {search.dropoffAddress}{data?.journey?.dropoff_address && materiallyDiffers(search.dropoffAddress, data.journey.dropoff_address) && <div>interpreted as {data.journey.dropoff_address}</div>}</div>}
-                </div>
-              </div>}
-              <div className="blv-railcard">
-                {selectedQuote ? (
-                  <>
-                    <div className="blv-rail-row">
-                      <span className="blv-rail-name">{selectedQuote.vehicle_name}</span>
-                      <span className="blv-rail-price">{money(selectedQuote.total, selectedQuote.currency)}{search?.tripType === "hourly" && <small> for {search.hours} hours</small>}</span>
-                    </div>
-                    <div className="blv-rail-sub">{selectedQuote.vehicle_name} or similar</div>
-
-                    {/* Every booker row is a real, keyboard-reachable button:
-                        aria-pressed + the check mark make the selection
-                        unmistakable, and every click visibly responds. */}
-                    <div className="blv-bookers">
-                      {user ? (
-                        <>
-                          <button type="button" className={`blv-booker${bookFor === "me" ? " on" : ""}`}
-                                  aria-pressed={bookFor === "me"}
-                                  onClick={() => { setBookFor("me"); setTrip({ forSomeoneElse: false }); }}>
-                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
-                            <span className="blv-booker-text">
-                              <span className="blv-booker-title">Book for myself</span>
-                              <span className="blv-booker-sub">{user.email || "Book with your account information"}</span>
-                            </span>
-                            {bookFor === "me" && <span className="blv-booker-check"><CheckIcon /></span>}
-                          </button>
-                          <button type="button" className={`blv-booker${bookFor === "guest" ? " on" : ""}`}
-                                  aria-pressed={bookFor === "guest"}
-                                  onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: true }); }}>
-                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
-                            <span className="blv-booker-text">
-                              <span className="blv-booker-title">Book for a guest</span>
-                              <span className="blv-booker-sub">Enter the passenger&rsquo;s details at the next steps</span>
-                            </span>
-                            {bookFor === "guest" && <span className="blv-booker-check"><CheckIcon /></span>}
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {/* Optional sign-in affordance — opens the in-flow
-                              auth dialog and never gates the flow. */}
-                          <button type="button" className="blv-booker" onClick={() => setAuthModal("login")}>
-                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
-                            <span className="blv-booker-text">
-                              <span className="blv-booker-title">Book for myself</span>
-                              <span className="blv-booker-sub">Sign in to book with your account information</span>
-                            </span>
-                            <span className="blv-booker-chevron"><ChevronRight /></span>
-                          </button>
-                          <div className="blv-register">
-                            New here?{" "}
-                            <button type="button" onClick={() => setAuthModal("register")}>Create an account</button>
-                          </div>
-                          <button type="button" className="blv-booker on" aria-pressed="true"
-                                  onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: false }); }}>
-                            <span className="blv-booker-icon"><PersonBadgeIcon /></span>
-                            <span className="blv-booker-text">
-                              <span className="blv-booker-title">Book as guest</span>
-                              <span className="blv-booker-sub">Selected — continue with your contact details, no account needed</span>
-                            </span>
-                            <span className="blv-booker-check"><CheckIcon /></span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    <hr className="blv-rail-hr" />
-                    <div className="blv-offer-row">
-                      <button type="button" className="blv-offer" aria-expanded={offerOpen}
-                              onClick={() => { setOfferOpen((open) => !open); setOfferMsg(""); }}>
-                        <TicketIcon /> Apply offer
+            <FlowRail
+              step="vehicle"
+              cta={selectedQuote ? { label: `Select ${selectedQuote.vehicle_name}`, onClick: handleContinue } : null}
+              stickyExtra={!user ? <button type="button" onClick={() => setAuthModal("login")} className="btn btn-link">Sign in</button> : undefined}
+              bookers={
+                /* The flow's ONE identity decision. Every booker row is a real,
+                   keyboard-reachable button: aria-pressed + the check mark make
+                   the selection unmistakable, and every click visibly responds. */
+                <div className="blv-bookers">
+                  {user ? (
+                    <>
+                      <button type="button" className={`blv-booker${bookFor === "me" ? " on" : ""}`}
+                              aria-pressed={bookFor === "me"}
+                              onClick={() => { setBookFor("me"); setTrip({ forSomeoneElse: false }); }}>
+                        <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                        <span className="blv-booker-text">
+                          <span className="blv-booker-title">Book for myself</span>
+                          <span className="blv-booker-sub">{user.email || "Book with your account information"}</span>
+                        </span>
+                        {bookFor === "me" && <span className="blv-booker-check"><CheckIcon /></span>}
                       </button>
-                      <span className="blv-rail-note">All fees included</span>
-                    </div>
-                    {offerOpen && (
-                      <div className="blv-offer-box">
-                        <input
-                          className="form-control"
-                          placeholder="Offer code"
-                          value={offerCode}
-                          onChange={(e) => { setOfferCode(e.target.value); setOfferMsg(""); }}
-                        />
-                        <button type="button" className="blv-offer-apply"
-                                onClick={() => setOfferMsg(offerCode.trim() ? "This code is not valid." : "Enter an offer code.")}>
-                          Apply
-                        </button>
-                        {offerMsg && <p className="blv-offer-err" role="alert">{offerMsg}</p>}
+                      <button type="button" className={`blv-booker${bookFor === "guest" ? " on" : ""}`}
+                              aria-pressed={bookFor === "guest"}
+                              onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: true }); }}>
+                        <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                        <span className="blv-booker-text">
+                          <span className="blv-booker-title">Book for a guest</span>
+                          <span className="blv-booker-sub">Enter the passenger&rsquo;s details at the next steps</span>
+                        </span>
+                        {bookFor === "guest" && <span className="blv-booker-check"><CheckIcon /></span>}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Optional sign-in affordance — opens the in-flow
+                          auth dialog and never gates the flow. */}
+                      <button type="button" className="blv-booker" onClick={() => setAuthModal("login")}>
+                        <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                        <span className="blv-booker-text">
+                          <span className="blv-booker-title">Book for myself</span>
+                          <span className="blv-booker-sub">Sign in to book with your account information</span>
+                        </span>
+                        <span className="blv-booker-chevron"><ChevronRight /></span>
+                      </button>
+                      <div className="blv-register">
+                        New here?{" "}
+                        <button type="button" onClick={() => setAuthModal("register")}>Create an account</button>
                       </div>
-                    )}
-                    <button className="blv-cta" type="button" onClick={handleContinue}>
-                      Select {selectedQuote.vehicle_name}
-                    </button>
-                  </>
-                ) : (
-                  <div className="blv-rail-empty">Choose a vehicle class to continue.</div>
-                )}
-              </div>
-            </aside>
+                      <button type="button" className="blv-booker on" aria-pressed="true"
+                              onClick={() => { setBookFor("guest"); setTrip({ forSomeoneElse: false }); }}>
+                        <span className="blv-booker-icon"><PersonBadgeIcon /></span>
+                        <span className="blv-booker-text">
+                          <span className="blv-booker-title">Book as guest</span>
+                          <span className="blv-booker-sub">Selected — continue with your contact details, no account needed</span>
+                        </span>
+                        <span className="blv-booker-check"><CheckIcon /></span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              }
+            />
           </div>
         )}
       </div>
-
-      {/* Phones: the rail collapses into a sticky bottom bar with the CTA. */}
-      {selectedQuote && (
-        <div className="blv-sticky">
-          {!user && <button type="button" onClick={() => setAuthModal("login")} className="btn btn-link">Sign in</button>}
-          <div style={{display:"flex", alignItems:"center", gap:12}}><strong style={{whiteSpace:"nowrap"}}>{money(selectedQuote.total, selectedQuote.currency)}</strong>
-          <button className="blv-cta" type="button" onClick={handleContinue}>
-            Select {selectedQuote.vehicle_name}
-          </button></div>
-        </div>
-      )}
 
       <AuthModal open={authModal !== null} initialTab={authModal ?? "login"} onClose={() => setAuthModal(null)} />
     </section>

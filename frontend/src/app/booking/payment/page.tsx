@@ -14,7 +14,9 @@ import { ApiRequestError } from "@/lib/api/client";
 import { useCapacity } from "@/lib/booking/useCapacity";
 import { saveConfirmationSnapshot } from "@/lib/booking/confirmation";
 import { money } from "@/lib/format";
-import OrderSummary from "@/components/booking/OrderSummary";
+import AuthModal from "@/components/booking/AuthModal";
+import FlowRail from "@/components/booking/FlowRail";
+import OfferCode from "@/components/booking/OfferCode";
 import type { PaymentConfig } from "@/types/api";
 
 type Method = "cash" | "card";
@@ -63,9 +65,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   const trip = useBookingStore((s) => s.trip);
   const contact = useBookingStore((s) => s.contact);
   const setReference = useBookingStore((s) => s.setReference);
-  const [offerOpen, setOfferOpen] = useState(false);
-  const [offerCode, setOfferCode] = useState("");
-  const [offerMsg, setOfferMsg] = useState("");
+  const [authModal, setAuthModal] = useState<"login" | "register" | null>(null);
 
   // Default to card once we know it's available (config loads async), unless the
   // customer has already picked a method themselves.
@@ -268,12 +268,12 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
   const cardDisabledSubmit = method === "card" && (!stripe || !cardComplete);
 
   return (
-    <section className="section">
-      <div className="container-sub">
-        <div className="box-row-tab mt-50">
-          <div className="box-tab-left">
-            <div className="box-content-detail">
-              <h3 className="heading-24-medium color-text mb-20">Review &amp; confirm</h3>
+    <section className="blv">
+      <div className="blv-page">
+        <div className="blv-layout">
+          <div className="blv-main">
+            <h1 className="blv-title">Review &amp; confirm</h1>
+            <div className="flow-card">
 
         <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 20, marginBottom: 24 }}>
           <div className="d-flex justify-content-between mb-10">
@@ -292,24 +292,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
           </p>
         </div>
 
-        <div style={{ marginBottom: 20 }}>
-          <button type="button" className="btn btn-link" style={{ padding: 0 }}
-                  aria-expanded={offerOpen}
-                  onClick={() => { setOfferOpen((open) => !open); setOfferMsg(""); }}>
-            Have an offer code?
-          </button>
-          {offerOpen && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8, maxWidth: 360 }}>
-              <input className="form-control" placeholder="Offer code" value={offerCode}
-                     onChange={(e) => { setOfferCode(e.target.value); setOfferMsg(""); }} />
-              <button type="button" className="btn btn-border"
-                      onClick={() => setOfferMsg(offerCode.trim() ? "This code is not valid." : "Enter an offer code.")}>
-                Apply
-              </button>
-            </div>
-          )}
-          {offerOpen && offerMsg && <p role="alert" className="text-14" style={{ color: "#c0392b", margin: "6px 0 0" }}>{offerMsg}</p>}
-        </div>
+        <OfferCode />
 
         <h5 className="text-16-medium mb-10">How would you like to pay?</h5>
         {methodBox(
@@ -337,7 +320,9 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
               </p>
             ) : (
               <p className="text-14 color-grey mt-10" style={{ marginBottom: 0 }}>
-                Want one-tap booking next time? <a href="/login">Sign in</a> to keep your card on file.
+                Want one-tap booking next time?{" "}
+                <button type="button" className="mm-quiet-link" onClick={() => setAuthModal("login")}>Sign in</button>
+                {" "}to keep your card on file.
               </p>
             )}
           </div>
@@ -355,18 +340,6 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
                 </div>
               )}
               {error && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
-              <button
-                className="btn btn-primary hover-up mt-10"
-                onClick={confirm}
-                disabled={submitting || cardDisabledSubmit || capacity.blocked || expired || refreshing}
-              >
-                {submitting && <span className="mm-btn-spinner" aria-hidden="true" />}
-                {submitting
-                  ? "Processing payment…"
-                  : method === "cash"
-                    ? "Confirm booking (cash)"
-                    : `Pay ${money(quote.total, quote.currency)}`}
-              </button>
               {submitting && (
                 <p role="status" className="text-14 color-grey mt-10" style={{ marginBottom: 0 }}>
                   Confirming your booking — this usually takes a moment. Please don&rsquo;t close this page.
@@ -374,9 +347,19 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
               )}
             </div>
           </div>
-          <OrderSummary />
+          <FlowRail
+            step="payment"
+            cta={{
+              label: submitting ? "Processing payment…" : method === "cash" ? "Confirm booking" : `Pay ${money(quote.total, quote.currency)}`,
+              onClick: () => void confirm(),
+              disabled: cardDisabledSubmit || capacity.blocked || expired || refreshing,
+              busy: submitting,
+            }}
+          />
         </div>
       </div>
+
+      <AuthModal open={authModal !== null} initialTab={authModal ?? "login"} onClose={() => setAuthModal(null)} />
     </section>
   );
 }

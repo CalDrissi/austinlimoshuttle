@@ -1057,23 +1057,34 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
   @keyframes mm-auth-sheet { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }
 }
 
-/* Apply offer pill + "All fees included" on one line */
-.blv-offer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.blv-offer {
-  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+/* ---- the ONE flow rail (FlowRail.tsx): trip facts, route, edit, strip ---- */
+.flow-card {
+  background: #fff; border-radius: 16px; padding: 28px;
+  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
+}
+.blv-facts { display: flex; flex-direction: column; gap: 7px; font-size: 14px; }
+.blv-fact { display: flex; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.blv-fact-label { color: #6e6e73; flex: 0 0 auto; }
+.blv-fact-value { text-align: right; color: #0f1319; font-weight: 500; }
+.blv-route { list-style: none; margin: 6px 0; padding: 0; }
+.blv-route li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 12px; position: relative; align-items: start; padding: 0 0 18px; }
+.blv-route li:last-child { padding-bottom: 0; }
+.blv-route li:not(:last-child)::before { content: ""; position: absolute; left: 12px; top: 28px; bottom: 2px; border-left: 2px dotted #c9ced3; }
+.blv-route-pin { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0f1319; color: #fff; font-size: 12px; font-weight: 600; }
+.blv-route-text { padding-top: 3px; overflow-wrap: anywhere; line-height: 20px; font-size: 14px; font-weight: 500; color: #0f1319; }
+.blv-route-interpreted { display: block; font-size: 13px; font-weight: 400; color: #6e6e73; }
+.blv-edit {
+  display: block; width: 100%; margin: 14px 0 12px; cursor: pointer;
   background: #fff; border: 1px solid #c9ced3; border-radius: 999px;
-  padding: 8px 16px; font-size: 14px; font-weight: 500; color: #0f1319;
+  padding: 10px 16px; font-size: 14.5px; font-weight: 500; color: #0f1319;
   transition: border-color .15s;
 }
-.blv-offer:hover { border-color: #0f1319; }
-.blv-offer-box { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.blv-offer-box .form-control { flex: 1 1 140px; }
-.blv-offer-apply {
-  border: 1px solid #0f1319; background: #fff; color: #0f1319; cursor: pointer;
-  border-radius: 999px; padding: 8px 18px; font-size: 14px; font-weight: 500;
-}
-.blv-offer-apply:hover { background: #0f1319; color: #fff; }
-.blv-offer-err { flex-basis: 100%; font-size: 13px; color: #b02032; margin: 0; }
+.blv-edit:hover { border-color: #0f1319; }
+.blv-rail .blv-rail-note { margin-top: 2px; }
+.blv-rail .blv-bookers { margin-top: 16px; }
+
+/* phones, steps 2–4: collapsible trip summary at the top of the page */
+.blv-strip { display: none; }
 
 .blv-cta {
   display: block; width: 100%; border: 0; border-radius: 999px; cursor: pointer;
@@ -1083,12 +1094,28 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
 }
 .blv-cta:hover { background: #0d4a8c; }
 
-/* sticky bottom CTA bar (phones) */
+/* sticky bottom CTA bar (phones) — identical pattern on every step */
 .blv-sticky {
   display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
   background: #fbf8f2; border-top: 1px solid #e3ded3;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
 }
+.blv-sticky-main { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; }
+.blv-sticky-total { white-space: nowrap; font-size: 16px; }
+.blv-sticky-main .blv-cta { flex: 1 1 auto; min-width: 0; }
+
+/* quiet in-copy link buttons ("Have an account? Sign in") */
+.mm-quiet-link {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: #0f63bd; font: inherit; font-weight: 500; text-decoration: underline;
+}
+.mm-quiet-link:hover { color: #0d4a8c; }
+
+/* trip editor's own date control (formatted, never an ISO/24h native input) */
+.mm-editor-date { position: relative; margin-bottom: 12px; }
+.mm-editor-label { display: block; font-weight: 500; margin-bottom: 2px; }
+.mm-editor-date-btn { text-align: left; cursor: pointer; }
+.mm-editor-date .mm-dropdown { z-index: 30; }
 
 /* mid widths: rail narrows before stacking */
 @media (max-width: 1279.98px) {
@@ -1104,10 +1131,27 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
      its content's intrinsic width — otherwise card images inflate the column */
   .blv-layout { flex-direction: column; align-items: stretch; }
   .blv-main { width: 100%; max-width: 100%; }
-  /* live shows no map and no rail card on phones — the sticky bar takes over */
+  /* steps 2–4: the rail yields to the top strip + sticky bar; step 1 keeps the
+     full rail (map, interpreted addresses, bookers) inline below the classes */
   .blv-rail { display: none; }
-  .blv-sticky { display: block; }
-  .blv { padding-bottom: 96px; } /* room for the sticky bar */
+  .blv-rail.mobilekeep { display: block; position: static; flex: none; width: 100%; margin-top: 24px; }
+  .blv-rail.mobilekeep .blv-cta { display: none; } /* the sticky bar carries the CTA */
+  .blv-sticky { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .blv-strip {
+    display: block; order: -1; margin-bottom: 16px;
+    background: #fff; border-radius: 16px; box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
+  }
+  .blv-strip-head {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: 0; cursor: pointer; padding: 14px 16px;
+    font-size: 14px; color: #0f1319; text-align: left;
+  }
+  .blv-strip-route { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .blv-strip-when { color: #6e6e73; margin-left: auto; white-space: nowrap; }
+  .blv-strip-body { padding: 0 16px 16px; border-top: 1px solid #eef1f3; }
+  .blv-strip-body .blv-facts { padding-top: 12px; }
+  .blv-strip-body .blv-rail-row { margin-top: 10px; }
+  .blv { padding-bottom: 110px; } /* room for the sticky bar */
   .blv-title { text-align: center; }
   .blv-orsim-mobile { display: block; font-size: 14px; color: #6e6e73; margin-top: 14px; }
   .blv-nav { display: none; } /* touch scrolling carries the row */

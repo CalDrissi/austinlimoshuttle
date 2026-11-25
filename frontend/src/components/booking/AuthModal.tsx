@@ -66,7 +66,7 @@ export default function AuthModal({ open, initialTab, onClose }: {
         <div className="mm-auth-body">
           {tab === "login"
             ? <LoginFields idPrefix="modal-login" onSuccess={onClose} />
-            : <RegisterFields onSuccess={onClose} />}
+            : <RegisterFields idPrefix="modal-register" onSuccess={onClose} />}
           <p className="mm-auth-guest">No account needed to book — close this window to continue as a guest.</p>
         </div>
       </div>

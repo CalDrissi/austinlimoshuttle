@@ -11,20 +11,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { telHref } from "@/lib/api/site.service";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
-import { formatTime } from "@/lib/format";
-import TripEditor from "@/components/booking/TripEditor";
+import { formatDate, formatTime } from "@/lib/format";
+import TripEditorOverlay from "@/components/booking/TripEditorOverlay";
+import AuthModal from "@/components/booking/AuthModal";
 
 /** "Austin-Bergstrom International Airport (AUS), Presidential Blvd…" -> "Austin-Bergstrom International Airport (AUS)" */
 function shortAddress(value: string): string {
   return value.split(",")[0].trim();
-}
-
-/** "YYYY-MM-DD" -> "Sat, November 28" without the UTC shift of new Date(string). */
-function pillDate(value: string): string {
-  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return value;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-    .toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric" });
 }
 
 function ArrowIcon() {
@@ -48,8 +41,8 @@ export default function FlowHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const editPanelRef = useRef<HTMLDivElement>(null);
 
   // Signing in anywhere in the flow replaces the booker identity: the booking
   // belongs to the account, so any guest contact typed earlier must not survive.
@@ -63,14 +56,6 @@ export default function FlowHeader() {
 
   useEffect(() => { setMenuOpen(false); }, [pathname]);
 
-  // Trip-editor overlay: Esc closes, focus starts inside.
-  useEffect(() => {
-    if (!editing) return;
-    editPanelRef.current?.querySelector<HTMLElement>("input, select, button")?.focus();
-    const keydown = (e: KeyboardEvent) => { if (e.key === "Escape") setEditing(false); };
-    document.addEventListener("keydown", keydown);
-    return () => document.removeEventListener("keydown", keydown);
-  }, [editing]);
   useEffect(() => {
     const outside = (e: PointerEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
@@ -113,7 +98,7 @@ export default function FlowHeader() {
               )}
             </button>
             <button type="button" className="fh-pill fh-pill-when" title="Edit your trip" onClick={() => setEditing(true)}>
-              <span className="fh-seg">{pillDate(search.date)}</span>
+              <span className="fh-seg">{formatDate(search.date)}</span>
               <span className="fh-seg">
                 <span className="fh-pill-icon"><ArrowIcon /></span>
                 {formatTime(search.time)}
@@ -147,7 +132,9 @@ export default function FlowHeader() {
                   <button onClick={logout} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>
                 </>
               ) : (
-                <Link href="/login" onClick={() => setMenuOpen(false)}>Sign in</Link>
+                /* In-flow sign-in never leaves the funnel — open the dialog,
+                   not the /login page (owner blueprint: auth asked in place). */
+                <button type="button" onClick={() => { setMenuOpen(false); setAuthOpen(true); }}>Sign in</button>
               )}
               {site?.contact_phone && (
                 <>
@@ -160,16 +147,11 @@ export default function FlowHeader() {
         </div>
       </div>
 
-      {/* In-place trip edit: same editor + reprice path as the Ride Summary
+      {/* In-place trip edit: same editor + reprice path as the rail
           (applyRequote), shown as an overlay so the current step is kept. */}
-      {editing && search && (
-        <div className="mm-auth-layer" role="presentation">
-          <div className="mm-auth-backdrop" onClick={() => setEditing(false)} aria-hidden="true" />
-          <div ref={editPanelRef} className="mm-auth-panel" role="dialog" aria-modal="true" aria-label="Edit your trip">
-            <TripEditor search={search} onClose={() => setEditing(false)} />
-          </div>
-        </div>
-      )}
+      {editing && search && <TripEditorOverlay search={search} onClose={() => setEditing(false)} />}
+
+      <AuthModal open={authOpen} initialTab="login" onClose={() => setAuthOpen(false)} />
     </header>
   );
 }

@@ -21,16 +21,21 @@ export function money(amount: string | number, currency = "USD"): string {
   return format.format(Number(amount));
 }
 
-/**
- * Blacklane prints "US$ 167.94" on the vehicle cards; keep that anatomy (the
- * vehicle step is A/B'd against live Blacklane) but with grouped thousands.
- */
-export function moneyBlacklane(amount: string | number, currency = "USD"): string {
-  if (currency !== "USD") return money(amount, currency);
-  const grouped = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(Number(amount));
-  return `US$ ${grouped}`;
+/** Customer-facing trip-type names — the same three words on every surface. */
+export function tripTypeLabel(tripType: "transfer" | "hourly" | "city", hours?: number): string {
+  if (tripType === "hourly") return hours ? `By the hour · ${hours} hours` : "By the hour";
+  return tripType === "city" ? "City to city" : "One way";
+}
+
+/** Loose address equality: the resolved address counts as "the same" when the
+ *  typed text survives in it (Places picks usually do). Only a material
+ *  difference earns an "interpreted as" line — otherwise it's noise. */
+export function materiallyDiffers(typed: string, resolved: string): boolean {
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const t = norm(typed);
+  const r = norm(resolved);
+  if (!t || !r) return false;
+  return t !== r && !r.includes(t) && !t.includes(r);
 }
 
 /** "2026-11-28" -> "Fri, Nov 28, 2026" without the UTC shift of new Date(string). */

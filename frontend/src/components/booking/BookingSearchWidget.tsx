@@ -9,6 +9,7 @@ import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { ApiRequestError } from "@/lib/api/client";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
 import { useBookingStore } from "@/lib/booking/store";
+import { formatDate } from "@/lib/format";
 import {
   loadGoogleMaps,
   fetchPlaceSuggestions,
@@ -485,9 +486,7 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const selectedDay = date ? parseYmd(date) : undefined;
-  const dateDisplay = selectedDay
-    ? selectedDay.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-    : "";
+  const dateDisplay = date ? formatDate(date) : "";
 
   const locField = (which: "pickup" | "dropoff", label: string, value: string, set: (v: string) => void, inputRef: React.RefObject<HTMLInputElement | null>) => (
     <div

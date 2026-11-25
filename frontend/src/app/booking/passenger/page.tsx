@@ -4,15 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
-import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
-import { ApiRequestError } from "@/lib/api/client";
-import { API_BASE_URL } from "@/lib/api/config";
 import { useCapacity } from "@/lib/booking/useCapacity";
-import OrderSummary from "@/components/booking/OrderSummary";
+import AuthModal from "@/components/booking/AuthModal";
+import FlowRail from "@/components/booking/FlowRail";
 
-type Panel = "signin" | "register" | null;
-
+/**
+ * Step 3 only REFLECTS the identity decided on step 1 (owner blueprint):
+ * guests fill Name/Email/Phone with one quiet "Have an account? Sign in" line
+ * opening the same AuthModal the rail uses; signed-in bookers see their
+ * prefilled details plus the "booking for someone else" toggle. The old
+ * triple-ask (segmented control + Returning-customer + New-here rows with
+ * their own inline auth forms) is gone.
+ */
 export default function BookingPassengerPage() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -32,6 +36,7 @@ export default function BookingPassengerPage() {
   const [paxName, setPaxName] = useState(trip.passengerName ?? "");
   const [paxPhone, setPaxPhone] = useState(trip.passengerPhone ?? "");
   const [error, setError] = useState("");
+  const [authModal, setAuthModal] = useState<"login" | "register" | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const touch = (key: string) => setTouched((old) => ({ ...old, [key]: true }));
   const invalid = (key: string, value: string) => touched[key] && (key === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) : key === "phone" ? value.replace(/\D/g, "").length < 7 : key === "paxPhone" ? !!value.trim() && value.replace(/\D/g, "").length < 7 : !value.trim());
@@ -43,17 +48,6 @@ export default function BookingPassengerPage() {
     setForElse(!!saved.trip.forSomeoneElse); setPaxName(saved.trip.passengerName ?? ""); setPaxPhone(saved.trip.passengerPhone ?? "");
     setDetailsReady(true);
   }, [hydrated]);
-
-  // Inline auth accordion
-  const [panel, setPanel] = useState<Panel>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authErr, setAuthErr] = useState("");
-  const [authMsg, setAuthMsg] = useState("");
-  const [li, setLi] = useState({ email: "", password: "" });
-  const [loginMethod, setLoginMethod] = useState<"password" | "code">("password");
-  const [codeSent, setCodeSent] = useState(false);
-  const [code, setCode] = useState("");
-  const [reg, setReg] = useState({ first_name: "", last_name: "", email: "", password: "", phone: "" });
 
   useEffect(() => {
     if (hydrated && !quote) router.replace("/booking/vehicle");
@@ -84,63 +78,6 @@ export default function BookingPassengerPage() {
     if (hydrated && capacity.over) router.replace("/booking/extra");
   }, [hydrated, capacity.over, router]);
   if (!hydrated || !quote) return null;
-
-  const doLogin = async () => {
-    if (authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try {
-      const signedIn = await authService.login({ email: li.email.trim(), password: li.password });
-      notify(`Welcome back, ${signedIn.first_name || "traveler"}`);
-      await refreshAuth();
-    } catch (e) {
-      setAuthErr("Email or password is incorrect");
-    }
-    setAuthBusy(false);
-  };
-
-  const doSendCode = async () => {
-    if (authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try {
-      await authService.sendCode(li.email.trim());
-      setCodeSent(true);
-      setAuthMsg("Code sent — check your inbox.");
-    } catch (e) {
-      setAuthErr(e instanceof Error ? e.message : "Unable to send a code. Please try again.");
-    }
-    setAuthBusy(false);
-  };
-
-  const doVerifyCode = async () => {
-    if (authBusy) return;
-    setAuthBusy(true); setAuthErr("");
-    try {
-      const signedIn = await authService.verifyCode({ email: li.email.trim(), code });
-      notify(`Welcome back, ${signedIn.first_name || "traveler"}`);
-      await refreshAuth();
-    } catch (e) {
-      setAuthErr(e instanceof ApiRequestError && e.status === 400
-        ? "That code is invalid or has expired."
-        : e instanceof Error ? e.message : "Sign in failed.");
-    }
-    setAuthBusy(false);
-  };
-
-  const doRegister = async () => {
-    if (authBusy) return;
-    setAuthBusy(true); setAuthErr(""); setAuthMsg("");
-    try {
-      const r = (await authService.register({
-        email: reg.email.trim(), password: reg.password,
-        first_name: reg.first_name.trim(), last_name: reg.last_name.trim(), phone: reg.phone.trim(),
-      })) as unknown as { email?: string };
-      if (r?.email) await refreshAuth();
-      else setAuthMsg("If that address can be registered, you'll receive an email.");
-    } catch (e) {
-      setAuthErr(e instanceof Error ? e.message : "Registration failed.");
-    }
-    setAuthBusy(false);
-  };
 
   const next = async () => {
     if (capacity.blocked) { setError("Check passengers and luggage against your vehicle capacity before payment."); return; }
@@ -178,100 +115,13 @@ export default function BookingPassengerPage() {
     router.push("/booking/payment");
   };
 
-  const toggle = (p: Exclude<Panel, null>) => { setPanel(panel === p ? null : p); setAuthErr(""); setAuthMsg(""); };
-
   return (
-    <section className="section">
-      <div className="container-sub">
-        <div className="box-row-tab mt-50">
-          <div className="box-tab-left">
-            <div className="box-content-detail">
-              <h3 className="heading-24-medium color-text mb-20">Your details</h3>
-
-              {!isLoading && !user && (
-                <div className="mm-auth-gate mm-signin-form mb-25">
-                  <p className="text-16-medium">How would you like to continue?</p>
-                  <div className="mm-auth-choices">
-                    <button type="button" className={`btn ${panel === "signin" ? "btn-primary" : "btn-border"}`} aria-pressed={panel === "signin"} onClick={() => setPanel("signin")}>Sign in</button>
-                    <button type="button" className={`btn ${panel === "register" ? "btn-primary" : "btn-border"}`} aria-pressed={panel === "register"} onClick={() => setPanel("register")}>Register</button>
-                    <button type="button" className={`btn ${panel === null ? "btn-primary" : "btn-border"}`} aria-pressed={panel === null} onClick={() => { setPanel(null); document.getElementById("guest-name")?.focus(); }}>Continue as guest</button>
-                  </div>
-                  {/* Sign in */}
-                  <div className="mm-auth-row" onClick={() => toggle("signin")}>
-                    <div>
-                      <div className="mm-auth-t">Returning customer?</div>
-                      <div className="mm-auth-s">Sign in to use your saved details.</div>
-                    </div>
-                    <button type="button" className="btn btn-default hover-up"
-                      onClick={(e) => { e.stopPropagation(); toggle("signin"); }}>
-                      {panel === "signin" ? "Close" : "Sign in"}
-                    </button>
-                  </div>
-                  {panel === "signin" && (
-                    <div className="mm-auth-form mm-signin-form">
-                      <div className="row">
-                        <div className="col-12 mb-15">
-                          <label htmlFor="booking-signin-email" className="text-14">Email</label>
-                          <input id="booking-signin-email" autoComplete="email" placeholder="you@example.com" type="email" className="form-control" value={li.email} disabled={authBusy} onChange={(e) => { setLi({ ...li, email: e.target.value }); setCodeSent(false); setCode(""); setAuthMsg(""); setAuthErr(""); }} />
-                        </div>
-                        {loginMethod === "password" && <div className="col-12 mb-15">
-                          <label htmlFor="booking-signin-password" className="text-14">Password</label>
-                          <input id="booking-signin-password" autoComplete="current-password" placeholder="Your password" type="password" className="form-control" value={li.password} onChange={(e) => setLi({ ...li, password: e.target.value })} />
-                        </div>}
-                        {loginMethod === "code" && codeSent && <div className="col-12 mb-15">
-                          <label htmlFor="booking-signin-code" className="text-14">6-digit email code</label>
-                          <input id="booking-signin-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} className="form-control" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} />
-                        </div>}
-                      </div>
-                      {loginMethod === "password" && <p className="mb-15"><a className="mm-password-reset" href={`${API_BASE_URL.replace(/\/api\/?$/, "")}/accounts/password-reset/`}>Forgot password?</a></p>}
-                      {authMsg && <p role="status" className="text-14">{authMsg}</p>}
-                      {authErr && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{authErr}</p>}
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-                        <button type="button" className="btn btn-primary hover-up"
-                          onClick={loginMethod === "password" ? doLogin : codeSent ? doVerifyCode : doSendCode}
-                          disabled={authBusy || (loginMethod === "code" && (!li.email.trim() || (codeSent && code.length !== 6)))}>
-                          {authBusy ? (loginMethod === "code" && !codeSent ? "Sending code…" : "Signing in…") : loginMethod === "password" ? "Sign in" : codeSent ? "Sign in with code" : "Send code"}
-                        </button>
-                        <button type="button" className="btn btn-border hover-up" disabled={authBusy}
-                          onClick={() => { setLoginMethod(loginMethod === "password" ? "code" : "password"); setAuthErr(""); setAuthMsg(""); setCodeSent(false); setCode(""); }}>
-                          {loginMethod === "password" ? "Email me a sign-in code instead" : "Use password instead"}
-                        </button>
-                        {loginMethod === "code" && codeSent && <button type="button" className="btn btn-default hover-up" disabled={authBusy} onClick={doSendCode}>Resend code</button>}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Register */}
-                  <div className="mm-auth-row" onClick={() => toggle("register")}>
-                    <div>
-                      <div className="mm-auth-t">New here?</div>
-                      <div className="mm-auth-s">Create an account to track your rides.</div>
-                    </div>
-                    <button type="button" className="btn btn-default hover-up"
-                      onClick={(e) => { e.stopPropagation(); toggle("register"); }}>
-                      {panel === "register" ? "Close" : "Register"}
-                    </button>
-                  </div>
-                  {panel === "register" && (
-                    <div className="mm-auth-form">
-                      <div className="row">
-                        <div className="col-6 mb-15"><label className="text-14 color-grey">First name</label><input className="form-control" value={reg.first_name} onChange={(e) => setReg({ ...reg, first_name: e.target.value })} /></div>
-                        <div className="col-6 mb-15"><label className="text-14 color-grey">Last name</label><input className="form-control" value={reg.last_name} onChange={(e) => setReg({ ...reg, last_name: e.target.value })} /></div>
-                        <div className="col-12 mb-15"><label className="text-14 color-grey">Email</label><input type="email" className="form-control" value={reg.email} onChange={(e) => setReg({ ...reg, email: e.target.value })} /></div>
-                        <div className="col-6 mb-15"><label className="text-14 color-grey">Password</label><input type="password" className="form-control" value={reg.password} onChange={(e) => setReg({ ...reg, password: e.target.value })} /></div>
-                        <div className="col-6 mb-15"><label className="text-14 color-grey">Phone (optional)</label><input type="tel" className="form-control" value={reg.phone} onChange={(e) => setReg({ ...reg, phone: e.target.value })} /></div>
-                      </div>
-                      {authErr && <p className="text-14" style={{ color: "#c0392b" }}>{authErr}</p>}
-                      {authMsg && <p className="text-14" style={{ color: "#1e7e34" }}>{authMsg}</p>}
-                      <button className="btn btn-primary hover-up" onClick={doRegister} disabled={authBusy}>
-                        {authBusy ? "Creating…" : "Create account"}
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="mm-auth-guest">Or just continue as a guest — fill your details below.</div>
-                </div>
-              )}
+    <section className="blv">
+      <div className="blv-page">
+        <div className="blv-layout">
+          <div className="blv-main">
+            <h1 className="blv-title">Your details</h1>
+            <div className="flow-card">
               {user && (
                 <div className="mm-auth-signedin mb-25">
                   Welcome back, {user.first_name || "traveler"}. Signed in as <b>{user.email}</b> — this booking will be saved to your account.
@@ -281,28 +131,36 @@ export default function BookingPassengerPage() {
               {!user && (
                 <div className="row">
                   <div className="col-12 mb-20">
-                    <label className="text-14 color-grey">Your full name</label>
+                    <label htmlFor="guest-name" className="text-14 color-grey">Your full name</label>
                     <input id="guest-name" type="text" className="form-control" value={name} onBlur={() => touch("name")} aria-invalid={!!invalid("name", name)} onChange={(e) => setName(e.target.value)} />
                     {invalid("name", name) && <p role="alert" className="mm-field-error">Enter your full name.</p>}
                   </div>
                   <div className="col-12 mb-20">
-                    <label className="text-14 color-grey">Your email <span className="color-grey">(receipt goes here)</span></label>
-                    <input type="email" className="form-control" value={email} onBlur={() => touch("email")} aria-invalid={!!invalid("email", email)} onChange={(e) => setEmail(e.target.value)} />
+                    <label htmlFor="guest-email" className="text-14 color-grey">Your email <span className="color-grey">(receipt goes here)</span></label>
+                    <input id="guest-email" type="email" className="form-control" value={email} onBlur={() => touch("email")} aria-invalid={!!invalid("email", email)} onChange={(e) => setEmail(e.target.value)} />
                     {invalid("email", email) && <p role="alert" className="mm-field-error">Enter a valid email address.</p>}
                   </div>
                   <div className="col-12 mb-20">
-                    <label className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
-                    <input type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    <label htmlFor="guest-phone" className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
+                    <input id="guest-phone" type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
                     {invalid("phone", phone) && <p role="alert" className="mm-field-error">Enter a valid phone number.</p>}
                   </div>
                 </div>
               )}
 
+              {!isLoading && !user && (
+                <p className="text-14 color-grey mb-25">
+                  Have an account?{" "}
+                  <button type="button" className="mm-quiet-link" onClick={() => setAuthModal("login")}>Sign in</button>
+                  {" "}to use your saved details.
+                </p>
+              )}
+
               {user && (
                 <div className="row">
                   <div className="col-12 mb-20">
-                    <label className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
-                    <input type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
+                    <label htmlFor="account-phone" className="text-14 color-grey">Your phone number <span style={{ color: "#c0392b" }}>*</span> <span className="color-grey">(so the driver can reach you)</span></label>
+                    <input id="account-phone" type="tel" className="form-control" value={phone} onBlur={() => touch("phone")} aria-invalid={!!invalid("phone", phone)} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. (512) 555-0142" required />
                     {invalid("phone", phone) && <p role="alert" className="mm-field-error">Enter a valid phone number.</p>}
                   </div>
                 </div>
@@ -321,26 +179,27 @@ export default function BookingPassengerPage() {
                   <p className="text-14 color-grey" style={{ margin: "0 0 12px" }}>Who is travelling?</p>
                   <div className="row">
                     <div className="col-6 mb-20">
-                      <label className="text-14 color-grey">Passenger full name</label>
-                      <input type="text" className="form-control" value={paxName} onBlur={() => touch("paxName")} aria-invalid={!!invalid("paxName", paxName)} onChange={(e) => setPaxName(e.target.value)} placeholder="Name for the driver&rsquo;s sign" />
+                      <label htmlFor="pax-name" className="text-14 color-grey">Passenger full name</label>
+                      <input id="pax-name" type="text" className="form-control" value={paxName} onBlur={() => touch("paxName")} aria-invalid={!!invalid("paxName", paxName)} onChange={(e) => setPaxName(e.target.value)} placeholder="Name for the driver&rsquo;s sign" />
                     {invalid("paxName", paxName) && <p role="alert" className="mm-field-error">Enter the passenger’s name.</p>}
                     </div>
                     <div className="col-6 mb-20">
-                      <label className="text-14 color-grey">Passenger phone (optional)</label>
-                      <input type="tel" className="form-control" value={paxPhone} onBlur={() => touch("paxPhone")} aria-invalid={!!invalid("paxPhone", paxPhone)} onChange={(e) => setPaxPhone(e.target.value)} placeholder="So the driver can reach them" />
+                      <label htmlFor="pax-phone" className="text-14 color-grey">Passenger phone (optional)</label>
+                      <input id="pax-phone" type="tel" className="form-control" value={paxPhone} onBlur={() => touch("paxPhone")} aria-invalid={!!invalid("paxPhone", paxPhone)} onChange={(e) => setPaxPhone(e.target.value)} placeholder="So the driver can reach them" />
                     {invalid("paxPhone", paxPhone) && <p role="alert" className="mm-field-error">Enter a valid phone number or leave it blank.</p>}
                     </div>
                   </div>
                 </div>
               )}
 
-              {error && <p className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
-              <button className="btn btn-primary hover-up mt-10" onClick={next} disabled={capacity.blocked}>Continue to payment</button>
+              {error && <p role="alert" className="text-14" style={{ color: "#c0392b" }}>{error}</p>}
             </div>
           </div>
-          <OrderSummary />
+          <FlowRail step="passenger" cta={{ label: "Continue to payment", onClick: () => void next(), disabled: capacity.blocked }} />
         </div>
       </div>
+
+      <AuthModal open={authModal !== null} initialTab={authModal ?? "login"} onClose={() => setAuthModal(null)} />
     </section>
   );
 }
