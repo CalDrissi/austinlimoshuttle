@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { quoteService, quoteRequest } from "@/lib/api/quote.service";
 import { catalogService } from "@/lib/api/catalog.service";
 import { useBookingStore } from "@/lib/booking/store";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
-import OrderSummary from "@/components/booking/OrderSummary";
+import ItineraryMap from "@/components/booking/ItineraryMap";
 import type { QuoteResult, Vehicle } from "@/types/api";
 
 function money(amount: string, currency: string) {
@@ -30,67 +31,34 @@ function BagIcon() {
   );
 }
 
-function VehicleCard({ quote, vehicle, meetGreet, selected, onSelect }: {
+/** One class card: photo on a tinted ground, name + price, capacities.
+ *  Clicking selects the class (the rail / sticky bar continues the flow). */
+function ClassCard({ quote, vehicle, selected, onPick }: {
   quote: QuoteResult;
   vehicle?: Vehicle;
-  meetGreet: boolean;
   selected: boolean;
-  onSelect: (q: QuoteResult) => void;
+  onPick: (q: QuoteResult) => void;
 }) {
   return (
-    <div id={`vehicle-${quote.vehicle_id}`} className={`blf-car${selected ? " on" : ""}`}>
-      <div className="blf-car-media">
-        <img src={vehicle?.photo || VEHICLE_PLACEHOLDER} alt={quote.vehicle_name} />
-      </div>
-      <div className="blf-car-body">
-        <h5 className="blf-car-name">{quote.vehicle_name}</h5>
-        <div className="blf-car-caps">
-          <span><PaxIcon /> {vehicle?.passenger_capacity ?? "–"}</span>
-          <span><BagIcon /> {vehicle?.luggage_capacity ?? "–"}</span>
-        </div>
-        {vehicle?.description && <p className="blf-car-desc">{vehicle.description}</p>}
-        <p className="blf-car-perks">
-          {meetGreet && <span>Meet &amp; Greet included</span>}
-          <span>Free cancellation</span>
-          <span>Free waiting time</span>
-        </p>
-        {selected && <p role="status" className="blf-car-chosen">Selected for your trip — you can still choose any car below.</p>}
-      </div>
-      <div className="blf-car-side">
-        <div className="blf-car-price">{money(quote.total, quote.currency)}</div>
-        <div className="blf-car-incl">All-inclusive — taxes &amp; fees included</div>
-        <button className="blf-btn" onClick={() => onSelect(quote)}>{selected ? "Continue" : "Select"}</button>
-      </div>
-    </div>
-  );
-}
-
-/** Compact trip recap above the vehicle list, with an edit link back home. */
-function TripStrip({ journey }: { journey?: { distance_miles: string; duration_minutes: number } | null }) {
-  const search = useBookingStore((s) => s.search);
-  if (!search) return null;
-  const date = (() => {
-    const m = search.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return search.date;
-    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-      .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  })();
-  return (
-    <div className="blf-strip">
-      <div className="blf-strip-info">
-        <div className="blf-strip-route">
-          <span>{search.pickupAddress}</span>
-          {search.tripType === "hourly"
-            ? <em>· {search.hours} hours at your disposal</em>
-            : <><span className="blf-strip-arrow" aria-hidden="true">→</span><span>{search.dropoffAddress}</span></>}
-        </div>
-        <div className="blf-strip-meta">
-          {date} at {search.time}
-          {journey && <> · {Number(journey.distance_miles).toFixed(1)} mi · {journey.duration_minutes} min</>}
-        </div>
-      </div>
-      <a className="blf-strip-edit" href="/">Edit</a>
-    </div>
+    <button
+      type="button"
+      id={`vehicle-${quote.vehicle_id}`}
+      className={`blv-card${selected ? " on" : ""}`}
+      aria-pressed={selected}
+      onClick={() => onPick(quote)}
+    >
+      <span className="blv-card-media">
+        <img src={vehicle?.photo || VEHICLE_PLACEHOLDER} alt={quote.vehicle_name} loading="lazy" />
+      </span>
+      <span className="blv-card-row">
+        <span className="blv-card-name">{quote.vehicle_name}</span>
+        <span className="blv-card-price">{money(quote.total, quote.currency)}</span>
+      </span>
+      <span className="blv-card-caps">
+        <span><PaxIcon /> {vehicle?.passenger_capacity ?? "–"}</span>
+        <span><BagIcon /> {vehicle?.luggage_capacity ?? "–"}</span>
+      </span>
+    </button>
   );
 }
 
@@ -102,7 +70,6 @@ export default function BookingVehiclePage() {
   const preselectedVehicleId = useBookingStore((s) => s.preselectedVehicleId);
   const setPreselectedVehicle = useBookingStore((s) => s.setPreselectedVehicle);
 
-
   const { data, isLoading, error } = useQuery({
     queryKey: ["quotes", search],
     enabled: !!search,
@@ -110,6 +77,7 @@ export default function BookingVehiclePage() {
     queryFn: () => quoteService.create(quoteRequest(search!)),
   });
 
+  // Fleet-page pre-selection: highlight the embedded vehicle and fill the rail.
   useEffect(() => {
     if (!data || preselectedVehicleId == null) return;
     const preferred = data.quotes.find((q) => q.vehicle_id === preselectedVehicleId);
@@ -132,48 +100,88 @@ export default function BookingVehiclePage() {
   });
   const byId = new Map((vehicles ?? []).map((v) => [v.id, v]));
 
-  const handleSelect = (quote: QuoteResult) => {
-    setQuote(quote);
-    router.push("/booking/extra");
+  const selVehicle = selectedQuote ? byId.get(selectedQuote.vehicle_id) : undefined;
+
+  const handleContinue = () => {
+    if (selectedQuote) router.push("/booking/extra");
   };
 
   return (
-    <section className="section">
+    <section className="section blv">
       <div className="container-sub">
-        <div className="box-row-tab mt-50">
-          <div className="box-tab-left">
-            <div className="box-content-detail">
-              <h3 className="heading-24-medium color-text mb-20">Choose your experience</h3>
-              {search && <TripStrip journey={data?.journey} />}
+        <h3 className="blv-title">Choose your experience</h3>
 
-              {!search && (
-                <p className="text-16 color-grey">Start with a search from the <a href="/">home page</a>.</p>
-              )}
-              {search && isLoading && <p role="status" className="text-16 color-grey">Pricing vehicles for your journey…</p>}
-              {error && (
-                <p className="text-16" style={{ color: "#c0392b" }}>
-                  We couldn't price that trip — check your addresses. <a href="/">Edit your search</a>
-                </p>
-              )}
+        {!search && (
+          <p className="text-16 color-grey">Start with a search from the <a href="/">home page</a>.</p>
+        )}
+        {search && isLoading && <p role="status" className="text-16 color-grey">Pricing vehicles for your journey…</p>}
+        {error && (
+          <p className="text-16" style={{ color: "#b02032" }}>
+            We couldn&apos;t price that trip — check your addresses. <a href="/">Edit your search</a>
+          </p>
+        )}
+        {data && data.quotes.length === 0 && (
+          <p role="status" className="mm-feedback">No vehicles fit this trip. <a href="/">Try different addresses or a different time</a>.</p>
+        )}
 
-              {data && data.quotes.length === 0 && <p role="status" className="mm-feedback">No vehicles fit this trip. <a href="/">Try different addresses or a different time</a>.</p>}
-              <div className="list-vehicles">
-                {data?.quotes.map((q) => (
-                  <VehicleCard
+        {data && data.quotes.length > 0 && (
+          <div className="blv-layout">
+            <div className="blv-main">
+              <div className="blv-grid">
+                {data.quotes.map((q) => (
+                  <ClassCard
                     key={q.vehicle_id}
                     quote={q}
                     vehicle={byId.get(q.vehicle_id)}
                     selected={selectedQuote?.vehicle_id === q.vehicle_id}
-                    meetGreet={!!search?.meetGreet}
-                    onSelect={handleSelect}
+                    onPick={setQuote}
                   />
                 ))}
               </div>
+
+              {selVehicle && (
+                <div className="blv-more">
+                  <Link className="blv-explore" href={`/fleet/${selVehicle.slug}`}>
+                    Explore {selVehicle.name} details
+                  </Link>
+                  {selVehicle.description && <p className="blv-desc">{selVehicle.description}</p>}
+                </div>
+              )}
             </div>
+
+            <aside className="blv-rail" aria-label="Your selection">
+              {search && <div className="blv-rail-map"><ItineraryMap search={search} /></div>}
+              <div className="blv-railcard">
+                {selectedQuote ? (
+                  <>
+                    <div className="blv-rail-row">
+                      <span className="blv-rail-name">{selectedQuote.vehicle_name}</span>
+                      <span className="blv-rail-price">{money(selectedQuote.total, selectedQuote.currency)}</span>
+                    </div>
+                    <div className="blv-rail-sub">{selectedQuote.vehicle_name} or similar</div>
+                    <hr className="blv-rail-hr" />
+                    <div className="blv-rail-note">All fees included — taxes &amp; gratuity in the price.</div>
+                    <button className="blv-cta" type="button" onClick={handleContinue}>
+                      Select {selectedQuote.vehicle_name}
+                    </button>
+                  </>
+                ) : (
+                  <div className="blv-rail-empty">Choose a vehicle class to continue.</div>
+                )}
+              </div>
+            </aside>
           </div>
-          <OrderSummary journey={data?.journey} />
-        </div>
+        )}
       </div>
+
+      {/* Phones: the rail collapses into a sticky bottom bar with the CTA. */}
+      {selectedQuote && (
+        <div className="blv-sticky">
+          <button className="blv-cta" type="button" onClick={handleContinue}>
+            Select {selectedQuote.vehicle_name} · {money(selectedQuote.total, selectedQuote.currency)}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

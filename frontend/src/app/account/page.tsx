@@ -18,7 +18,12 @@ function money(a: string, c: string) {
   return `${c === "USD" ? "$" : c + " "}${Number(a).toFixed(2)}`;
 }
 function when(iso: string) {
-  return new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  // Pickup times are Austin wall-clock; render them in the business timezone so
+  // the card matches the edit form regardless of the viewer's browser timezone.
+  return new Date(iso).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    timeZone: "America/Chicago",
+  });
 }
 function isUpcoming(b: Booking) {
   return b.status !== "cancelled" && b.status !== "completed" && new Date(b.pickup_at) > new Date();
@@ -166,6 +171,13 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       </div>
       {!b.is_amendable && isUpcoming(b) && (
         <div className="meta" style={{ marginTop: 6, color: "#9aa1ac" }}>Online changes are closed for this trip — please contact us to make changes.</div>
+      )}
+      {/* Past/cancelled rides have no actions — say why instead of showing nothing. */}
+      {b.status === "cancelled" && (
+        <div className="meta" style={{ marginTop: 6, color: "#9aa1ac" }}>This booking was cancelled.</div>
+      )}
+      {b.status !== "cancelled" && !isUpcoming(b) && (
+        <div className="meta" style={{ marginTop: 6, color: "#9aa1ac" }}>This ride has taken place.</div>
       )}
     </div>
   );
