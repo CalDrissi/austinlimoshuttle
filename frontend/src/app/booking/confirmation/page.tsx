@@ -63,7 +63,11 @@ export default function BookingConfirmationPage() {
       <div className="container-sub">
         <div className="box-completed-booking">
           <div className="text-center">
-            <img className="mb-20" src="/assets/imgs/page/booking/completed.png" alt="Booking received" />
+            {/* Flow-blue success badge (the template PNG was its orange brand). */}
+            <svg className="mb-20" width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="Booking received">
+              <circle cx="36" cy="36" r="36" fill="#0f63bd" />
+              <path d="m22 37 10 10 18-21" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
             <h4 className="heading-24-medium color-text mb-10">Your booking was submitted successfully!</h4>
             <p className="text-14 color-grey mb-40">
               {snap.contact.email
