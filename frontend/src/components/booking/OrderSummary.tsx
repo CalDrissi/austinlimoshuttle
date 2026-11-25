@@ -46,7 +46,8 @@ export default function OrderSummary({ journey: suppliedJourney }: { journey?: J
         {(paxOver || lugOver) && <p role="alert" style={{color:"#b42318", fontWeight:600}}>{paxOver && <>Exceeds {vehicle?.name}&apos;s {vehicle?.passenger_capacity} seats. </>}{lugOver && <>Exceeds {vehicle?.name}&apos;s {vehicle?.luggage_capacity} bags. </>}Change vehicle or reduce your party before payment. <a href="/booking/extra">Update details</a></p>}
       </Group>
       <Group title="Vehicle">{quote ? quote.vehicle_name : "Choose a vehicle"}</Group>
-      <Group title="Extras">{extras.length ? extras.map((line, i) => <Row key={i} label={line.label}>{money(line.amount, quote!.currency)}</Row>) : search.meetGreet ? "Meet & Greet · price after vehicle selection" : "No paid extras"}
+      {/* Owner rule: no itemised amounts in the flow — extras show as included. */}
+      <Group title="Extras">{extras.length ? extras.map((line, i) => <Row key={i} label={line.label}>Included in total</Row>) : search.meetGreet ? "Meet & Greet · included after vehicle selection" : "No paid extras"}
         {trip.pickupSign && <Row label="Pickup sign">{trip.pickupSign}</Row>}{trip.notes && <Row label="Notes">{trip.notes}</Row>}
       </Group>
       <Group title="Passenger / contact">

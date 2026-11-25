@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { quoteService, quoteRequest } from "@/lib/api/quote.service";
@@ -10,6 +9,7 @@ import { useBookingStore } from "@/lib/booking/store";
 import { useAuth } from "@/hooks/useAuth";
 import { VEHICLE_PLACEHOLDER } from "@/lib/fleet/images";
 import ItineraryMap from "@/components/booking/ItineraryMap";
+import AuthModal from "@/components/booking/AuthModal";
 import type { QuoteResult, Vehicle } from "@/types/api";
 
 /** Blacklane prints "US$ 167.94"; mirror that for USD. */
@@ -170,6 +170,7 @@ export default function BookingVehiclePage() {
   const [offerOpen, setOfferOpen] = useState(false);
   const [offerCode, setOfferCode] = useState("");
   const [offerMsg, setOfferMsg] = useState("");
+  const [authModal, setAuthModal] = useState<"login" | "register" | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["quotes", search],
@@ -289,31 +290,15 @@ export default function BookingVehiclePage() {
                 </ul>
               </div>
 
-              {selectedQuote && selectedQuote.lines.length > 0 && (
-                <div className="blv-breakdown">
-                  <h2 className="blv-h2">Price breakdown</h2>
-                  <div className="blv-bd-card">
-                    {selectedQuote.lines.map((line, i) => (
-                      <div className="blv-bd-row" key={i}>
-                        <span>{line.label}</span>
-                        <span>{money(line.amount, selectedQuote.currency)}</span>
-                      </div>
-                    ))}
-                    <hr className="blv-rail-hr" />
-                    <div className="blv-bd-row blv-bd-total">
-                      <span>Total</span>
-                      <span>{money(selectedQuote.total, selectedQuote.currency)}</span>
-                    </div>
-                  </div>
-                  <div className="blv-note">
-                    <p>Please note:</p>
-                    <ul>
-                      <li>Passenger and luggage capacities are safety limits — if you are unsure, choose a larger class.</li>
-                      <li>Vehicle photos are representative; you may be driven in a different vehicle of similar quality.</li>
-                    </ul>
-                  </div>
-                </div>
-              )}
+              {/* Owner rule: no itemized price breakdown in the customer flow —
+                  the all-inclusive total on the rail is the only price shown. */}
+              <div className="blv-note">
+                <p>Please note:</p>
+                <ul>
+                  <li>Passenger and luggage capacities are safety limits — if you are unsure, choose a larger class.</li>
+                  <li>Vehicle photos are representative; you may be driven in a different vehicle of similar quality.</li>
+                </ul>
+              </div>
             </div>
 
             <aside className="blv-rail" aria-label="Your selection">
@@ -335,7 +320,7 @@ export default function BookingVehiclePage() {
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for myself</span>
-                              <span className="blv-booker-sub">Book with your account information</span>
+                              <span className="blv-booker-sub">{user.email || "Book with your account information"}</span>
                             </span>
                           </button>
                           <button type="button" className={`blv-booker${bookFor === "guest" ? " on" : ""}`}
@@ -350,17 +335,19 @@ export default function BookingVehiclePage() {
                         </>
                       ) : (
                         <>
-                          {/* Optional sign-in affordance — never gates the flow. */}
-                          <Link className="blv-booker" href="/login?next=/booking/vehicle">
+                          {/* Optional sign-in affordance — opens the in-flow
+                              auth dialog and never gates the flow. */}
+                          <button type="button" className="blv-booker" onClick={() => setAuthModal("login")}>
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
                             <span className="blv-booker-text">
                               <span className="blv-booker-title">Book for myself</span>
                               <span className="blv-booker-sub">Sign in to book with your account information</span>
                             </span>
                             <span className="blv-booker-chevron"><ChevronRight /></span>
-                          </Link>
+                          </button>
                           <div className="blv-register">
-                            New here? <Link href="/register?next=/booking/vehicle">Create an account</Link>
+                            New here?{" "}
+                            <button type="button" onClick={() => setAuthModal("register")}>Create an account</button>
                           </div>
                           <div className="blv-booker on" role="note">
                             <span className="blv-booker-icon"><PersonBadgeIcon /></span>
@@ -417,6 +404,8 @@ export default function BookingVehiclePage() {
           </button>
         </div>
       )}
+
+      <AuthModal open={authModal !== null} initialTab={authModal ?? "login"} onClose={() => setAuthModal(null)} />
     </section>
   );
 }

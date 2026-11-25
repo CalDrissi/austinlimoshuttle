@@ -1,55 +1,15 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { clientDestination, notify } from "@/lib/feedback";
-import { API_BASE_URL } from "@/lib/api/config";
-import { ApiRequestError } from "@/lib/api/client";
-import { authService } from "@/lib/api/auth.service";
-import { useRefreshAuth } from "@/hooks/useAuth";
+import { clientDestination } from "@/lib/feedback";
+import { LoginFields } from "@/components/auth/AuthForms";
 
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const refreshAuth = useRefreshAuth();
   const next = clientDestination(params.get("next"));
-
-  const [email, setEmail] = useState("");
-  const [method, setMethod] = useState<"password" | "code">("password");
-  const [codeSent, setCodeSent] = useState(false);
-  const [code, setCode] = useState("");
-  const [notice, setNotice] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (method === "code" && !codeSent) {
-        await authService.sendCode(email.trim()); setCodeSent(true);
-        setNotice("Code sent — check your inbox."); return;
-      }
-      const signedIn = method === "password"
-        ? await authService.login({ email: email.trim(), password })
-        : await authService.verifyCode({ email: email.trim(), code });
-      notify(`Welcome back, ${signedIn.first_name || "traveler"}`);
-      await refreshAuth();
-      router.push(next);
-    } catch (err) {
-      setError(method === "password"
-        ? "Email or password is incorrect"
-        : codeSent && err instanceof ApiRequestError && err.status === 400
-          ? "That code is invalid or has expired."
-          : "Unable to " + (codeSent ? "sign in" : "send a code") + ". Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <section className="section pt-80 pb-80">
@@ -58,27 +18,7 @@ function LoginForm() {
         <p className="text-14 color-grey mb-30">
           New here? <Link href={`/register?next=${encodeURIComponent(next)}`}>Create an account</Link>
         </p>
-        <form className="mm-signin-form" onSubmit={submit}>
-          <div className="mb-20">
-            <label htmlFor="login-email" className="text-14 color-grey">Email</label>
-            <input id="login-email" autoComplete="email" placeholder="you@example.com" type="email" className="form-control" required disabled={busy} value={email}
-              onChange={(e) => { setEmail(e.target.value); setCodeSent(false); setNotice(""); setCode(""); }} />
-          </div>
-          {method === "password" && <div className="mb-10">
-            <label htmlFor="login-password" className="text-14 color-grey">Password</label>
-            <input id="login-password" autoComplete="current-password" placeholder="Your password" type="password" className="form-control" required disabled={busy} value={password}
-              onChange={(e) => setPassword(e.target.value)} />
-          </div>}
-          {method === "code" && codeSent && <div className="mb-20"><label htmlFor="login-code">6-digit email code</label><input id="login-code" className="form-control" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={busy} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} /></div>}
-          {method === "password" && <p className="text-13 mb-20"><a className="mm-password-reset" href={`${API_BASE_URL.replace(/\/api\/?$/, "")}/accounts/password-reset/`}>Forgot password?</a></p>}
-          {notice && <p role="status" className="mm-feedback">{notice}</p>}
-          {error && <p role="alert" className="text-14 mb-15" style={{ color: "#c0392b" }}>{error}</p>}
-          <button className="btn btn-primary hover-up w-100" type="submit" disabled={busy}>
-            {busy ? (method === "code" && !codeSent ? "Sending code…" : "Signing in…") : method === "code" && !codeSent ? "Send email code" : method === "code" ? "Sign in with code" : "Sign in"}
-          </button>
-          <button type="button" className="btn btn-border w-100 mt-15" disabled={busy} onClick={() => { setMethod(method === "password" ? "code" : "password"); setError(""); setNotice(""); setCodeSent(false); setCode(""); }}>{method === "password" ? "Email me a sign-in code instead" : "Use password instead"}</button>
-          {method === "code" && codeSent && <button type="button" className="btn btn-border w-100 mt-10" disabled={busy} onClick={() => { setCodeSent(false); setCode(""); setNotice(""); }}>Request a new code</button>}
-        </form>
+        <LoginFields onSuccess={() => router.push(next)} />
 
         {next.startsWith("/booking") && (
           <>

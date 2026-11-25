@@ -972,15 +972,8 @@ img {
 .blv-included li { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; color: #0f1319; }
 .blv-included li svg { flex: 0 0 auto; margin-top: 2px; }
 
-/* price breakdown panel (live's bottom section, with our real quote lines) */
-.blv-breakdown { margin-top: 44px; }
-.blv-bd-card {
-  background: #fff; border-radius: 16px; padding: 20px 24px; max-width: 640px;
-  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
-}
-.blv-bd-row { display: flex; justify-content: space-between; gap: 16px; font-size: 15px; color: #0f1319; padding: 6px 0; }
-.blv-bd-total { font-weight: 600; }
-.blv-note { margin-top: 18px; max-width: 640px; }
+/* please-note bullets (no itemised price breakdown — owner rule: total only) */
+.blv-note { margin-top: 40px; max-width: 640px; }
 .blv-note p { font-size: 14px; color: #6e6e73; margin: 0 0 8px; }
 .blv-note ul { list-style: none; margin: 0; padding: 0; }
 .blv-note li { font-size: 13.5px; color: #6e6e73; padding-left: 18px; position: relative; margin-bottom: 6px; line-height: 1.5; }
@@ -1020,8 +1013,49 @@ a.blv-booker:hover { border-color: #c9ced3; color: #0f1319; }
 
 /* "New here? Create an account" under the sign-in row */
 .blv-register { font-size: 13px; color: #6e6e73; padding: 0 4px; }
-.blv-register a { color: #0f63bd; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
-.blv-register a:hover { color: #0d4a8c; }
+.blv-register a, .blv-register button {
+  border: 0; background: transparent; padding: 0; cursor: pointer; font-size: 13px;
+  color: #0f63bd; font-weight: 500; text-decoration: underline; text-underline-offset: 2px;
+}
+.blv-register a:hover, .blv-register button:hover { color: #0d4a8c; }
+
+/* in-flow auth dialog: centred white card on desktop, bottom sheet on phones */
+.mm-auth-layer { position: fixed; inset: 0; z-index: 2100; display: flex; align-items: center; justify-content: center; }
+.mm-auth-backdrop { position: absolute; inset: 0; background: rgba(15, 19, 25, 0.5); }
+.mm-auth-panel {
+  position: relative; width: min(440px, calc(100% - 32px)); max-height: 90vh; overflow-y: auto;
+  background: #fff; border-radius: 16px; box-shadow: 0 24px 70px rgba(6, 10, 13, 0.3);
+  padding: 20px 24px 24px; animation: mm-auth-enter 160ms ease-out;
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+@keyframes mm-auth-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.mm-auth-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-family: Fraunces, Georgia, "Times New Roman", serif; font-size: 22px; color: #0f1319;
+  margin-bottom: 14px;
+}
+.mm-auth-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border: 0; border-radius: 50%; cursor: pointer;
+  background: transparent; color: #0f1319;
+}
+.mm-auth-close:hover { background: #f5f3ee; }
+.mm-auth-tabs { display: flex; gap: 6px; background: #f2f0ea; border-radius: 999px; padding: 4px; margin-bottom: 18px; }
+.mm-auth-tabs button {
+  flex: 1; border: 0; background: transparent; cursor: pointer; border-radius: 999px;
+  padding: 8px 10px; font-size: 14px; font-weight: 500; color: #6e6e73;
+}
+.mm-auth-tabs button.on { background: #fff; color: #0f1319; box-shadow: 0 1px 4px rgba(6, 10, 13, 0.12); }
+.mm-auth-guest { font-size: 13px; color: #6e6e73; text-align: center; margin: 16px 0 0; }
+@media (max-width: 575.98px) {
+  .mm-auth-layer { align-items: flex-end; }
+  .mm-auth-panel {
+    width: 100%; max-height: 92dvh; border-radius: 16px 16px 0 0;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    animation-name: mm-auth-sheet;
+  }
+  @keyframes mm-auth-sheet { from { transform: translateY(40px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+}
 
 /* Apply offer pill + "All fees included" on one line */
 .blv-offer-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
