@@ -1160,7 +1160,12 @@ class TestManualBooking:
         self._login(client, roles)
         client.post(reverse("dashboard:booking_create"),
                     self._payload(vehicle, hours="3", guest_email=""))
-        assert Booking.objects.get().customer is None
+        booking = Booking.objects.get()
+        assert booking.customer is None
+        # The form's "Customer name" field is pickup_sign; it must land in
+        # guest_name too, or the back office shows this booking as "Guest".
+        assert booking.guest_name == "Jane Doe"
+        assert booking.customer_name == "Jane Doe"
 
     def test_cash_records_awaiting_collection(self, client, roles, vehicle):
         from payments.models import Payment

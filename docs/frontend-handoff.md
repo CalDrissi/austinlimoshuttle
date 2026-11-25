@@ -415,7 +415,7 @@ The HTTP client sends `credentials: "include"` on every request. This means:
 | POST | `/api/auth/login/` | `{ email, password }` | `{ user: User }` + Set-Cookie |
 | POST | `/api/auth/register/` | `{ name, email, password, phone? }` | `{ user: User }` + Set-Cookie |
 | POST | `/api/auth/logout/` | (empty) | 204 + clears cookie |
-| GET | `/api/auth/me/` | — | `User` object |
+| GET | `/api/auth/me/` | — | `User` object; anonymous → 204 no body (treat as signed-out) |
 
 ---
 
@@ -623,7 +623,7 @@ GET  /fleet/vehicles/{slug}/   → single vehicle
 POST /auth/login/              → login
 POST /auth/register/           → register  
 POST /auth/logout/             → logout
-GET  /auth/me/                 → current user
+GET  /auth/me/                 → current user (204 empty when anonymous)
 POST /bookings/                → create booking
 GET  /bookings/                → list user's bookings
 GET  /bookings/{id}/           → single booking

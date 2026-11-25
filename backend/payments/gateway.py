@@ -549,7 +549,11 @@ def refund(payment: Payment, *, amount: Decimal | None = None, reason: str = "",
             f"Only {remaining} {payment.currency} remains available to refund."
         )
 
-    if payment.provider == Payment.Provider.CASH:
+    # Stripe can only return money Stripe took. Cash and legacy-imported
+    # payments are recorded as manual refunds (blank stripe_refund_id -- the
+    # money is handed back outside the gateway) with no Stripe call and no
+    # Stripe configuration required.
+    if payment.provider != Payment.Provider.STRIPE:
         return Refund.objects.create(
             payment=payment,
             amount=amount,

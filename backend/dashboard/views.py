@@ -615,6 +615,11 @@ def booking_create(request):
                         # search or matched by email) or a new one created here.
                         customer, new_customer = _resolve_customer(cd)
                         booking.customer = customer
+                        if customer is None:
+                            # The form's "Customer name" field is pickup_sign;
+                            # keep the booker's name queryable for account-less
+                            # bookings (customer_name never reads the placard).
+                            booking.guest_name = booking.pickup_sign
                         booking.trip_type = (
                             Booking.TripType.HOURLY if mode == "hourly"
                             else Booking.TripType.TRANSFER
@@ -1185,8 +1190,10 @@ def cancellation_detail(request, pk):
                 return redirect("dashboard:cancellation_detail", pk=pk)
 
             # Issue the refund through the existing path FIRST (when > 0), so a
-            # gateway failure aborts before the booking is cancelled. Reuses the
-            # same Stripe refund mechanism as the stand-alone refund screen.
+            # gateway failure aborts before the booking is cancelled. The
+            # gateway routes by method: Stripe payments refund at Stripe, cash
+            # is recorded as a manual hand-back.
+            payment = None
             if refund_amount > 0:
                 payment = cancellation.booking.payments.filter(
                     status=Payment.Status.SUCCEEDED
@@ -1206,7 +1213,8 @@ def cancellation_detail(request, pk):
                     messages.error(request, str(exc))
                     return redirect("dashboard:cancellation_detail", pk=pk)
 
-            cancellation.approve(reviewed_by=request.user, refund_amount=refund_amount)
+            cancellation.approve(reviewed_by=request.user, refund_amount=refund_amount,
+                                 refunded_payment=payment)
             mailer.send_booking_cancelled(
                 cancellation.booking, refund_amount=refund_amount or None,
             )

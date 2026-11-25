@@ -820,14 +820,17 @@ class BookingCancellationRequest(models.Model):
         return self.status == self.Status.PENDING
 
     @transaction.atomic
-    def approve(self, reviewed_by, refund_amount):
+    def approve(self, reviewed_by, refund_amount, refunded_payment=None):
         """
         Cancel the booking and mark the request approved with the staff-set refund.
 
         Records the `refund_amount` staff chose (the caller is responsible for
-        having issued the actual Stripe refund through the existing refund path
-        first, so a gateway failure never leaves a cancelled-but-unrefunded
-        booking). Idempotent by guard: a request that is not pending is returned
+        having issued the actual refund through `gateway.refund` first, so a
+        gateway failure never leaves a cancelled-but-unrefunded booking).
+        `refunded_payment` is the Payment the caller refunded against -- it
+        decides the history wording (cash is handed back, card went through
+        Stripe) without this method re-guessing which payment that was.
+        Idempotent by guard: a request that is not pending is returned
         untouched, so a double submit never re-cancels or double-counts a refund.
         """
         if not self.is_pending:
@@ -845,10 +848,14 @@ class BookingCancellationRequest(models.Model):
         # at Stripe, so the refund is returned by hand.
         from payments.models import Payment
 
-        paid = booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
+        if refunded_payment is None and refund_amount:
+            refunded_payment = booking.payments.filter(
+                status=Payment.Status.SUCCEEDED,
+            ).first()
         if not refund_amount:
             refund_note = "; no refund"
-        elif paid and paid.provider == Payment.Provider.CASH:
+        elif (refunded_payment is not None
+              and refunded_payment.provider != Payment.Provider.STRIPE):
             refund_note = (f"; cash refund ${refund_amount} to be returned "
                            "to customer")
         else:

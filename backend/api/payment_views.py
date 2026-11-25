@@ -125,6 +125,17 @@ def create_intent(request):
     if booking.payments.filter(status=Payment.Status.SUCCEEDED).exists():
         return Response({"detail": "This booking is already paid."},
                         status=status.HTTP_409_CONFLICT)
+    # A cash confirmation is a settled choice, not an unpaid booking: opening a
+    # card intent on top of it would let the fare be collected twice (card now,
+    # cash at pickup -- the driver still sees cash due).
+    if booking.payments.filter(
+        provider=Payment.Provider.CASH, status=Payment.Status.PROCESSING,
+    ).exists():
+        return Response(
+            {"detail": "This booking is set to pay the driver in cash. "
+                       "Please contact us to switch to a card payment."},
+            status=status.HTTP_409_CONFLICT,
+        )
 
     # A signed-in customer paying for their own booking ALWAYS keeps the card on
     # file -- it is the default for account holders, not an opt-in, so their next
@@ -199,24 +210,33 @@ def pay_cash(request, reference):
     if booking.payments.filter(status=Payment.Status.SUCCEEDED).exists():
         return Response({"detail": "This booking is already paid."},
                         status=status.HTTP_409_CONFLICT)
-    # A retried confirm (double click, flaky network) must not record the fare
-    # twice: an awaiting-collection cash payment already covers this booking.
-    if booking.payments.filter(
-        provider=Payment.Provider.CASH, status=Payment.Status.PROCESSING,
-    ).exists():
-        return Response(BookingStatusSerializer(booking).data)
 
+    confirmed_now = False
     with transaction.atomic():
+        # Serialise concurrent confirms on the booking row: nothing in the
+        # schema forbids two awaiting-collection payments, so a double click's
+        # two racing requests must queue here rather than both pass the
+        # exists() check below.
+        booking = Booking.objects.select_for_update().get(pk=booking.pk)
+
         # Awaiting collection, NOT succeeded: the money changes hands with the
         # driver, so staff mark it collected in the back office. Recording it
-        # as paid here would poison paid-to-date (and therefore refunds).
-        Payment.objects.create(
-            booking=booking,
-            provider=Payment.Provider.CASH,
-            amount=booking.total,
-            currency=booking.currency,
-            status=Payment.Status.PROCESSING,
-        )
+        # as paid here would poison paid-to-date (and therefore refunds). A
+        # retried confirm finds the existing payment and records nothing new.
+        if not booking.payments.filter(
+            provider=Payment.Provider.CASH, status=Payment.Status.PROCESSING,
+        ).exists():
+            Payment.objects.create(
+                booking=booking,
+                provider=Payment.Provider.CASH,
+                amount=booking.total,
+                currency=booking.currency,
+                status=Payment.Status.PROCESSING,
+            )
+
+        # Confirm even when the payment already existed -- a staff-created
+        # booking can sit PENDING with an awaiting-collection payment, and
+        # this call is the customer's confirmation of it.
         if booking.status == Booking.Status.PENDING:
             BookingStatusChange.objects.create(
                 booking=booking,
@@ -226,9 +246,13 @@ def pay_cash(request, reference):
             )
             booking.status = Booking.Status.CONFIRMED
             booking.save(update_fields=["status", "updated_at"])
-            # Same confirmation as the card path: email + SMS + ops alert.
-            from notifications.events import booking_confirmed
-            booking_confirmed(booking)
+            confirmed_now = True
+
+    if confirmed_now:
+        # Same confirmation as the card path: email + SMS + ops alert. Outside
+        # the transaction so a slow SMTP conversation never holds the row lock.
+        from notifications.events import booking_confirmed
+        booking_confirmed(booking)
 
     return Response(BookingStatusSerializer(booking).data)
 

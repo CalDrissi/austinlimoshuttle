@@ -487,7 +487,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
     <div class="modelcard"><div class="mh"><span>TimeSurcharge</span></div><table><tr><td>name, start_time, end_time, percentage, is_active</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BlackoutDate</span></div><table><tr><td>name, description, date, percentage, is_active</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>PricingSettings</span></div><table><tr><td>tax_rate, currency, cancellation_window_hours, quote_ttl_minutes</td></tr></table></div>
-    <div class="modelcard"><div class="mh"><span>Booking</span></div><table><tr><td>reference, customer <span class="fk">→ User</span>, vehicle <span class="fk">→ Vehicle</span>, driver <span class="fk">→ Driver</span>, trip_type, status, pickup/dropoff (+lat/lng), pickup_at, distance_miles, hours, passenger/luggage counts, flight_number, meet_and_greet, guest_email/phone, subtotal, surcharge_total, tax, total, vehicle_name_snapshot, cancellation_*</td></tr></table></div>
+    <div class="modelcard"><div class="mh"><span>Booking</span></div><table><tr><td>reference, customer <span class="fk">→ User</span>, vehicle <span class="fk">→ Vehicle</span>, driver <span class="fk">→ Driver</span>, trip_type, status, pickup/dropoff (+lat/lng), pickup_at, distance_miles, hours, passenger/luggage counts, flight_number, meet_and_greet, guest_email/name/phone, subtotal, surcharge_total, tax, total, vehicle_name_snapshot, cancellation_*</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BookingPriceLine</span></div><table><tr><td>booking <span class="fk">→ Booking</span>, kind, label, amount, ordering</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BookingStatusChange</span></div><table><tr><td>booking <span class="fk">→ Booking</span>, from_status, to_status, changed_by <span class="fk">→ User</span>, changed_at, note</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>Driver</span></div><table><tr><td>full_name, phone, email, is_active, notes</td></tr></table></div>
@@ -777,7 +777,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Response 200 · PaymentIntentResponse</div><div class="fieldgrid"><span class="r">client_secret<span class="ty"> str</span></span><span class="r">publishable_key<span class="ty"> str</span></span><span class="r">amount<span class="ty"> str</span></span><span class="r">currency<span class="ty"> str</span></span><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="codes"><span class="code ok">200</span><span class="code">400</span><span class="code">404</span><span class="code">409</span><span class="code">502</span><span class="code">503</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/bookings/{reference}/pay-cash/</span><span class="au">public</span></div>
-    <div class="ep-b"><p class="sm">Confirm a booking as <b>cash / pay-on-arrival</b> — no card. Records a cash payment for the booking's own amount and moves it pending → confirmed. Reference-scoped like the intent endpoint; idempotent.</p>
+    <div class="ep-b"><p class="sm">Confirm a booking as <b>cash / pay-on-arrival</b> — no card. Records an <b>awaiting-collection</b> cash payment (becomes <code>succeeded</code> only via the back-office "Mark cash collected" action, so paid-to-date reflects money actually received) and moves the booking pending → confirmed. Reference-scoped like the intent endpoint; idempotent — a retry records nothing new.</p>
       <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="lab">Response 200 · BookingStatus</div>
       <div class="codes"><span class="code ok">200</span><span class="code">404</span><span class="code">409</span></div></div></div>
@@ -979,6 +979,18 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       table reconciles at a glance after an amendment reprice.</td></tr>
       <tr><td><b>POLISH — account Overview counts.</b> “Completed / past” on the storefront account Overview now
       excludes cancelled bookings (they still count in “Total bookings” and list under My bookings).</td></tr>
+      <tr><td><b>Review hardening (same batch).</b> (a) Migration <code>bookings.0011</code> backfills
+      <code>guest_name</code> from <code>pickup_sign</code> for pre-existing guest bookings so history doesn’t
+      regress to “Guest”; the staff manual-booking path also stores its “Customer name” field into
+      <code>guest_name</code> for account-less bookings. (b) <code>gateway.refund</code> treats <b>any non-Stripe</b>
+      provider (cash AND legacy imports) as a manual refund — Stripe can only return money Stripe took.
+      (c) <code>create_intent</code> now 409s when an awaiting-collection cash payment exists, closing the
+      pay-twice window (card online + cash at pickup). (d) <code>pay-cash</code> runs under
+      <code>select_for_update</code> (double-click race cannot record the fare twice) and still confirms a PENDING
+      booking whose cash payment was pre-recorded by staff. (e) Cancellation approval passes the refunded payment
+      into <code>approve()</code> so the history note can’t disagree with the money’s actual path. (f) Driver
+      job-sheet email’s “Passenger” row prefers the placard; confirmation email/PDF say “Total fare” (cash is no
+      longer “paid” at booking time). <code>docs/openapi.yaml</code> regenerated.</td></tr>
     </table>
   </div>
 

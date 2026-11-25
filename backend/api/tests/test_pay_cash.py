@@ -80,6 +80,32 @@ class TestPayCash:
         booking.save(update_fields=["status"])
         assert pay_cash(client, booking).status_code == 409
 
+    def test_confirms_a_pending_booking_that_already_has_the_cash_payment(
+        self, client, booking
+    ):
+        """A staff-created booking can sit PENDING with an awaiting-collection
+        payment; the customer's confirm must still flip it to confirmed."""
+        Payment.objects.create(
+            booking=booking, provider=Payment.Provider.CASH,
+            amount=booking.total, currency="USD",
+            status=Payment.Status.PROCESSING,
+        )
+        response = pay_cash(client, booking)
+        assert response.status_code == 200
+        booking.refresh_from_db()
+        assert booking.status == Booking.Status.CONFIRMED
+        assert booking.payments.count() == 1  # nothing double-recorded
+
+    def test_cash_choice_blocks_a_card_intent(self, client, booking):
+        """An awaiting-collection cash payment must stop a card intent, or the
+        fare can be taken twice (card online, cash at pickup)."""
+        pay_cash(client, booking)
+        response = client.post(
+            reverse("api:payment_intent"), {"reference": booking.reference},
+            content_type="application/json",
+        )
+        assert response.status_code == 409
+
 
 @pytest.mark.django_db
 class TestPaidToDate:
