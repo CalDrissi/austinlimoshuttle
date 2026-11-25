@@ -252,6 +252,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/Detail'
           description: ''
+  /api/bookings/{reference}/receipt/:
+    get:
+      operationId: bookings_receipt_retrieve
+      description: The confirmation as a PDF, rendered from the same template as the
+        confirmation email. Reachable by reference (guest checkout has no session);
+        a signed-in customer may only fetch their own.
+      summary: Download the booking receipt (PDF)
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - bookings
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          description: application/pdf
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/bookings/{reference}/pay-cash/:
+    post:
+      operationId: bookings_pay_cash_create
+      description: |-
+        Confirms a pending booking without an online payment — the fare is collected by the driver. Records an awaiting-collection cash payment for the booking's own amount (never a client-supplied one) and moves the booking to `confirmed`. The payment only becomes `succeeded` when staff mark the cash collected in the back office, so paid-to-date reflects money actually received.
+
+        Scoped like the other reference endpoints: a signed-in customer may only settle their own booking; a guest booking is settled by whoever holds the reference.
+      summary: Confirm a booking for cash / pay-on-arrival
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - payments
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingStatus'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: Already paid, or the booking was cancelled.
   /api/account/bookings/:
     get:
       operationId: account_bookings_list
@@ -276,42 +347,6 @@ paths:
                 $ref: '#/components/schemas/Detail'
           description: ''
   /api/account/bookings/{reference}/:
-    get:
-      operationId: account_bookings_retrieve
-      description: |-
-        Scoped to the signed-in customer. Another customer's reference returns **404, not 403** — a 403 would confirm the reference exists and allow bookings to be enumerated.
-
-        `PATCH {"action": "cancel"}` cancels, if the pickup is still in the future.
-      summary: Read or cancel one of your bookings
-      parameters:
-      - in: path
-        name: reference
-        schema:
-          type: string
-        required: true
-      tags:
-      - bookings
-      security:
-      - cookieAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Booking'
-          description: ''
-        '400':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Detail'
-          description: ''
-        '404':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Detail'
-          description: ''
     patch:
       operationId: account_bookings_partial_update
       description: |-
@@ -359,6 +394,503 @@ paths:
               schema:
                 $ref: '#/components/schemas/Detail'
           description: ''
+    get:
+      operationId: account_bookings_retrieve
+      description: |-
+        Scoped to the signed-in customer. Another customer's reference returns **404, not 403** — a 403 would confirm the reference exists and allow bookings to be enumerated.
+
+        `PATCH {"action": "cancel"}` cancels, if the pickup is still in the future.
+      summary: Read or cancel one of your bookings
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - bookings
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/bookings/{reference}/amend-request/:
+    post:
+      operationId: account_bookings_amend_request_create
+      description: |-
+        Owner-only. Unlike a direct amend, this does **not** change the booking: it files a pending request that staff review. The pickup/drop-off addresses and vehicle stay office-only; changing the pickup time re-prices and the new fare is returned on the request.
+
+        Rejected (400) when the pickup is already inside the office-set amendment window, when the booking is cancelled/completed, or when a request is already awaiting review.
+      summary: Request a change to one of your bookings (staff must approve)
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - bookings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingAmendRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BookingAmendRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BookingAmendRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingAmendmentRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/bookings/{reference}/cancel-request/:
+    post:
+      operationId: account_bookings_cancel_request_create
+      description: |-
+        Owner-only. Unlike the direct `PATCH {action: cancel}`, this does **not** cancel the booking: it files a pending cancellation request that staff review. Approval cancels the booking and issues a staff-set refund; the refund is **not** automatic.
+
+        Rejected (400) when the pickup is already inside the office-set cancellation window, when the booking is cancelled/completed, or when a cancellation request is already awaiting review.
+      summary: Request to cancel one of your bookings (staff must approve)
+      parameters:
+      - in: path
+        name: reference
+        schema:
+          type: string
+        required: true
+      tags:
+      - bookings
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingCancellationRequest'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/profile/:
+    patch:
+      operationId: account_profile_partial_update
+      description: Self-service edit of first_name, last_name, email and phone. Email
+        must be a valid address and unique across accounts; it is also the sign-in
+        identity, so a change updates how you log in.
+      summary: Update the signed-in customer's profile
+      tags:
+      - account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/cards/:
+    post:
+      operationId: account_cards_create
+      description: GET lists the cards. POST records a card the customer just added
+        with a SetupIntent -- the body carries the Stripe PaymentMethod id; the card
+        itself stays at Stripe.
+      summary: List or add the signed-in customer's cards on file
+      tags:
+      - account
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCardRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AddCardRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AddCardRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedCard'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedCard'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+    get:
+      operationId: account_cards_list
+      description: GET lists the cards. POST records a card the customer just added
+        with a SetupIntent -- the body carries the Stripe PaymentMethod id; the card
+        itself stays at Stripe.
+      summary: List or add the signed-in customer's cards on file
+      tags:
+      - account
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SavedCard'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedCard'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/cards/setup-intent/:
+    post:
+      operationId: account_cards_setup_intent_create
+      description: Returns a SetupIntent client secret and the publishable key so
+        the browser can confirm a new card with Stripe Elements. No charge is made;
+        the card is kept on file for future use.
+      summary: Start adding a card (Stripe SetupIntent)
+      tags:
+      - account
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupIntentResponse'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '502':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/cards/{id}/:
+    delete:
+      operationId: account_cards_destroy
+      summary: Remove a card on file
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - account
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/account/cards/{id}/default/:
+    post:
+      operationId: account_cards_default_create
+      summary: Set a saved card as the default
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - account
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedCard'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/staff/amendment-requests/:
+    get:
+      operationId: staff_amendment_requests_list
+      description: Staff-only. Defaults to the pending queue; pass `?status=approved|declined|all`
+        to widen it.
+      summary: List booking change requests (staff)
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingAmendmentRequest'
+          description: ''
+  /api/staff/amendment-requests/{id}/approve/:
+    post:
+      operationId: staff_amendment_requests_approve_create
+      description: 'Staff-only. Applies the requested change to the booking, re-prices,
+        marks the request approved and emails the customer. Idempotent: a request
+        that is already approved or declined returns **409**.'
+      summary: Approve a booking change request (staff)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - staff
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingAmendmentRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/staff/amendment-requests/{id}/decline/:
+    post:
+      operationId: staff_amendment_requests_decline_create
+      description: 'Staff-only. Marks the request declined (the booking is untouched)
+        and emails the customer with the reason. Idempotent: an already-resolved request
+        returns **409**.'
+      summary: Decline a booking change request (staff)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - in: path
+        name: pk
+        schema:
+          type: integer
+        required: true
+      tags:
+      - staff
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetailRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DetailRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DetailRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingAmendmentRequest'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/auth/csrf/:
+    get:
+      operationId: auth_csrf_retrieve
+      description: Sets the `csrftoken` cookie so the SPA can echo it in an `X-CSRFToken`
+        header on authenticated writes. Safe to call anonymously and as often as needed.
+      summary: Prime the CSRF cookie
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/auth/login/:
     post:
       operationId: auth_login_create
@@ -482,14 +1014,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/Detail'
           description: ''
-  /api/auth/me/:
-    get:
-      operationId: auth_me_retrieve
-      summary: The signed-in customer
+  /api/auth/send-code/:
+    post:
+      operationId: auth_send_code_create
+      description: |-
+        Passwordless sign-in, step one. Emails a six-digit code that is valid for ten minutes, single-use, and rate-limited per address and per IP.
+
+        **Always returns 200** with a neutral message, whether or not the address is registered -- the response cannot be used to discover who has an account, exactly like password reset. A registered customer is sent a code; nothing happens for anyone else.
+      summary: Email a one-time sign-in code
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendCodeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendCodeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendCodeRequestRequest'
+        required: true
       security:
       - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/auth/verify-code/:
+    post:
+      operationId: auth_verify_code_create
+      description: Passwordless sign-in, step two. Exchanges a valid, unexpired, unused
+        code for a session -- the response and cookie are identical to `/auth/login/`.
+        A wrong, expired, used or over-attempted code returns **400** with a single
+        neutral message. A correct code is consumed on use and cannot be replayed.
+      summary: Sign in with a one-time code
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VerifyCodeRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - {}
       responses:
         '200':
           content:
@@ -497,6 +1078,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+  /api/auth/me/:
+    patch:
+      operationId: auth_me_partial_update
+      description: GET returns the current profile, or **204** with no body for an
+        anonymous visitor — every storefront page asks "who am I?" on load, and an
+        error status would land in the browser console as noise. PATCH updates the
+        editable fields (first_name, last_name, phone) and requires a session. Email
+        is the login identifier and is not editable here.
+      summary: Read or update the signed-in customer
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserRequest'
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '204':
+          description: No response body
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+    get:
+      operationId: auth_me_retrieve
+      description: GET returns the current profile, or **204** with no body for an
+        anonymous visitor — every storefront page asks "who am I?" on load, and an
+        error status would land in the browser console as noise. PATCH updates the
+        editable fields (first_name, last_name, phone) and requires a session. Email
+        is the login identifier and is not editable here.
+      summary: Read or update the signed-in customer
+      tags:
+      - auth
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+        '204':
+          description: No response body
         '403':
           content:
             application/json:
@@ -665,6 +1314,16 @@ components:
       - cancel
       type: string
       description: '* `cancel` - cancel'
+    AddCardRequest:
+      type: object
+      description: The PaymentMethod id the browser produced after confirming a SetupIntent.
+      properties:
+        payment_method_id:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required:
+      - payment_method_id
     Availability:
       type: object
       description: Everything a date picker needs to warn about surcharged times.
@@ -796,7 +1455,35 @@ components:
           type: string
           format: date-time
           readOnly: true
+        is_amendable:
+          type: boolean
+          readOnly: true
+        amendment_deadline:
+          type: string
+          format: date-time
+          readOnly: true
+        pending_amendment:
+          allOf:
+          - $ref: '#/components/schemas/BookingAmendmentRequest'
+          nullable: true
+          readOnly: true
+        last_amendment:
+          allOf:
+          - $ref: '#/components/schemas/BookingAmendmentRequest'
+          nullable: true
+          readOnly: true
+        pending_cancellation:
+          allOf:
+          - $ref: '#/components/schemas/BookingCancellationRequest'
+          nullable: true
+          readOnly: true
+        last_cancellation:
+          allOf:
+          - $ref: '#/components/schemas/BookingCancellationRequest'
+          nullable: true
+          readOnly: true
       required:
+      - amendment_deadline
       - created_at
       - currency
       - distance_miles
@@ -804,10 +1491,15 @@ components:
       - duration_minutes
       - flight_number
       - hours
+      - is_amendable
+      - last_amendment
+      - last_cancellation
       - luggage_count
       - meet_and_greet
       - notes
       - passenger_count
+      - pending_amendment
+      - pending_cancellation
       - pickup_address
       - pickup_at
       - pickup_sign
@@ -821,6 +1513,204 @@ components:
       - total
       - trip_type
       - vehicle_name
+    BookingAmendRequest:
+      type: object
+      description: |-
+        Customer-editable booking details within the office-set amendment window.
+
+        All optional (a partial update). Most fields don't touch the fare; changing
+        `pickup_at` does (night/event surcharges are time-based), so the server
+        re-prices on a date change. The pickup/drop-off addresses and vehicle stay
+        office-only — changing them is effectively a new trip. `phone` updates the
+        account's contact number.
+      properties:
+        passenger_count:
+          type: integer
+          maximum: 20
+          minimum: 1
+        luggage_count:
+          type: integer
+          maximum: 20
+          minimum: 0
+        flight_number:
+          type: string
+          maxLength: 32
+        pickup_sign:
+          type: string
+          maxLength: 120
+        notes:
+          type: string
+        phone:
+          type: string
+          maxLength: 32
+        pickup_at:
+          type: string
+          format: date-time
+    BookingAmendmentRequest:
+      type: object
+      description: |-
+        A customer's proposed change to a booking, awaiting (or past) staff review.
+
+        Read-only: the client never writes this shape directly -- it POSTs the fields
+        to amend (via `BookingAmendSerializer`) and receives this back. `changes` is
+        the resolved OLD -> NEW diff; the `new_*` figures are the fare the change
+        would produce (authoritative once approved).
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        booking_reference:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        requested_changes:
+          readOnly: true
+          description: 'Proposed {field: new_value}. Only changed fields appear.'
+        changes:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+          readOnly: true
+        old_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        new_subtotal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        new_surcharge_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        new_tax:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        new_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        currency:
+          type: string
+          readOnly: true
+        price_delta:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_by:
+          type: string
+          format: email
+          readOnly: true
+        decline_reason:
+          type: string
+          readOnly: true
+      required:
+      - booking_reference
+      - changes
+      - currency
+      - decline_reason
+      - id
+      - new_subtotal
+      - new_surcharge_total
+      - new_tax
+      - new_total
+      - old_total
+      - price_delta
+      - requested_at
+      - requested_changes
+      - reviewed_at
+      - reviewed_by
+      - status
+      - status_display
+    BookingCancellationRequest:
+      type: object
+      description: |-
+        A customer's request to cancel a booking, awaiting (or past) staff review.
+
+        Read-only: the client POSTs nothing but the request itself (no body) and
+        receives this back. `paid_amount` is what had been paid when they asked;
+        `refund_amount` is null until staff approve and set it (0 is a real value,
+        not "unset").
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        booking_reference:
+          type: string
+          readOnly: true
+        status:
+          type: string
+          readOnly: true
+        status_display:
+          type: string
+          readOnly: true
+        paid_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          description: Amount paid at request time; the default and ceiling for the
+            refund.
+        refund_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          description: Refund set by staff at approval. 0 is allowed; null until reviewed.
+        currency:
+          type: string
+          readOnly: true
+        requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+        reviewed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        reviewed_by:
+          type: string
+          format: email
+          readOnly: true
+        decline_reason:
+          type: string
+          readOnly: true
+      required:
+      - booking_reference
+      - currency
+      - decline_reason
+      - id
+      - paid_amount
+      - refund_amount
+      - requested_at
+      - reviewed_at
+      - reviewed_by
+      - status
+      - status_display
     BookingCreateRequest:
       type: object
       description: |-
@@ -860,6 +1750,9 @@ components:
         guest_name:
           type: string
           maxLength: 150
+        guest_phone:
+          type: string
+          maxLength: 32
       required:
       - quote_token
     BookingStatus:
@@ -911,6 +1804,15 @@ components:
       properties:
         detail:
           type: string
+      required:
+      - detail
+    DetailRequest:
+      type: object
+      description: A human-readable message. Used for errors and simple acknowledgements.
+      properties:
+        detail:
+          type: string
+          minLength: 1
       required:
       - detail
     EnquiryRequest:
@@ -1058,6 +1960,38 @@ components:
       properties:
         action:
           $ref: '#/components/schemas/ActionEnum'
+    PatchedProfileUpdateRequest:
+      type: object
+      description: |-
+        Self-service profile edit. Every field optional (PATCH); email is
+        format-validated here, uniqueness is checked in the view against the row.
+      properties:
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          minLength: 1
+        phone:
+          type: string
+          maxLength: 32
+    PatchedUserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone:
+          type: string
     PaymentConfig:
       type: object
       properties:
@@ -1148,6 +2082,9 @@ components:
         meet_and_greet:
           type: boolean
           default: false
+        city_to_city:
+          type: boolean
+          default: false
       required:
       - pickup_address
       - pickup_at
@@ -1221,6 +2158,65 @@ components:
       required:
       - email
       - password
+    SavedCard:
+      type: object
+      description: A customer's card on file. Display bits only -- never anything
+        to charge with.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        brand:
+          type: string
+          readOnly: true
+        last4:
+          type: string
+          readOnly: true
+        exp_month:
+          type: integer
+          readOnly: true
+          nullable: true
+        exp_year:
+          type: integer
+          readOnly: true
+          nullable: true
+        is_default:
+          type: boolean
+          readOnly: true
+        label:
+          type: string
+          readOnly: true
+        expiry:
+          type: string
+          readOnly: true
+      required:
+      - brand
+      - exp_month
+      - exp_year
+      - expiry
+      - id
+      - is_default
+      - label
+      - last4
+    SendCodeRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+      required:
+      - email
+    SetupIntentResponse:
+      type: object
+      properties:
+        client_secret:
+          type: string
+        publishable_key:
+          type: string
+      required:
+      - client_secret
+      - publishable_key
     SiteSettings:
       type: object
       description: |-
@@ -1254,10 +2250,16 @@ components:
           type: string
           format: uri
           readOnly: true
+        google_maps_api_key:
+          type: string
+          readOnly: true
+          description: Google Maps key for address autocomplete and distance pricing.
+            Leave blank to use the server's configured key.
       required:
       - contact_email
       - contact_phone
       - facebook
+      - google_maps_api_key
       - instagram
       - linkedin
       - twitter
@@ -1266,12 +2268,14 @@ components:
       - pending
       - confirmed
       - completed
+      - no_show
       - cancelled
       type: string
       description: |-
         * `pending` - Pending payment
         * `confirmed` - Confirmed
         * `completed` - Completed
+        * `no_show` - No-show
         * `cancelled` - Cancelled
     TimeSurcharge:
       type: object
@@ -1351,10 +2355,30 @@ components:
           format: decimal
           pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
           description: Fare floor. Applied after every other adjustment.
+        photo:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
       required:
       - id
       - name
+      - photo
       - slug
+    VerifyCodeRequestRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          description: The six-digit code from the email.
+      required:
+      - code
+      - email
   securitySchemes:
     cookieAuth:
       type: apiKey
@@ -1372,6 +2396,8 @@ tags:
   description: Fare quoting. Returns signed tokens.
 - name: bookings
   description: Creating and managing bookings.
+- name: staff
+  description: Back-office review (staff only).
 - name: payments
   description: Stripe checkout and webhooks.
 - name: auth

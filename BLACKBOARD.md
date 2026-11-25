@@ -8,6 +8,8 @@ decisions go in `CONTRACTS.md`, not here. The read-only code map is the graphify
 _One line per active task: `@handle — branch — what / status`._
 - 2026-11-03 @dashboard-bookings — agent/dashboard-bookings/c2c-manual-booking — Phase 4b: migrated manual booking `city` mode to free-form + distance (quote(city_to_city=True)), dropped CityRoute from dashboard/views.py. Also edited @dashboard-forms' `ManualBookingForm` (removed `city_route` field, city now requires a drop-off) for this cohesive change. Dashboard suite 100 green. Awaiting merge gate.
 
+- 2026-11-25 @bugfix-round1 — CalDrissi/bugfix-round1-e2e-defects — fixing the 5 E2E defects + 1 polish in one batch (cash refunds w/o Stripe, cash awaiting-collection, guest_name vs placard, quiet /auth/me 204, min-fare label, overview count). New migration bookings.0010 (guest_name). See CONTRACTS.md 2026-11-25 E2E round-1 entry. Full gate then deploy both sides.
+
 ## Findings & gotchas
 _Short discoveries worth sharing across lanes._
 - 2026-11-25 01:20 @notifications — **VPS outbound mail is being refused: the server IP (209.126.15.51) is listed at zen.spamhaus.org ("excess volume")**. Last successful send 00:23 UTC; every send since gets a 550 from the relay. Not code — email P1–P5 deployed fine and EmailLog records the failures (now visible on the dashboard home card). Needs @deploy/ops: check https://check.spamhaus.org, find the volume source, request delisting.

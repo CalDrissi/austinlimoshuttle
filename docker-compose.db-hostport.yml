@@ -1,0 +1,16 @@
+# Override: publish MariaDB to the host loopback so the host-run backend
+# (gunicorn under pm2, no Docker — see ecosystem.config.js + scripts/
+# deploy-backend.sh) can reach it on 127.0.0.1:3307.
+#
+# Always apply together with the base file:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.db-hostport.yml up -d db
+#
+# Running `up -d db` with ONLY docker-compose.prod.yml would recreate the db
+# container WITHOUT this port mapping and break the host backend — always pass
+# both -f flags. Data is safe either way (named volume db_data persists across
+# container recreation).
+services:
+  db:
+    ports:
+      - "127.0.0.1:3307:3306"

@@ -6,15 +6,16 @@ import type { User } from "@/types/api";
 
 /**
  * Current signed-in user, resolved from the session cookie via GET /auth/me/.
- * Anonymous visitors get a 403, which surfaces here simply as `user = null`
- * (no retry — a 403 is an answer, not a transient failure).
+ * Anonymous visitors get a 204 (no body), which surfaces here simply as
+ * `user = null` — a 2xx by design, so the console shows no failed request on
+ * every storefront page. The catch covers real failures (network, 5xx).
  */
 export function useAuth() {
   const { data, isLoading } = useQuery<User | null>({
     queryKey: ["me"],
     queryFn: async () => {
       try {
-        return await authService.me();
+        return (await authService.me()) ?? null;
       } catch {
         return null;
       }

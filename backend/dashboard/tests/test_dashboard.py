@@ -963,6 +963,136 @@ class TestCityToCityCard:
 
 
 @pytest.mark.django_db
+class TestVehicleCompleteness:
+    """
+    A vehicle can be individually valid yet unbookable: active, listed on the
+    storefront, but absent from every quote because it has no rate card (the
+    Escalade id8 incident). The add/edit screen must block the outright-dead
+    combination and warn about the surprising-but-legal ones.
+    """
+
+    CREATE_URL = ("dashboard:managed_create", ["vehicles"])
+
+    def _login(self, client, roles):
+        staff_in(MANAGER, roles)
+        client.login(username="manager@example.com", password="DashLocal!2026")
+
+    def _payload(self, *, name="Escalade", slug="escalade", active=True,
+                 hourly="0.00", min_miles="", bands=(), intercity=()):
+        data = {
+            "name": name, "slug": slug, "description": "", "features": "",
+            "passenger_capacity": "6", "luggage_capacity": "4",
+            "hourly_rate": hourly, "meet_greet_fee": "0.00",
+            "minimum_fare": "0.00", "city_to_city_min_miles": min_miles,
+            "display_order": "0",
+            "bands-TOTAL_FORMS": str(len(bands)),
+            "bands-INITIAL_FORMS": "0",
+            "bands-MIN_NUM_FORMS": "0", "bands-MAX_NUM_FORMS": "1000",
+            "intercity_bands-TOTAL_FORMS": str(len(intercity)),
+            "intercity_bands-INITIAL_FORMS": "0",
+            "intercity_bands-MIN_NUM_FORMS": "0",
+            "intercity_bands-MAX_NUM_FORMS": "1000",
+        }
+        if active:
+            data["is_active"] = "on"
+        for prefix, rows in (("bands", bands), ("intercity_bands", intercity)):
+            for i, (start, end, rate) in enumerate(rows):
+                data[f"{prefix}-{i}-from_miles"] = str(start)
+                data[f"{prefix}-{i}-to_miles"] = "" if end is None else str(end)
+                data[f"{prefix}-{i}-rate_per_mile"] = str(rate)
+        return data
+
+    def _create(self, client, **kwargs):
+        name, args = self.CREATE_URL
+        return client.post(reverse(name, args=args), self._payload(**kwargs))
+
+    def test_active_with_no_rate_card_and_no_hourly_rate_is_blocked(
+        self, client, roles,
+    ):
+        self._login(client, roles)
+        response = self._create(client)
+        assert response.status_code == 200
+        assert b"will not appear in quotes" in response.content
+        assert not Vehicle.objects.filter(slug="escalade").exists()
+
+    def test_inactive_draft_with_no_rate_card_saves_with_a_warning(
+        self, client, roles,
+    ):
+        self._login(client, roles)
+        response = self._create(client, active=False)
+        assert response.status_code == 302
+        assert Vehicle.objects.filter(slug="escalade", is_active=False).exists()
+        body = client.get(response["Location"]).content.decode()
+        assert "inactive draft with no rate card" in body
+
+    def test_active_hourly_only_saves_with_a_warning(self, client, roles):
+        self._login(client, roles)
+        response = self._create(client, hourly="85.00")
+        assert response.status_code == 302
+        body = client.get(response["Location"]).content.decode()
+        assert "hourly hire" in body
+        assert "NOT appear in transfer" in body
+
+    def test_active_with_a_rate_card_saves_without_rate_warnings(
+        self, client, roles,
+    ):
+        self._login(client, roles)
+        response = self._create(client, bands=[(0, None, "3.00")])
+        assert response.status_code == 302
+        assert Vehicle.objects.filter(slug="escalade", is_active=True).exists()
+        body = client.get(response["Location"]).content.decode()
+        assert "will not appear in quotes" not in body
+        assert "NOT appear in transfer" not in body
+
+    def test_intercity_card_without_a_minimum_warns_it_is_dormant(
+        self, client, roles,
+    ):
+        self._login(client, roles)
+        response = self._create(
+            client, bands=[(0, None, "3.00")],
+            intercity=[(0, None, "2.00")], min_miles="",
+        )
+        assert response.status_code == 302
+        body = client.get(response["Location"]).content.decode()
+        assert "that card will never be used" in body
+
+    def test_minimum_without_an_intercity_card_warns_of_fallback(
+        self, client, roles,
+    ):
+        self._login(client, roles)
+        response = self._create(
+            client, bands=[(0, None, "3.00")], min_miles="50",
+        )
+        assert response.status_code == 302
+        body = client.get(response["Location"]).content.decode()
+        assert "fall back to the normal rate card" in body
+
+    def test_missing_photo_on_an_active_vehicle_warns(self, client, roles):
+        self._login(client, roles)
+        response = self._create(client, bands=[(0, None, "3.00")])
+        assert response.status_code == 302
+        body = client.get(response["Location"]).content.decode()
+        assert "generic" in body and "placeholder" in body
+
+    def test_blank_slug_is_generated_from_the_name(self, client, roles):
+        self._login(client, roles)
+        response = self._create(
+            client, name="Sprinter Executive", slug="", bands=[(0, None, "3.00")],
+        )
+        assert response.status_code == 302
+        assert Vehicle.objects.filter(slug="sprinter-executive").exists()
+
+    def test_generated_slug_dodges_a_collision(self, client, roles):
+        Vehicle.objects.create(name="Taken", slug="sprinter-executive")
+        self._login(client, roles)
+        response = self._create(
+            client, name="Sprinter Executive", slug="", bands=[(0, None, "3.00")],
+        )
+        assert response.status_code == 302
+        assert Vehicle.objects.filter(slug="sprinter-executive-2").exists()
+
+
+@pytest.mark.django_db
 class TestCityRoutesPageRemoved:
     """
     The standalone "City routes" managed page was retired with the city-to-city
@@ -1160,7 +1290,12 @@ class TestManualBooking:
         self._login(client, roles)
         client.post(reverse("dashboard:booking_create"),
                     self._payload(vehicle, hours="3", guest_email=""))
-        assert Booking.objects.get().customer is None
+        booking = Booking.objects.get()
+        assert booking.customer is None
+        # The form's "Customer name" field is pickup_sign; it must land in
+        # guest_name too, or the back office shows this booking as "Guest".
+        assert booking.guest_name == "Jane Doe"
+        assert booking.customer_name == "Jane Doe"
 
     def test_cash_records_awaiting_collection(self, client, roles, vehicle):
         from payments.models import Payment

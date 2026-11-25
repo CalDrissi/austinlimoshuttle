@@ -164,6 +164,11 @@ class Booking(models.Model):
         help_text="Contact address for a booking made without an account. "
                   "Without it a guest can never receive their own confirmation.",
     )
+    guest_name = models.CharField(
+        max_length=150, blank=True,
+        help_text="Contact name for a booking made without an account. Distinct "
+                  "from pickup_sign, which is what the driver's placard shows.",
+    )
     guest_phone = models.CharField(max_length=32, blank=True)
 
     # -- money -------------------------------------------------------------
@@ -296,9 +301,13 @@ class Booking(models.Model):
 
     @property
     def customer_name(self) -> str:
+        """
+        The booker's name, never the placard: `pickup_sign` is what the driver
+        holds up and is often the passenger, not the customer who booked.
+        """
         if self.customer:
             return self.customer.get_full_name() or self.customer.email
-        return self.pickup_sign or "Guest"
+        return self.guest_name or "Guest"
 
     def reprice(self, *, pickup_at=None):
         """
@@ -810,14 +819,17 @@ class BookingCancellationRequest(models.Model):
         return self.status == self.Status.PENDING
 
     @transaction.atomic
-    def approve(self, reviewed_by, refund_amount):
+    def approve(self, reviewed_by, refund_amount, refunded_payment=None):
         """
         Cancel the booking and mark the request approved with the staff-set refund.
 
         Records the `refund_amount` staff chose (the caller is responsible for
-        having issued the actual Stripe refund through the existing refund path
-        first, so a gateway failure never leaves a cancelled-but-unrefunded
-        booking). Idempotent by guard: a request that is not pending is returned
+        having issued the actual refund through `gateway.refund` first, so a
+        gateway failure never leaves a cancelled-but-unrefunded booking).
+        `refunded_payment` is the Payment the caller refunded against -- it
+        decides the history wording (cash is handed back, card went through
+        Stripe) without this method re-guessing which payment that was.
+        Idempotent by guard: a request that is not pending is returned
         untouched, so a double submit never re-cancels or double-counts a refund.
         """
         if not self.is_pending:
@@ -831,12 +843,27 @@ class BookingCancellationRequest(models.Model):
             booking.cancellation_reason = "Cancellation requested by customer"
         booking.save(update_fields=["status", "cancelled_at", "cancellation_reason"])
 
+        # The history line names how the money goes back: a cash fare was never
+        # at Stripe, so the refund is returned by hand.
+        from payments.models import Payment
+
+        if refunded_payment is None and refund_amount:
+            refunded_payment = booking.payments.filter(
+                status=Payment.Status.SUCCEEDED,
+            ).first()
+        if not refund_amount:
+            refund_note = "; no refund"
+        elif (refunded_payment is not None
+              and refunded_payment.provider != Payment.Provider.STRIPE):
+            refund_note = (f"; cash refund ${refund_amount} to be returned "
+                           "to customer")
+        else:
+            refund_note = f"; refunded {refund_amount} {self.currency}"
+
         BookingStatusChange.objects.create(
             booking=booking, from_status=from_status,
             to_status=Booking.Status.CANCELLED, changed_by=reviewed_by,
-            note="Cancellation approved by staff"
-                 + (f"; refunded {refund_amount} {self.currency}"
-                    if refund_amount else "; no refund"),
+            note="Cancellation approved by staff" + refund_note,
         )
 
         self.status = self.Status.APPROVED

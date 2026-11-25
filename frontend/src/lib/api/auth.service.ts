@@ -3,7 +3,8 @@ import type { User, LoginRequest, RegisterRequest } from "@/types/api";
 
 /**
  * Cookie-session auth. The session cookie is httpOnly and set by Django; there
- * is no token in JS. `me()` resolves the current user (403 when anonymous).
+ * is no token in JS. `me()` resolves the current user (204/undefined when
+ * anonymous — a 2xx, so the browser console stays clean on every page load).
  */
 export const authService = {
   login: (body: LoginRequest) => apiPost<User>("/auth/login/", body),
@@ -11,7 +12,7 @@ export const authService = {
   verifyCode: (body: { email: string; code: string }) => apiPost<User>("/auth/verify-code/", body),
   register: (body: RegisterRequest) => apiPost<User>("/auth/register/", body),
   logout: () => apiPost<void>("/auth/logout/", {}),
-  me: () => apiGet<User>("/auth/me/"),
+  me: () => apiGet<User | undefined>("/auth/me/"),
   updateProfile: (body: { first_name?: string; last_name?: string; phone?: string }) =>
     apiPatch<User>("/auth/me/", body),
   /** Self-service profile edit (name, email, phone) via the account endpoint. */

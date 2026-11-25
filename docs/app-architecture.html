@@ -392,33 +392,46 @@ docker compose exec backend pytest -m "not legacy"</pre>
     <tr><td>MariaDB</td><td><code>localhost:3307</code></td><td><code>limo-db</code></td></tr>
   </table>
 
-  <h4 style="margin-top:28px">Production topology (testmode VPS) — hybrid: Docker + host pm2</h4>
-  <p>Local dev runs the <b>whole</b> stack in Docker (above). <b>Production is a hybrid:</b> db + Django stay
-  in Docker (via <code>docker-compose.prod.yml</code>, still behind the merge gate), but the <b>Next.js
-  storefront runs on the host under <code>pm2</code></b> — it is <i>not</i> containerised in prod. HestiaCP's
-  Nginx reverse-proxies the public domain: <code>/</code> → host Next.js on <code>127.0.0.1:3001</code>, and
-  the API/back-office paths (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/ /static/ /media/</code>)
-  → the backend container on <code>127.0.0.1:8001</code>.</p>
+  <h4 style="margin-top:28px">Production topology (testmode VPS) — host pm2 apps + Docker db only</h4>
+  <p>Local dev runs the <b>whole</b> stack in Docker (above). <b>In production only MariaDB is containerised</b>
+  (<code>limo-prod-db</code>, published to the host loopback on <code>127.0.0.1:3307</code> via
+  <code>docker-compose.db-hostport.yml</code>); both app processes run <b>on the host under <code>pm2</code></b>
+  as the unprivileged <code>limoweb</code> user. HestiaCP's Nginx reverse-proxies the public domain:
+  <code>/</code> → host Next.js on <code>127.0.0.1:3001</code>, and the API/back-office paths
+  (<code>/api/ /dashboard/ /admin/ /driver/ /accounts/ /static/ /media/</code>) → host gunicorn on
+  <code>127.0.0.1:8001</code> (WhiteNoise serves <code>/static</code>, Django serves <code>/media</code>,
+  so Nginx needs no file mappings).</p>
   <table>
     <tr><th>Surface</th><th>Runs as</th><th>Port (localhost)</th><th>Deploy path</th></tr>
-    <tr><td>Client site (Next.js)</td><td><b>host pm2</b> app <code>limo-frontend</code></td><td><code>:3001</code></td><td><b>gate-free</b>, build-before-restart</td></tr>
-    <tr><td>Backend (Django) + DB</td><td>Docker <code>limo-prod-backend</code> / <code>limo-prod-db</code></td><td><code>:8001</code></td><td>merge gate (as before)</td></tr>
+    <tr><td>Client site (Next.js)</td><td><b>host pm2</b> app <code>limo-frontend</code></td><td><code>:3001</code></td><td><code>scripts/deploy-frontend.sh</code> — build-before-restart</td></tr>
+    <tr><td>Backend (Django/gunicorn)</td><td><b>host pm2</b> app <code>limo-backend</code> (venv <code>backend/.venv</code>, py3.12)</td><td><code>:8001</code></td><td><code>scripts/deploy-backend.sh</code> — graceful SIGHUP reload</td></tr>
+    <tr><td>MariaDB 10.11</td><td>Docker <code>limo-prod-db</code></td><td><code>:3307</code> (loopback)</td><td>compose, both <code>-f</code> files</td></tr>
   </table>
-  <p>The frontend deploy is <b>gate-free and build-before-restart</b>: the live pm2 process keeps serving the
-  old build until the new one compiles, then swaps. <code>NEXT_PUBLIC_*</code> are inlined at <b>build</b> time, so
-  the deploy script sources them from the root <code>.env</code> (single source of truth) and fails loudly if the
-  API base URL is missing.</p>
-  <pre># frontend-only change — gate-free fast deploy (host):
+  <p>Both deploys are <b>gate-free fast lanes</b> (owner decision 2026-11-25 — the merge gate is retired;
+  periodic E2E verification rounds are the quality net). Each script fails safe: everything before the
+  reload (frontend build; backend pip/check/migrate/collectstatic) leaves the live app untouched, and the
+  backend reload is a graceful gunicorn SIGHUP (old workers serve until new ones boot) followed by a smoke
+  curl that exits 1 loudly on non-200. Backend env comes from the git-ignored <code>backend/.env</code>
+  (DB at <code>127.0.0.1:3307</code>, host static/media paths); reminder crons call the venv
+  <code>manage.py</code> directly (<code>scripts/install-reminder-cron.sh</code>).</p>
+  <pre># frontend change:
 bash /opt/austinlimoshuttle/scripts/deploy-frontend.sh
-#   git pull origin main → npm ci → npm run build (with .env NEXT_PUBLIC_*)
-#   → pm2 restart limo-frontend --update-env → pm2 save
+#   git pull → npm ci + next build (as limoweb, .env NEXT_PUBLIC_*) → pm2 reload
 
-# pm2 process is defined by ecosystem.config.js (PORT=3001 to match Nginx):
+# backend change:
+bash /opt/austinlimoshuttle/scripts/deploy-backend.sh
+#   git pull → pip (only if requirements changed) → manage.py check → migrate
+#   → collectstatic → pm2 sendSignal SIGHUP limo-backend → smoke /api/vehicles/
+
+# pm2 processes are defined by ecosystem.config.js (ports 3001/8001 to match Nginx):
 pm2 start /opt/austinlimoshuttle/ecosystem.config.js   # first time
 pm2 save && pm2 startup systemd                         # survive reboot
 
-# backend / db changes still go through Docker + the gate:
-docker compose -f docker-compose.prod.yml up -d --build   # db + backend only</pre>
+# db only (NEVER the base file alone — it would drop the 3307 host port):
+docker compose -f docker-compose.prod.yml -f docker-compose.db-hostport.yml up -d db
+
+# ROLLBACK to the last containerized backend (kept stopped on the VPS):
+pm2 stop limo-backend && docker start limo-prod-backend   # same :8001</pre>
 
   <!-- ============================== 4 ============================== -->
   <h2 id="apps">4 · Django apps</h2>
@@ -487,7 +500,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
     <div class="modelcard"><div class="mh"><span>TimeSurcharge</span></div><table><tr><td>name, start_time, end_time, percentage, is_active</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BlackoutDate</span></div><table><tr><td>name, description, date, percentage, is_active</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>PricingSettings</span></div><table><tr><td>tax_rate, currency, cancellation_window_hours, quote_ttl_minutes</td></tr></table></div>
-    <div class="modelcard"><div class="mh"><span>Booking</span></div><table><tr><td>reference, customer <span class="fk">→ User</span>, vehicle <span class="fk">→ Vehicle</span>, driver <span class="fk">→ Driver</span>, trip_type, status, pickup/dropoff (+lat/lng), pickup_at, distance_miles, hours, passenger/luggage counts, flight_number, meet_and_greet, guest_email/phone, subtotal, surcharge_total, tax, total, vehicle_name_snapshot, cancellation_*</td></tr></table></div>
+    <div class="modelcard"><div class="mh"><span>Booking</span></div><table><tr><td>reference, customer <span class="fk">→ User</span>, vehicle <span class="fk">→ Vehicle</span>, driver <span class="fk">→ Driver</span>, trip_type, status, pickup/dropoff (+lat/lng), pickup_at, distance_miles, hours, passenger/luggage counts, flight_number, meet_and_greet, guest_email/name/phone, subtotal, surcharge_total, tax, total, vehicle_name_snapshot, cancellation_*</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BookingPriceLine</span></div><table><tr><td>booking <span class="fk">→ Booking</span>, kind, label, amount, ordering</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>BookingStatusChange</span></div><table><tr><td>booking <span class="fk">→ Booking</span>, from_status, to_status, changed_by <span class="fk">→ User</span>, changed_at, note</td></tr></table></div>
     <div class="modelcard"><div class="mh"><span>Driver</span></div><table><tr><td>full_name, phone, email, is_active, notes</td></tr></table></div>
@@ -756,9 +769,9 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Request · RegisterRequest</div><div class="fieldgrid"><span class="r">email<span class="ty"> email</span></span><span class="r">password<span class="ty"> str</span></span><span>first_name<span class="ty"> str</span></span><span>last_name<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span></div>
       <div class="lab">Response 201 · User</div><div class="codes"><span class="code ok">201</span><span class="code">202</span><span class="code">400</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m get">GET</span><span class="sig">/api/auth/me/</span><span class="au session">session</span></div>
-    <div class="ep-b"><p class="sm">The current signed-in user.</p>
+    <div class="ep-b"><p class="sm">The current signed-in user. Anonymous → <b>204</b> (no body, no console noise); PATCH still requires a session (403 anonymous).</p>
       <div class="lab">Response 200 · User</div><div class="fieldgrid"><span class="r">email<span class="ty"> email</span></span><span class="r">first_name<span class="ty"> str</span></span><span class="r">last_name<span class="ty"> str</span></span><span>phone<span class="ty"> str</span></span></div>
-      <div class="codes"><span class="code ok">200</span><span class="code">403</span></div></div></div>
+      <div class="codes"><span class="code ok">200</span><span class="code ok">204</span><span class="code">403</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/auth/logout/</span><span class="au session">session</span></div>
     <div class="ep-b"><p class="sm">Sign out; clears the cookie.</p><div class="lab">Response 204</div><div class="codes"><span class="code ok">204</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/auth/password-reset/</span><span class="au">public</span></div>
@@ -777,7 +790,7 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <div class="lab">Response 200 · PaymentIntentResponse</div><div class="fieldgrid"><span class="r">client_secret<span class="ty"> str</span></span><span class="r">publishable_key<span class="ty"> str</span></span><span class="r">amount<span class="ty"> str</span></span><span class="r">currency<span class="ty"> str</span></span><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="codes"><span class="code ok">200</span><span class="code">400</span><span class="code">404</span><span class="code">409</span><span class="code">502</span><span class="code">503</span></div></div></div>
   <div class="ep"><div class="ep-h"><span class="m post">POST</span><span class="sig">/api/bookings/{reference}/pay-cash/</span><span class="au">public</span></div>
-    <div class="ep-b"><p class="sm">Confirm a booking as <b>cash / pay-on-arrival</b> — no card. Records a cash payment for the booking's own amount and moves it pending → confirmed. Reference-scoped like the intent endpoint; idempotent.</p>
+    <div class="ep-b"><p class="sm">Confirm a booking as <b>cash / pay-on-arrival</b> — no card. Records an <b>awaiting-collection</b> cash payment (becomes <code>succeeded</code> only via the back-office "Mark cash collected" action, so paid-to-date reflects money actually received) and moves the booking pending → confirmed. Reference-scoped like the intent endpoint; idempotent — a retry records nothing new.</p>
       <div class="lab">Path</div><div class="fieldgrid"><span class="r">reference<span class="ty"> str</span></span></div>
       <div class="lab">Response 200 · BookingStatus</div>
       <div class="codes"><span class="code ok">200</span><span class="code">404</span><span class="code">409</span></div></div></div>
@@ -960,6 +973,114 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
       <b>Kept for back-compat:</b> the <code>bookings.flight_number</code> DB column (historical data, no destructive
       migration), the legacy importer, and <code>BookingCreateSerializer</code> still silently accepts the field from
       old clients; the read API still returns it.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Prod infra: backend out of Docker onto host pm2; merge gate retired (owner decision)</span><span class="tbl">ops · deploy · backend</span></div>
+    <table>
+      <tr><td><b>Why.</b> Backend changes had to go through a Docker image rebuild + the two-verifier merge gate to
+      reach prod — minutes-to-hours for a one-line fix, while the frontend lane shipped in under a minute. The owner
+      approved removing the gate and the backend container: both app processes now deploy through host fast lanes;
+      <b>periodic E2E verification rounds replace the gate as the quality net</b>.</td></tr>
+      <tr><td><b>What.</b> Django now runs on the host: venv at <code>backend/.venv</code> (python3.12, matching the
+      old image), gunicorn <code>config.wsgi</code> with the same worker/timeout config, bound
+      <code>127.0.0.1:8001</code> under pm2 app <code>limo-backend</code> (user <code>limoweb</code>, resurrected at
+      boot by pm2-limoweb systemd). Env via the git-ignored <code>backend/.env</code>; static collected to
+      <code>backend/staticfiles</code> (WhiteNoise), media rsynced from the old <code>media_data</code> volume to
+      <code>backend/media</code>. <b>MariaDB stays in Docker</b> (<code>limo-prod-db</code>), now published to the
+      host loopback as <code>127.0.0.1:3307</code> via the new <code>docker-compose.db-hostport.yml</code> override
+      (named volume untouched). Nginx needed no changes — it already proxied all backend paths to
+      <code>127.0.0.1:8001</code>.</td></tr>
+      <tr><td><b>Deploy lane.</b> New <code>scripts/deploy-backend.sh</code>: pull → pip (only when
+      <code>backend/requirements/</code> changed) → <code>manage.py check</code> → <code>migrate</code> →
+      <code>collectstatic</code> → graceful reload (<code>pm2 sendSignal SIGHUP limo-backend</code>; old workers
+      keep serving while new ones boot) → smoke curl <code>/api/vehicles/</code>, non-200 exits 1 loudly. Any
+      failure before the reload leaves the running app untouched. Reminder crons rewritten from
+      <code>docker compose exec backend …</code> to the venv <code>manage.py</code>
+      (<code>scripts/install-reminder-cron.sh</code> reworked, installs both booking + pickup jobs).</td></tr>
+      <tr><td><b>Rollback.</b> The last containerized backend (<code>limo-prod-backend</code> container + image) is
+      kept stopped on the VPS: <code>pm2 stop limo-backend && docker start limo-prod-backend</code> restores the old
+      world on the same port. <code>docker-compose.prod.yml</code>'s backend service is kept as that rollback
+      artifact and documented as such. Protocol docs (CLAUDE.md) updated: merge-gate section replaced by the
+      fast-lane workflow.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · Add-vehicle form completeness: unquotable-vehicle guard, slug autogeneration, help texts</span><span class="tbl">dashboard</span></div>
+    <table>
+      <tr><td><b>Unquotable-vehicle guard (the Escalade id8 class of bug).</b> A vehicle could be saved
+      <i>active</i> with no rate card and no hourly rate: it showed on the storefront fleet page but
+      <code>pricing.engine.quote_all()</code> silently omitted it from every quote, so it could never be booked and
+      nobody was told. The managed registry (<code>dashboard.crud.Managed</code>) now carries an optional
+      <code>cross_clean(form, formsets)</code> hook — validation that needs the record form and its inline formsets
+      together, which neither can see alone. <code>managed_edit</code> calls it once both are individually valid; it
+      may add form errors (blocking the save) and returns warning strings surfaced via
+      <code>messages.warning</code> after a save that proceeds. The vehicles entry wires
+      <code>dashboard.forms.vehicle_cross_clean</code>: an <b>active</b> vehicle with zero distance bands AND no
+      hourly rate is <b>blocked</b> (“…will not appear in quotes and can never be booked. Add a rate card below, or
+      untick Active to save it as a draft.”). Non-fatal but surprising states save with a warning: active with hourly
+      rate only (hourly quotes only, never transfer/city-to-city), inactive draft with no card, a city-to-city card
+      with no minimum distance (dormant card), a minimum distance with no city-to-city card (falls back to the normal
+      card), and an active vehicle with no photo (storefront shows the generic placeholder).</td></tr>
+      <tr><td><b>Slug autogeneration.</b> <code>VehicleForm.slug</code> is optional on the form: left blank it is
+      slugified from the name with a numeric suffix on collision. The field keeps its warning that changing it later
+      breaks existing storefront links (<code>/fleet/&lt;slug&gt;/</code>).</td></tr>
+      <tr><td><b>Field audit + help texts.</b> Audited model vs form vs <code>/api/vehicles/</code> serializer: every
+      storefront-consumed field (name, slug, description, features, photo, capacities, minimum fare) was already
+      editable, and <code>legacy_car_id</code> is deliberately import-only — the real gap was the missing quotability
+      validation above. Added help texts: photo placeholder behaviour, capacities (0 = no limit), hourly rate
+      (0 = not offered hourly), display order, and what Active does and does not guarantee.</td></tr>
+      <tr><td><b>Tests.</b> <code>dashboard/tests/test_dashboard.py::TestVehicleCompleteness</code> — block,
+      each warning, slug generation and collision handling (9 tests).</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
+    <div class="mh"><span>2026-11-25 · E2E round-1 defect batch: cash refunds without Stripe, cash awaiting-collection, guest name vs placard, quiet /auth/me, min-fare label, overview count</span><span class="tbl">payments · bookings · api · dashboard · frontend</span></div>
+    <table>
+      <tr><td><b>BUG-1 — cash refunds no longer require Stripe.</b> <code>payments.gateway.refund()</code> now routes
+      by payment method: a <code>Provider.CASH</code> payment records a <b>manual refund</b> (a <code>Refund</code> row
+      with no <code>stripe_refund_id</code>, money handed back to the customer) without touching — or needing —
+      Stripe configuration; card payments refund at Stripe exactly as before. All existing validation (succeeded-only,
+      remaining-amount ceiling) applies to both. Covers the cancellation-approval path AND the stand-alone refund
+      screen, since both call <code>gateway.refund</code>. <code>BookingCancellationRequest.approve()</code> writes a
+      method-aware history line: cash → <i>“Cancellation approved by staff; cash refund $X to be returned to
+      customer”</i>; the client cancellation email still shows the refund amount for both methods.</td></tr>
+      <tr><td><b>BUG-5 — cash is awaiting-collection until staff say otherwise.</b>
+      <code>POST /api/bookings/&lt;ref&gt;/pay-cash/</code> now records the cash payment as
+      <code>Status.PROCESSING</code> (awaiting collection), matching the staff manual-booking path; it only becomes
+      <code>succeeded</code> via the existing “Mark cash collected” action. Paid-to-date (the refund ceiling snapshot
+      on a cancellation request) therefore reflects money actually in hand: $0 while awaiting, the full fare once
+      collected. The endpoint is also idempotent now — a retried confirm returns 200 without recording a second
+      payment. Back-office payments table already badges <i>Cash — awaiting collection</i>.</td></tr>
+      <tr><td><b>BUG-3 — customer name is the booker, never the placard.</b> New <code>Booking.guest_name</code>
+      column (migration <code>bookings.0010</code>), persisted from the storefront’s contact name on guest checkout.
+      <code>Booking.customer_name</code> now resolves account name → <code>guest_name</code> → <i>“Guest”</i> and
+      never falls back to <code>pickup_sign</code>; driver screens keep preferring the placard explicitly.</td></tr>
+      <tr><td><b>BUG-4 — anonymous <code>GET /api/auth/me/</code> is a quiet 204.</b> Previously 403, which the
+      browser logged as a failed request on every storefront page an anonymous visitor opened. Anonymous GET → 204
+      (no body); anonymous PATCH still 403. The frontend treats the empty response as signed-out.</td></tr>
+      <tr><td><b>BUG-2 — minimum-fare line reads as what it is.</b> The engine’s floor line amount is the TOP-UP, not
+      the floor (<code>$3.90</code>, not <code>$150.00</code>), so the lines always sum to the total — but the old
+      label (<i>“Minimum fare $150.00”</i>) made the row look irreconcilable. Relabelled to
+      <i>“Minimum fare adjustment (to $150.00)”</i> in <code>pricing.engine.quote()</code>, so the back-office fare
+      table reconciles at a glance after an amendment reprice.</td></tr>
+      <tr><td><b>POLISH — account Overview counts.</b> “Completed / past” on the storefront account Overview now
+      excludes cancelled bookings (they still count in “Total bookings” and list under My bookings).</td></tr>
+      <tr><td><b>Review hardening (same batch).</b> (a) Migration <code>bookings.0011</code> backfills
+      <code>guest_name</code> from <code>pickup_sign</code> for pre-existing guest bookings so history doesn’t
+      regress to “Guest”; the staff manual-booking path also stores its “Customer name” field into
+      <code>guest_name</code> for account-less bookings. (b) <code>gateway.refund</code> treats <b>any non-Stripe</b>
+      provider (cash AND legacy imports) as a manual refund — Stripe can only return money Stripe took.
+      (c) <code>create_intent</code> now 409s when an awaiting-collection cash payment exists, closing the
+      pay-twice window (card online + cash at pickup). (d) <code>pay-cash</code> runs under
+      <code>select_for_update</code> (double-click race cannot record the fare twice) and still confirms a PENDING
+      booking whose cash payment was pre-recorded by staff. (e) Cancellation approval passes the refunded payment
+      into <code>approve()</code> so the history note can’t disagree with the money’s actual path. (f) Driver
+      job-sheet email’s “Passenger” row prefers the placard; confirmation email/PDF say “Total fare” (cash is no
+      longer “paid” at booking time). <code>docs/openapi.yaml</code> regenerated.</td></tr>
     </table>
   </div>
 

@@ -29,42 +29,37 @@ rebuilds it (`graphify update .` + restart `docker-compose.graphify.yml`) before
 
 ## Branches & worktrees (Orca-managed)
 - Each task runs in its **own git worktree + branch** (`agent/<domain>/<short-task>`), created
-  from `origin/main`. Never commit directly to `main`.
+  from `origin/main`.
 - Rebase `main` into your branch before you start a task and before you hand off.
 - **Merge foundations sooner.** Prefer merging a verified foundation/independent branch to `main`
-  promptly (via the gate) rather than stacking many branches off each other. Deep branch stacks
-  make integration slow and conflict-prone — keep `main` the common base.
+  promptly rather than stacking many branches off each other. Deep branch stacks make integration
+  slow and conflict-prone — keep `main` the common base.
 
-## The merge gate (autonomous on green)
-A branch merges to `main` **only** when BOTH verifiers pass:
-1. **code-verifier** — `backend` tests + `frontend` typecheck/build + `/code-review` clean.
-   - **Prod-parity (required):** build the production image (`Dockerfile.prod`), run
-     `manage.py collectstatic --noinput` under `config.settings.prod`
-     (`CompressedManifestStaticFilesStorage`), and boot that prod image to confirm it serves
-     without crash-looping. This catches prod-only failures that dev tests miss (e.g. WhiteNoise
-     `MissingFileError` from an unvendored static asset).
-2. **business-verifier** — the affected flow actually works (runs the app, exercises it).
+## Deploy workflow (owner decision 2026-11-25: NO merge gate)
+The merge gate is **retired**. There are no blocking verifiers between a branch and `main`;
+author diligence (run the tests you touched, `/code-review` your own diff) plus **periodic E2E
+verification rounds** are the quality net — the coordinator schedules full app-exercising passes
+and defects found there become immediate fix tasks.
 
-**No fast-pathing.** A change reaches `main` ONLY after BOTH verifiers pass — never merge on
-partial/implied verification.
+Both app processes run **on the VPS host under pm2** (user `limoweb`); only **MariaDB stays in
+Docker** (`limo-prod-db`, published to the host loopback on `127.0.0.1:3307` via
+`docker-compose.db-hostport.yml` — always pass both `-f` files or the port mapping is lost).
+Deploys are fast lanes, one script each, run as root on the VPS:
+- **Frontend** — `scripts/deploy-frontend.sh`: pull → `npm ci` + `next build` as limoweb →
+  pm2 reload `limo-frontend`. Build-before-restart: a failed build leaves the old app serving.
+- **Backend** — `scripts/deploy-backend.sh`: pull → pip (only if requirements changed) →
+  `manage.py check` → `migrate` → `collectstatic` → graceful gunicorn reload
+  (`pm2 sendSignal SIGHUP limo-backend`) → smoke curl `/api/vehicles/` (non-200 exits 1).
+  Any failure **before** the reload leaves the running app untouched.
 
-### Tiered gate (scale to risk)
-The gate **scales to the risk of the change** — don't re-run the full isolated suite on trivial
-edits. Classify each change, then run the matching gate:
-- **LOW-RISK** (CSS / templates / copy / docs / frontend-only, no migrations): **light gate** —
-  `npm run build` (frontend) or an import/lint check (backend), plus `/code-review`. Skip the full
-  isolated backend rebuild and prod-parity.
-- **HIGH-RISK** (models, migrations, pricing, auth, payments, settings/middleware, deps): **FULL
-  gate** — full backend `pytest` + frontend build + `/code-review` + **prod-parity** (prod image +
-  `collectstatic` + boot). Both verifiers required.
+Rollback: the last containerized backend (`limo-prod-backend` container + image) is kept stopped
+on the VPS — `docker start limo-prod-backend` restores it on :8001 (stop the pm2 `limo-backend`
+app first; both bind 127.0.0.1:8001).
 
-Use the **fast cached test runner** (`ops/fast-test.sh`) for backend tests, not a from-scratch
-rebuild.
-
-On both-green, **repo-manager** merges, then **rebuilds the graph** (`graphify --update` +
-`docker compose -f docker-compose.graphify.yml restart`) and **re-runs the suite on `main`**;
-if `main` goes red it **auto-reverts** the merge and reopens the task. No human step unless a
-verifier escalates.
+Backend tests still exist (`docker compose exec backend pytest` in the dev stack, or
+`ops/fast-test.sh`) — run them when you touch backend logic; they are no longer a merge
+precondition. After a merge, **repo-manager rebuilds the graph** (`graphify --update` +
+`docker compose -f docker-compose.graphify.yml restart`).
 
 ## Shared memory
 - **`BLACKBOARD.md`** — live, in-flight coordination (who's doing what, findings, blockers).

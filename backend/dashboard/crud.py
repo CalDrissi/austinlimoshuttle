@@ -92,6 +92,11 @@ class Managed:
     can_delete: bool = True
     #: Inline formsets edited alongside the record, e.g. a vehicle's rate cards.
     inlines: list[Inline] = field(default_factory=list)
+    #: Validation that needs the form AND its inlines together (a form alone
+    #: cannot see them). Called once both are individually valid, with
+    #: (form, formsets); may add form errors to block the save, and returns
+    #: warning strings to show after a save that goes ahead.
+    cross_clean: Callable[[ModelForm, list[BaseInlineFormSet]], list[str]] | None = None
     #: Related names to select_related, to keep list screens off N+1.
     select_related: list[str] = field(default_factory=list)
     prefetch_related: list[str] = field(default_factory=list)

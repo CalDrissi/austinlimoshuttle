@@ -11,7 +11,8 @@
 {% include "notifications/email/_itinerary.html" %}
 
 <table style="width:100%;border-collapse:collapse;font-size:14.5px;margin:0 0 20px">
-  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Passenger</td><td style="padding:6px 0"><strong>{{ booking.customer_name }}</strong></td></tr>
+  {# The placard is who the driver meets; the booker's name is the fallback. #}
+  <tr><td style="padding:6px 0;color:#5b636d;width:130px">Passenger</td><td style="padding:6px 0"><strong>{{ booking.pickup_sign|default:booking.customer_name }}</strong></td></tr>
   {% if booking.contact_phone %}<tr><td style="padding:6px 0;color:#5b636d">Phone</td><td style="padding:6px 0">{{ booking.contact_phone }}</td></tr>{% endif %}
 </table>
 

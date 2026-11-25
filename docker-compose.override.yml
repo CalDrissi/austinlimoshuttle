@@ -1,0 +1,11 @@
+# TEMP (local, not committed): run limo preview on alt ports to coexist with kodus.
+services:
+  backend:
+    ports: !override ["8100:8000"]
+    environment:
+      DJANGO_CSRF_TRUSTED_ORIGINS: "http://localhost:3210,http://127.0.0.1:3210"
+      DJANGO_CORS_ALLOWED_ORIGINS: "http://localhost:3210,http://127.0.0.1:3210"
+  frontend:
+    ports: !override ["3210:3000"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8100/api
