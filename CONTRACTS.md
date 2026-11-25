@@ -18,8 +18,8 @@ another lane's inputs/outputs, **before** merging. Newest at top. Format:
 - Change (two interfaces):
   - New `POST /api/bookings/<reference>/void/` — cancels a booking that is still `pending` **and**
     has no `succeeded`/`processing` payment (status change note "Voided — the customer changed
-    their trip before paying"). Reference-capability scoped exactly like `status`/`pay-cash`
-    (guest checkout has no session; a signed-in customer can only void their own → 404 otherwise).
+    their trip before paying"). The creating browser session holds the authorization; a
+    reference alone cannot void a booking (404). Session loss prevents later voiding.
     Idempotent on already-cancelled (200); confirmed/paid → **409** (that's the
     cancellation-request flow, not a void). The storefront calls it when the customer changes
     trip/identity after a booking was created but before paying; the draft's

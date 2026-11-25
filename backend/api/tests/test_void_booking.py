@@ -43,12 +43,27 @@ def booking(db, vehicle):
     )
 
 
+def authorize(client, booking):
+    session = client.session
+    session["voidable_booking_refs"] = [booking.reference]
+    session.save()
+    client.cookies["mm_store_sessionid"] = session.session_key
+
+
 def void(client, booking):
     return client.post(reverse("api:void_pending", args=[booking.reference]))
 
 
 @pytest.mark.django_db
 class TestVoidPending:
+    @pytest.fixture(autouse=True)
+    def authorize_creator(self, client, booking):
+        authorize(client, booking)
+
+    def test_reference_alone_cannot_void(self, client, booking):
+        client.cookies.clear()
+        assert void(client, booking).status_code == 404
+
     def test_voids_unpaid_pending(self, client, booking):
         response = void(client, booking)
         assert response.status_code == 200

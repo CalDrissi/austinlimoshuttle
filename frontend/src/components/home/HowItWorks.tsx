@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import HomepagePicture from "./HomepagePicture";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
-import type { Swiper as SwiperClass } from "swiper";
 
 // Ported from index.html "How It Works" — the template synced a slick image
 // gallery with a vertical step nav. Reimplemented with Swiper so the steps and
@@ -30,7 +29,6 @@ const STEPS = [
 
 export default function HowItWorks() {
   const [active, setActive] = useState(0);
-  const swiperRef = useRef<SwiperClass | null>(null);
 
   return (
     <section className="section pt-120 pb-20 bg-primary bg-how-it-works">
@@ -44,7 +42,6 @@ export default function HowItWorks() {
                   modules={[Autoplay]}
                   loop
                   autoplay={{ delay: 3500, disableOnInteraction: false }}
-                  onSwiper={(s) => { swiperRef.current = s; }}
                   onSlideChange={(s) => setActive(s.realIndex)}
                 >
                   {STEPS.map((s, i) => (
@@ -62,8 +59,6 @@ export default function HowItWorks() {
                 <li
                   key={i}
                   className={active === i ? "active" : ""}
-                  onClick={() => { swiperRef.current?.slideToLoop(i); setActive(i); }}
-                  style={{ cursor: "pointer" }}
                 >
                   <span className="line-white" />
                   <h4 className="text-20-medium mb-20">{s.title}</h4>

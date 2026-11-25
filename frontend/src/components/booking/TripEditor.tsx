@@ -16,6 +16,9 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     if (!draft.pickupAddress.trim() || !draft.date || !draft.time || (draft.tripType !== "hourly" && !draft.dropoffAddress.trim())) {
       setError("Enter pickup, date, time and a drop-off for point-to-point trips."); return;
     }
+    if (draft.tripType !== "hourly" && draft.pickupAddress.trim().toLowerCase() === draft.dropoffAddress.trim().toLowerCase()) {
+      setError("Pickup and drop-off are the same address"); return;
+    }
     setBusy(true); setError("");
     try {
       const next = { ...draft,
@@ -37,7 +40,7 @@ export default function TripEditor({ search, onClose }: { search: Search; onClos
     </div>
     <AddressField label="Pickup" value={draft.pickupAddress} onChange={(pickupAddress) => update({ pickupAddress })} placeholder="Pickup address" />
     {draft.tripType !== "hourly" ? <AddressField label="Drop-off" value={draft.dropoffAddress} onChange={(dropoffAddress) => update({ dropoffAddress })} placeholder="Drop-off address" /> :
-      <label>Hours<select className="form-control" value={draft.hours ?? 3} onChange={(e) => update({ hours: Number(e.target.value) })}>{Array.from({length:10}, (_, i) => <option key={i} value={i+3}>{i+3}</option>)}</select></label>}
+      <label>Hours<select className="form-control" value={draft.hours ?? 3} onChange={(e) => update({ hours: Number(e.target.value) })}>{Array.from({length:22}, (_, i) => <option key={i} value={i+3}>{i+3}</option>)}</select></label>}
     <label>Date<input className="form-control" type="date" value={draft.date} required onChange={(e) => update({ date: e.target.value })} /></label>
     <label>Time<input className="form-control" type="time" value={normalTime(draft.time)} required onChange={(e) => update({ time: e.target.value })} /></label>
     {draft.tripType !== "hourly" && <label><input type="checkbox" checked={draft.meetGreet} onChange={(e) => update({ meetGreet: e.target.checked })} /> Meet &amp; Greet</label>}

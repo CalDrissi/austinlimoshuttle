@@ -266,9 +266,8 @@ def pay_cash(request, reference):
         "customer changes their trip or contact identity after a booking was "
         "created but before paying — the replaced draft would otherwise sit in "
         "the back office as pending work forever.\n\n"
-        "Scoped like the other reference endpoints: the reference is the "
-        "capability (guest checkout has no session); a signed-in customer may "
-        "only void their own. Idempotent: an already-cancelled booking "
+        "Only the browser session that created the booking can void it. "
+        "Idempotent: an already-cancelled booking "
         "returns 200. A confirmed or paid booking returns **409** — that is a "
         "cancellation request, not a void."
     ),
@@ -289,8 +288,9 @@ def void_pending(request, reference):
     if booking is None:
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    if booking.customer_id and request.user.is_authenticated \
-            and booking.customer_id != request.user.id:
+    if (reference not in request.session.get("voidable_booking_refs", [])
+            or (booking.customer_id and request.user.is_authenticated
+                and booking.customer_id != request.user.id)):
         return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if booking.status == Booking.Status.CANCELLED:

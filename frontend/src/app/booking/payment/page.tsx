@@ -197,7 +197,7 @@ function PaymentForm({ cardEnabled }: { cardEnabled: boolean }) {
       void qc.invalidateQueries({ queryKey: ["my-bookings"] });
       router.push("/booking/confirmation");
     } catch (e) {
-      if (e instanceof ApiRequestError && e.status === 409 && createdRef) {
+      if (e instanceof ApiRequestError && e.status === 409 && createdRef && /already paid/i.test(e.message)) {
         // Already settled (double submit, second tab, back-button replay):
         // the right destination is this booking's confirmation, not an error.
         setUnpaid(null);

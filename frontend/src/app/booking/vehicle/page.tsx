@@ -13,11 +13,7 @@ import ItineraryMap from "@/components/booking/ItineraryMap";
 import AuthModal from "@/components/booking/AuthModal";
 import type { QuoteResult, Vehicle } from "@/types/api";
 
-/** Blacklane prints "US$ 167.94"; mirror that for USD. */
-function money(amount: string, currency: string) {
-  const prefix = currency === "USD" ? "US$ " : `${currency} `;
-  return `${prefix}${Number(amount).toFixed(2)}`;
-}
+import { money } from "@/lib/format";
 
 function PaxIcon() {
   return (
@@ -413,9 +409,11 @@ export default function BookingVehiclePage() {
       {/* Phones: the rail collapses into a sticky bottom bar with the CTA. */}
       {selectedQuote && (
         <div className="blv-sticky">
+          {!user && <button type="button" onClick={() => setAuthModal("login")} className="btn btn-link">Sign in</button>}
+          <div style={{display:"flex", alignItems:"center", gap:12}}><strong style={{whiteSpace:"nowrap"}}>{money(selectedQuote.total, selectedQuote.currency)}</strong>
           <button className="blv-cta" type="button" onClick={handleContinue}>
             Select {selectedQuote.vehicle_name}
-          </button>
+          </button></div>
         </div>
       )}
 

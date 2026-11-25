@@ -469,6 +469,9 @@ def create_booking(request):
             note="Created via website",
         )
 
+    # The creating browser session is the authority to void this unpaid draft.
+    refs = request.session.get("voidable_booking_refs", [])
+    request.session["voidable_booking_refs"] = (refs + [booking.reference])[-50:]
     return Response(BookingSerializer(booking).data, status=status.HTTP_201_CREATED)
 
 

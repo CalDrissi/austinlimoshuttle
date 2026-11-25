@@ -439,6 +439,10 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
         );
         return;
       }
+      if (from.trim().toLowerCase() === to.trim().toLowerCase()) {
+        setError("Pickup and drop-off are the same address");
+        return;
+      }
       setSearch({
         tripType,
         pickupAddress: from.trim(), dropoffAddress: to.trim(),

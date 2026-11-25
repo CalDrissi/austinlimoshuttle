@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCapacity } from "@/lib/booking/useCapacity";
 import { useBookingStore, useHydrated } from "@/lib/booking/store";
 
 const STEPS = [
@@ -16,6 +17,8 @@ export default function BookingSteps() {
   const hydrated = useHydrated();
   const quote = useBookingStore((s) => s.quote);
   const contact = useBookingStore((s) => s.contact);
+  const trip = useBookingStore((s) => s.trip);
+  const capacity = useCapacity();
   const currentIdx = STEPS.findIndex((s) => s.href === pathname);
 
   // The vehicle step matches Blacklane's anatomy exactly: trip pills in the
@@ -29,7 +32,8 @@ export default function BookingSteps() {
   // How far forward the stepper may jump: each step is reachable only once the
   // steps before it hold what they collect. Back-navigation is always allowed.
   const phoneOk = (contact.phone ?? "").replace(/\D/g, "").length >= 7;
-  const maxReachable = !hydrated || !quote ? 0 : phoneOk ? 3 : 2;
+  const contactOk = phoneOk && !!contact.name?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email ?? "") && (!trip.forSomeoneElse || (!!trip.passengerName?.trim() && (trip.passengerPhone ?? "").replace(/\D/g, "").length >= 7));
+  const maxReachable = !hydrated || !quote ? 0 : capacity.blocked ? 1 : contactOk ? 3 : 2;
 
   return (
     <section className="section pt-20">
