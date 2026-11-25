@@ -429,16 +429,20 @@ export default function BookingSearchWidget({ preselectedVehicleId = null }: { p
   const handleSearch = async () => {
     if (busy) return;
     setPane(null);
-    if (!from.trim() || !date || !time) {
-      // Name the drop-off too when this trip type needs one, so the user isn't
-      // sent around a second validation loop after filling the first three.
-      const dropoffMissing =
-        (tripType === "transfer" || tripType === "city") && !to.trim();
-      setError(
-        dropoffMissing
-          ? "Please fill in date, time, pickup and drop-off."
-          : "Please fill in date, time and pickup.",
-      );
+    const needsDropoff = tripType === "transfer" || tripType === "city";
+    if (!from.trim() || !date || !time || (needsDropoff && !to.trim())) {
+      // List only the fields the user still has to fill, so the message always
+      // matches the current state instead of naming fields already entered.
+      const missing: string[] = [];
+      if (!from.trim()) missing.push("pickup");
+      if (needsDropoff && !to.trim()) missing.push("drop-off");
+      if (!date) missing.push("date");
+      if (!time) missing.push("time");
+      const list =
+        missing.length === 1
+          ? missing[0]
+          : missing.slice(0, -1).join(", ") + " and " + missing[missing.length - 1];
+      setError(`Please fill in ${list}.`);
       return;
     }
     // A one-way transfer and a city-to-city trip both need a drop-off address;
