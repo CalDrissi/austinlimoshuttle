@@ -750,18 +750,31 @@ img {
 }
 .mm-flow label { font-weight: 500; }
 
-/* primary buttons -> ink, rounded */
+/* primary buttons -> Blacklane blue pill */
 .mm-flow .btn.btn-primary {
-  background: #0f1319; border-color: #0f1319; color: #fff;
-  border-radius: 999px; padding: 12px 28px; font-weight: 600; font-size: 15px;
+  background: #0f63bd; border-color: #0f63bd; color: #fff;
+  border-radius: 999px; padding: 12px 28px; font-weight: 500; font-size: 16px;
 }
-.mm-flow .btn.btn-primary:hover:not(:disabled) { background: #000; border-color: #000; }
+.mm-flow .btn.btn-primary:hover:not(:disabled) { background: #0d4a8c; border-color: #0d4a8c; }
 .mm-flow .btn.btn-primary:disabled { opacity: .6; }
+
+/* serif section titles (Blacklane's PP Fragment ≈ our Fraunces/Georgia) */
+.mm-flow .heading-24-medium,
+.mm-flow .sidebar .text-20-medium {
+  font-family: Fraunces, Georgia, "Times New Roman", serif;
+  font-weight: 400; letter-spacing: 0.25px;
+}
+
+/* white content card around each step's form */
+.mm-flow .box-content-detail {
+  background: #fff; border-radius: 16px; padding: 28px;
+  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
+}
 
 /* summary sidebar card */
 .mm-flow .sidebar {
-  border: 1px solid #e3e7eb; border-radius: 16px; padding: 22px;
-  background: #fff; box-shadow: 0 10px 30px rgba(15, 19, 25, 0.05);
+  border: 0; border-radius: 16px; padding: 24px;
+  background: #fff; box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
 }
 
 
@@ -775,7 +788,7 @@ img {
   display: inline-flex; align-items: center; justify-content: center; transition: .12s; flex: 0 0 auto;
   background: #fff;
 }
-.mm-check input:checked + .mm-check-box { background: #0f1319; border-color: #0f1319; }
+.mm-check input:checked + .mm-check-box { background: #0f63bd; border-color: #0f63bd; }
 .mm-check input:checked + .mm-check-box::after {
   content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
   transform: rotate(45deg); margin-top: -2px;
@@ -786,7 +799,8 @@ img {
 /* Confirmation page: template tiles/cards in the flow's language. */
 .mm-flow .box-info-book-border,
 .mm-flow .box-booking-border {
-  border: 1px solid #e3e7eb; border-radius: 14px; background: #fff;
+  border: 0; border-radius: 16px; background: #fff;
+  box-shadow: 0 2px 8px rgba(6, 10, 13, 0.12);
 }
 .mm-flow .box-booking-border h6 { margin-bottom: 10px; }
 .mm-flow .btn.btn-border { border-radius: 999px; border-color: #c9ced3; color: #0f1319; }
