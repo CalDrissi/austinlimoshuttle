@@ -135,6 +135,17 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       {amendment && (
         <div className="mm-feedback" role="status" style={{ marginTop: 14 }}>
           {requestPending ? "Change requested — pending staff approval" : amendment.status === "approved" ? "Change request approved" : "Change request declined"}
+          {requestPending && (amendment.changes?.length ?? 0) > 0 && (
+            <p style={{ margin: "6px 0 0" }}>
+              Requested: {amendment.changes.map((c) => `${c.label}: ${c.new}`).join(" · ")}
+            </p>
+          )}
+          {requestPending && amendment.new_total && (
+            <p style={{ margin: "6px 0 0" }}>
+              New total if approved: <strong>{money(amendment.new_total, amendment.currency)}</strong>
+              {Number(amendment.price_delta) === 0 && " (unchanged)"}
+            </p>
+          )}
           {amendment.status === "declined" && amendment.decline_reason && <p style={{ marginBottom: 0 }}>{amendment.decline_reason}</p>}
         </div>
       )}

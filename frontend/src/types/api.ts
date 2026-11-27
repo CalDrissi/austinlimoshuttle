@@ -135,10 +135,25 @@ export interface BookingPriceLine {
   amount: string;
 }
 
+/** One OLD -> NEW row of a change request, resolved to display values. */
+export interface BookingAmendmentChange {
+  field: string;
+  label: string;
+  old: string | number;
+  new: string | number;
+}
+
 export interface BookingAmendment {
   id: number;
   status: "pending" | "approved" | "declined";
   decline_reason?: string;
+  /** The resolved diff of what was requested. */
+  changes: BookingAmendmentChange[];
+  old_total: string;
+  new_total: string;
+  /** Signed; positive = more expensive. */
+  price_delta: string;
+  currency: string;
 }
 
 export interface BookingCancellationRequest {
