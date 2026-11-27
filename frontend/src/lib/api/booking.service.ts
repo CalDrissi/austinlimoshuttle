@@ -45,4 +45,7 @@ export interface BookingAmendRequest {
   phone?: string;
   /** Austin wall-clock "YYYY-MM-DDTHH:mm"; a change re-prices the booking. */
   pickup_at?: string;
+  /** Address changes re-measure the journey and re-price on approval. */
+  pickup_address?: string;
+  dropoff_address?: string;
 }

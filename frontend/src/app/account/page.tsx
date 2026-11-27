@@ -11,6 +11,7 @@ import { notify } from "@/lib/feedback";
 import { authService } from "@/lib/api/auth.service";
 import { useAuth, useRefreshAuth } from "@/hooks/useAuth";
 import { money, formatDateTime } from "@/lib/format";
+import { AddressField } from "@/components/booking/BookingSearchWidget";
 import type { Booking } from "@/types/api";
 
 type Tab = "overview" | "bookings" | "profile";
@@ -55,6 +56,8 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
     notes: b.notes || "",
     phone: userPhone || "",
     pickup_at: toAustinLocalInput(b.pickup_at),
+    pickup_address: b.pickup_address,
+    dropoff_address: b.dropoff_address || "",
   });
 
   const cancellation = b.pending_cancellation ?? b.last_cancellation;
@@ -87,6 +90,10 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
         notes: f.notes.trim(),
         phone: f.phone.trim(),
         pickup_at: f.pickup_at,  // Austin wall-clock; server reads it in business tz
+        // The serializer rejects blank addresses, so only send what's filled in
+        // (an hourly hire has no drop-off to change).
+        ...(f.pickup_address.trim() ? { pickup_address: f.pickup_address.trim() } : {}),
+        ...(b.dropoff_address && f.dropoff_address.trim() ? { dropoff_address: f.dropoff_address.trim() } : {}),
       });
       setEditing(false);
     } catch (e) {
@@ -132,6 +139,17 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       {editing && !requestPending && (
         <div className="row" style={{ marginTop: 14 }}>
           <div className="col-12 mb-15"><p>Submit your proposed changes for staff approval. Your booking stays unchanged until approved.</p></div>
+          <div className="col-12 mb-15">
+            <label className="text-14 color-grey">Pickup address</label>
+            <AddressField label="" value={f.pickup_address} onChange={(pickup_address) => setF({ ...f, pickup_address })} placeholder="Pickup address" />
+            <span className="text-13 color-grey">Changing an address re-measures the journey and may change the fare.</span>
+          </div>
+          {!!b.dropoff_address && (
+            <div className="col-12 mb-15">
+              <label className="text-14 color-grey">Drop-off address</label>
+              <AddressField label="" value={f.dropoff_address} onChange={(dropoff_address) => setF({ ...f, dropoff_address })} placeholder="Drop-off address" />
+            </div>
+          )}
           <div className="col-12 mb-15"><label className="text-14 color-grey">Pickup date &amp; time</label><input type="datetime-local" className="form-control" value={f.pickup_at} onChange={(e) => setF({ ...f, pickup_at: e.target.value })} /><span className="text-13 color-grey">Changing the time may change the fare (night/event rates).</span></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Passengers</label><input type="number" min={1} className="form-control" value={f.passenger_count} onChange={(e) => setF({ ...f, passenger_count: Math.max(1, Number(e.target.value)) })} /></div>
           <div className="col-6 mb-15"><label className="text-14 color-grey">Luggage</label><input type="number" min={0} className="form-control" value={f.luggage_count} onChange={(e) => setF({ ...f, luggage_count: Math.max(0, Number(e.target.value)) })} /></div>
@@ -152,7 +170,8 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
           <button className="btn btn-border btn-sm hover-up" onClick={() => {
             setF({ passenger_count: b.passenger_count, luggage_count: b.luggage_count,
               pickup_sign: b.pickup_sign || "",
-              notes: b.notes || "", phone: userPhone || "", pickup_at: toAustinLocalInput(b.pickup_at) });
+              notes: b.notes || "", phone: userPhone || "", pickup_at: toAustinLocalInput(b.pickup_at),
+              pickup_address: b.pickup_address, dropoff_address: b.dropoff_address || "" });
             setErr(""); setEditing(true);
           }}>Request changes</button>
         )}
