@@ -11,13 +11,12 @@ const HERO_DIR = "/assets/imgs/page/homepage1/hero";
 const WIDTHS = [640, 768, 1024, 1366, 1672] as const;
 const SIZES = "100vw";
 
-// Bright daytime hero carousel: black S-Class in a light studio, chauffeur
-// beside a black SUV in sunlight, white-leather interior. Images are airy and
-// light, so the left scrim + text shadow carry headline legibility.
+// Bright daytime hero carousel, people-first chauffeur-service scenes. Images
+// are airy and light, so the left scrim + text shadow carry headline legibility.
 const SLIDES = [
-  { name: "hero1", alt: "Black Mercedes-Benz S-Class sedan in a bright studio" },
-  { name: "hero2", alt: "Chauffeur standing beside a black luxury SUV in daylight" },
-  { name: "hero3", alt: "Bright white leather interior of a luxury vehicle" },
+  { name: "hero1", alt: "Chauffeur opening the rear door of a black sedan for a smiling passenger" },
+  { name: "hero2", alt: "Well-dressed man stepping into a black Mercedes sedan on a sunny street" },
+  { name: "hero3", alt: "Chauffeur assisting an executive out of a black sedan at a hotel entrance" },
 ];
 
 const srcSet = (name: string, ext: string) =>
