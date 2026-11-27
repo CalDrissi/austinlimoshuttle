@@ -966,16 +966,10 @@ def amend_request(request, reference):
 
 @extend_schema(
     tags=["bookings"],
-    summary="Request to cancel one of your bookings (staff must approve)",
-    description=(
-        "Owner-only. Unlike the direct `PATCH {action: cancel}`, this does **not** "
-        "cancel the booking: it files a pending cancellation request that staff "
-        "review. Approval cancels the booking and issues a staff-set refund; the "
-        "refund is **not** automatic.\n\n"
-        "Rejected (400) when the pickup is already inside the office-set "
-        "cancellation window, when the booking is cancelled/completed, or when a "
-        "cancellation request is already awaiting review."
-    ),
+    summary="Cancel an eligible booking",
+    description=("Owner-only. Eligible cancellations are approved immediately; "
+                 "a refund is issued when automatic refunds are enabled. "
+                 "Cancellations too close to pickup must go through the office."),
     parameters=[OpenApiParameter("reference", str, OpenApiParameter.PATH)],
     request=None,
     responses={
