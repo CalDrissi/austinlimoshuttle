@@ -863,7 +863,7 @@ class BookingCancellationRequest(models.Model):
         BookingStatusChange.objects.create(
             booking=booking, from_status=from_status,
             to_status=Booking.Status.CANCELLED, changed_by=reviewed_by,
-            note="Cancellation approved by staff" + refund_note,
+            note=("Cancellation approved by staff" if reviewed_by else "Cancellation approved automatically") + refund_note,
         )
 
         self.status = self.Status.APPROVED

@@ -742,7 +742,7 @@ class PricingSettingsForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = PricingSettings
         fields = [
-            "tax_rate", "currency", "cancellation_window_hours",
+            "tax_rate", "currency", "cancellation_window_hours", "auto_refund",
             "amendment_window_hours", "min_booking_lead_hours", "quote_ttl_minutes",
         ]
         labels = {
