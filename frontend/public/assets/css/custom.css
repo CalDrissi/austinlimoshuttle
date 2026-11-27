@@ -99,6 +99,14 @@ img {
   object-fit: cover;
   object-position: center;
   z-index: 1;
+  filter: brightness(1.08) contrast(1.02);
+}
+/* Remove the template overlay only from the homepage hero. */
+.banner-home1 .box-cover-image::before {
+  opacity: 0;
+}
+.banner-home1 .box-banner-info {
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
 }
 /* Readability scrim over the photo: a left→right wash keeps the headline legible
    and a bottom lift darkens the floor under the search dock on every slide. */
@@ -109,13 +117,13 @@ img {
   pointer-events: none;
   background:
     linear-gradient(90deg,
-      rgba(0, 0, 0, 0.62) 0%,
-      rgba(0, 0, 0, 0.42) 36%,
-      rgba(0, 0, 0, 0.12) 68%,
+      rgba(0, 0, 0, 0.30) 0%,
+      rgba(0, 0, 0, 0.18) 36%,
+      rgba(0, 0, 0, 0.04) 68%,
       rgba(0, 0, 0, 0) 100%),
     linear-gradient(0deg,
-      rgba(0, 0, 0, 0.45) 0%,
-      rgba(0, 0, 0, 0.12) 24%,
+      rgba(0, 0, 0, 0.16) 0%,
+      rgba(0, 0, 0, 0.04) 24%,
       rgba(0, 0, 0, 0) 46%);
 }
 
