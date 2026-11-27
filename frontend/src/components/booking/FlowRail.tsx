@@ -62,7 +62,7 @@ export default function FlowRail({ step, cta, bookers, stickyExtra }: {
   /** Extra control in the mobile sticky bar (step 1 keeps its Sign-in shortcut). */
   stickyExtra?: ReactNode;
 }) {
-  const { search, quote, trip, journey } = useBookingStore();
+  const { search, quote, trip, journey, contact } = useBookingStore();
   const [editing, setEditing] = useState(false);
   const [stripOpen, setStripOpen] = useState(false);
   const { data: vehicles } = useQuery({ queryKey: ["vehicles"], queryFn: () => catalogService.listVehicles(), staleTime: 0 });
@@ -104,6 +104,11 @@ export default function FlowRail({ step, cta, bookers, stickyExtra }: {
           {trip.passengerPhone && <Fact label="Passenger phone">{trip.passengerPhone}</Fact>}
         </>
       )}
+      {contact.name && <Fact label="Booker">{contact.name}</Fact>}
+      {contact.email && <Fact label="Email">{contact.email}</Fact>}
+      {contact.phone && <Fact label="Phone">{contact.phone}</Fact>}
+      {trip.pickupSign && <Fact label="Pickup sign">{trip.pickupSign}</Fact>}
+      {trip.notes && <Fact label="Notes">{trip.notes}</Fact>}
     </div>
   );
 
