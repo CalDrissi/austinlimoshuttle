@@ -1066,7 +1066,7 @@ def amendment_detail(request, pk):
         if action == "approve":
             try:
                 amendment.approve(reviewed_by=request.user)
-            except QuoteError:
+            except (QuoteError, DistanceLookupError):
                 messages.error(
                     request,
                     "We couldn't re-price that change. Please review the booking "

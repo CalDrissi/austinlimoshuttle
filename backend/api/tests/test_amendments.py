@@ -460,3 +460,26 @@ class TestStaffReview:
             assert booking["pending_amendment"] is None
             assert booking["last_amendment"]["status"] == review_status
             assert booking["last_amendment"]["decline_reason"] == req.decline_reason
+
+
+@pytest.mark.django_db
+def test_dropoff_request_reprices_on_approval(client, vehicle, monkeypatch):
+    from pricing.distance import Journey
+    owner = make_owner()
+    booking = make_booking(owner, vehicle)
+    original_total = booking.total
+    monkeypatch.setattr("pricing.distance.lookup", lambda *args, **kwargs: Journey(
+        distance_miles=Decimal("60"), duration_minutes=60,
+        resolved_origin="Austin", resolved_destination="New destination"))
+    client.login(username=owner.email, password=PASSWORD)
+    response = client.post(amend_url(booking), {"dropoff_address": "New destination"})
+    assert response.status_code == 201
+    amendment = BookingAmendmentRequest.objects.get(booking=booking)
+    assert amendment.changed_fields()[0]["new"] == "New destination"
+    booking.refresh_from_db()
+    assert booking.dropoff_address != "New destination"
+    amendment.approve(reviewed_by=None)
+    booking.refresh_from_db()
+    assert booking.dropoff_address == "New destination"
+    assert booking.distance_miles == Decimal("60")
+    assert booking.total != original_total

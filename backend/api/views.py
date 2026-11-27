@@ -920,19 +920,24 @@ def amend_request(request, reference):
     if not changes:
         raise ValidationError({"detail": "Nothing to change."})
 
-    # Price the proposed booking. Only a new pickup time moves the fare; every
-    # other field leaves it where it is.
     new_subtotal = booking.subtotal
     new_surcharge = booking.surcharge_total
     new_tax = booking.tax
     new_total = booking.total
-    if "pickup_at" in changes:
+    address_changed = any(field in changes for field in ("pickup_address", "dropoff_address"))
+    if address_changed or "pickup_at" in changes:
         try:
-            recomputed = booking.reprice(pickup_at=data["pickup_at"])
+            if address_changed:
+                from pricing.distance import lookup
+                journey = lookup(changes.get("pickup_address", booking.pickup_address),
+                                 changes.get("dropoff_address", booking.dropoff_address))
+                if booking.trip_type == Booking.TripType.TRANSFER:
+                    booking.distance_miles = journey.distance_miles
+            recomputed = booking.reprice(pickup_at=data.get("pickup_at"))
+        except DistanceLookupError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
         except QuoteError as exc:
-            raise ValidationError({
-                "detail": "We couldn't re-price that time. Please contact us."
-            }) from exc
+            raise ValidationError({"detail": "We couldn't re-price that change. Please contact us."}) from exc
         new_subtotal = recomputed.subtotal
         new_surcharge = recomputed.surcharge_total
         new_tax = recomputed.tax
@@ -1080,7 +1085,7 @@ def staff_amendment_approve(request, pk):
 
     try:
         amendment.approve(reviewed_by=request.user)
-    except QuoteError as exc:
+    except (QuoteError, DistanceLookupError) as exc:
         raise ValidationError({
             "detail": "We couldn't re-price that change. Please review it manually."
         }) from exc
