@@ -15,8 +15,8 @@ const SIZES = "100vw";
 // are airy and light, so the left scrim + text shadow carry headline legibility.
 const SLIDES = [
   { name: "hero1", alt: "Chauffeur opening the rear door of a black sedan for a smiling passenger" },
-  { name: "hero2", alt: "Well-dressed man stepping into a black Mercedes sedan on a sunny street" },
-  { name: "hero3", alt: "Chauffeur assisting an executive out of a black sedan at a hotel entrance" },
+  { name: "hero2", alt: "Chauffeur assisting a traveler with luggage beside a black SUV at an airport" },
+  { name: "hero3", alt: "Chauffeur holding a car door as an elegant passenger steps inside" },
 ];
 
 const srcSet = (name: string, ext: string) =>
