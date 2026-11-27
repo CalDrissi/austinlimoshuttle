@@ -106,6 +106,51 @@ class TestApprove:
         assert booking.passenger_count == 3
         assert req.status == BookingAmendmentRequest.Status.APPROVED
 
+    def test_reprice_updates_awaiting_cash_payment(self, booking):
+        """A time-change reprice must move the driver's collection amount too."""
+        from payments.models import Payment
+
+        TimeSurcharge.objects.create(
+            name="Night", start_time=time(21, 0), end_time=time(6, 0),
+            percentage=Decimal("20.00"), is_active=True,
+        )
+        cash = Payment.objects.create(
+            booking=booking, provider=Payment.Provider.CASH,
+            amount=booking.total, currency="USD",
+            status=Payment.Status.PROCESSING,
+        )
+        staff = User.objects.create_user(email="staff7@x.com", is_staff=True)
+        night = timezone.localtime(booking.pickup_at).replace(hour=23, minute=0)
+        _request(booking, pickup_at=night.isoformat()).approve(reviewed_by=staff)
+
+        booking.refresh_from_db()
+        cash.refresh_from_db()
+        assert booking.total > Decimal("145.10")
+        assert cash.amount == booking.total
+
+    def test_reprice_leaves_collected_cash_and_notes_the_delta(self, booking):
+        """Money already received is never rewritten; the delta is recorded."""
+        from payments.models import Payment
+
+        TimeSurcharge.objects.create(
+            name="Night", start_time=time(21, 0), end_time=time(6, 0),
+            percentage=Decimal("20.00"), is_active=True,
+        )
+        paid = Payment.objects.create(
+            booking=booking, provider=Payment.Provider.STRIPE,
+            amount=booking.total, currency="USD",
+            status=Payment.Status.SUCCEEDED,
+        )
+        staff = User.objects.create_user(email="staff8@x.com", is_staff=True)
+        night = timezone.localtime(booking.pickup_at).replace(hour=23, minute=0)
+        _request(booking, pickup_at=night.isoformat()).approve(reviewed_by=staff)
+
+        booking.refresh_from_db()
+        paid.refresh_from_db()
+        assert paid.amount == Decimal("145.10")  # the charge is history
+        note = booking.status_changes.first().note
+        assert "outstanding to charge" in note
+
 
 @pytest.mark.django_db
 class TestDecline:

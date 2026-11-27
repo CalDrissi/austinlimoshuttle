@@ -671,6 +671,8 @@ class BookingAmendmentRequest(models.Model):
         changes = dict(self.requested_changes)
         applied = []
         recomputed = None
+        prior_total = booking.total
+        payment_note = ""
 
         # `phone` lives on the account, not the booking.
         if "phone" in changes and booking.customer_id:
@@ -724,11 +726,49 @@ class BookingAmendmentRequest(models.Model):
             self.new_tax = booking.tax
             self.new_total = booking.total
 
+            # The money owed changed, so what we expect to collect must follow.
+            # A cash fare is a pending (awaiting-collection) payment row -- left
+            # at the old amount, the driver collects the wrong fare. A card fare
+            # was already charged, so the delta cannot be applied silently: it
+            # is recorded in the audit note for the office to settle.
+            if booking.total != prior_total:
+                from payments.models import Payment
+
+                cash_pending = booking.payments.filter(
+                    provider=Payment.Provider.CASH,
+                ).exclude(status__in=[
+                    Payment.Status.SUCCEEDED, Payment.Status.FAILED,
+                    Payment.Status.CANCELLED,
+                ]).first()
+                if cash_pending is not None:
+                    cash_pending.amount = booking.total
+                    cash_pending.currency = booking.currency
+                    cash_pending.save(update_fields=["amount", "currency", "updated_at"])
+                    payment_note = (
+                        f"; awaiting-collection cash payment updated to "
+                        f"${booking.total:.2f}"
+                    )
+
+                paid = sum(
+                    (p.amount for p in booking.payments.filter(
+                        status=Payment.Status.SUCCEEDED)),
+                    Decimal("0.00"),
+                )
+                if paid and paid != booking.total:
+                    delta = booking.total - paid
+                    payment_note += (
+                        f"; fare changed ${prior_total:.2f} -> ${booking.total:.2f}, "
+                        f"${paid:.2f} already paid — "
+                        + (f"${delta:.2f} outstanding to charge"
+                           if delta > 0 else f"${-delta:.2f} to refund")
+                    )
+
         BookingStatusChange.objects.create(
             booking=booking, from_status=booking.status, to_status=booking.status,
             changed_by=reviewed_by,
             note="Amendment approved by staff"
-                 + (": " + ", ".join(applied) if applied else ""),
+                 + (": " + ", ".join(applied) if applied else "")
+                 + payment_note,
         )
 
         self.status = self.Status.APPROVED
