@@ -183,6 +183,8 @@ export interface Booking {
   last_cancellation?: BookingCancellationRequest | null;
   /** The cutoff after which online edits are blocked. */
   amendment_deadline: string;
+  /** The cutoff after which online self-cancellation is blocked. */
+  cancellation_deadline: string;
 }
 
 /** The narrow, public confirmation shape (no addresses/passenger data). */

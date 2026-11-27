@@ -62,6 +62,9 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
 
   const cancellation = b.pending_cancellation ?? b.last_cancellation;
   const cancellationPending = cancellation?.status === "pending";
+  // Within the office-set window a cancellation is instant (and refunded
+  // automatically when enabled); past it, online cancellation is closed.
+  const cancellableOnline = isUpcoming(b) && new Date() < new Date(b.cancellation_deadline);
 
   const submitCancellation = async () => {
     if (cancelling || cancellationPending) return;
@@ -70,7 +73,7 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
       await onCancel(b.reference);
       setConfirmCancellation(false);
     } catch (e) {
-      setCancelError(e instanceof Error ? e.message : "Could not submit your cancellation request.");
+      setCancelError(e instanceof Error ? e.message : "Could not cancel your booking.");
     } finally {
       setCancelling(false);
     }
@@ -115,16 +118,16 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
 
       {cancellation && (
         <div className="mm-feedback" role="status" style={{ marginTop: 14 }}>
-          {cancellationPending ? "Cancellation requested — pending staff approval" : cancellation.status === "approved" ? "Cancellation request approved — booking cancelled" : "Cancellation request declined"}
+          {cancellationPending ? "Cancellation received — the office will confirm shortly" : cancellation.status === "approved" ? `Booking cancelled${Number(cancellation.refund_amount) > 0 ? ` — ${money(cancellation.refund_amount!, cancellation.currency)} refunded` : ""}` : "Cancellation request declined"}
           {cancellation.status === "declined" && cancellation.decline_reason && <p style={{ marginBottom: 0 }}>{cancellation.decline_reason}</p>}
         </div>
       )}
 
-      {confirmCancellation && isUpcoming(b) && !cancellationPending && (
-        <div className="mm-feedback" role="region" aria-label="Confirm cancellation request" style={{ marginTop: 14 }}>
-          <p>Request cancellation? Staff will review it and issue any refund.</p>
+      {confirmCancellation && cancellableOnline && !cancellationPending && (
+        <div className="mm-feedback" role="region" aria-label="Confirm cancellation" style={{ marginTop: 14 }}>
+          <p>Cancel this booking? Within the free-cancellation window you&apos;ll be refunded automatically.</p>
           {cancelError && <p role="alert" style={{ color: "#c0392b" }}>{cancelError}</p>}
-          <button className="btn btn-primary btn-sm hover-up" disabled={cancelling} onClick={submitCancellation}>{cancelling ? "Submitting…" : "Submit cancellation request"}</button>{" "}
+          <button className="btn btn-primary btn-sm hover-up" disabled={cancelling} onClick={submitCancellation}>{cancelling ? "Cancelling…" : "Cancel booking"}</button>{" "}
           <button className="btn btn-border btn-sm hover-up" disabled={cancelling} onClick={() => setConfirmCancellation(false)}>Keep booking</button>
         </div>
       )}
@@ -175,10 +178,13 @@ function RideCard({ b, onCancel, onAmend, userPhone }: {
             setErr(""); setEditing(true);
           }}>Request changes</button>
         )}
-        {isUpcoming(b) && !cancellationPending && !confirmCancellation && (
-          <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => { setCancelError(""); setConfirmCancellation(true); }}>Request cancellation</button>
+        {cancellableOnline && !cancellationPending && !confirmCancellation && b.status !== "cancelled" && (
+          <button className="btn btn-border btn-sm hover-up" style={{ color: "#c0392b" }} onClick={() => { setCancelError(""); setConfirmCancellation(true); }}>Cancel booking</button>
         )}
       </div>
+      {isUpcoming(b) && !cancellableOnline && (
+        <div className="meta" style={{ marginTop: 6, color: "#9aa1ac" }}>Online cancellation is closed this close to pickup — please contact the office to cancel.</div>
+      )}
       {!b.is_amendable && isUpcoming(b) && (
         <div className="meta" style={{ marginTop: 6, color: "#9aa1ac" }}>Online changes are closed for this trip — please contact us to make changes.</div>
       )}
@@ -249,10 +255,16 @@ function AccountDashboard() {
 
   const cancel = async (ref: string) => {
     const request = await bookingService.cancelRequest(ref);
+    // In-window cancellations are approved instantly server-side; reflect the
+    // cancelled state at once rather than waiting for the refetch.
     qc.setQueryData<Booking[]>(["my-bookings"], (current) => current?.map((b) =>
-      b.reference === ref ? { ...b, pending_cancellation: request } : b
+      b.reference === ref
+        ? (request.status === "approved"
+            ? { ...b, status: "cancelled" as const, status_display: "Cancelled", last_cancellation: request, pending_cancellation: null }
+            : { ...b, pending_cancellation: request })
+        : b
     ));
-    notify("Cancellation requested — pending staff approval");
+    notify(request.status === "approved" ? "Your booking has been cancelled" : "Cancellation received");
     void qc.invalidateQueries({ queryKey: ["my-bookings"] });
   };
 

@@ -261,6 +261,7 @@ class BookingSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     is_amendable = serializers.BooleanField(read_only=True)
     amendment_deadline = serializers.DateTimeField(read_only=True)
+    cancellation_deadline = serializers.DateTimeField(read_only=True)
     pending_amendment = serializers.SerializerMethodField()
     last_amendment = serializers.SerializerMethodField()
     pending_cancellation = serializers.SerializerMethodField()
@@ -277,6 +278,7 @@ class BookingSerializer(serializers.ModelSerializer):
             "meet_and_greet", "notes", "vehicle_name",
             "subtotal", "surcharge_total", "tax", "total", "currency",
             "price_lines", "created_at", "is_amendable", "amendment_deadline",
+            "cancellation_deadline",
             "pending_amendment", "last_amendment",
             "pending_cancellation", "last_cancellation",
         ]
