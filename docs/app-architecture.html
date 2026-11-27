@@ -961,6 +961,21 @@ Page ─┬─&lt; Banner                   ContactMessage &gt;─ User (replied
   <p class="muted">What has actually been built, newest first. Per the rule in §11, every change lands here.</p>
 
   <div class="modelcard">
+    <div class="mh"><span>2026-11-27 · Daytime hero photos + account button legibility</span><span class="tbl">frontend</span></div>
+    <table>
+      <tr><td><b>Hero images.</b> The three night-time homepage hero photos were replaced with bright daytime
+      Pexels shots (free commercial license): black S-Class in a light studio (18369292), chauffeur beside a black
+      SUV in sunlight (36377051), white-leather AMG interior (5213025). All 30 responsive derivatives regenerated
+      with sharp (<code>hero{1,2,3}-{640,768,1024,1366,1672}.{avif,webp}</code>, webp q82 / avif q58, 1672:941 crop).
+      <code>custom.css</code>: the <code>brightness(1.08)</code> boost was dropped (sources are already bright) and
+      the left headline scrim strengthened slightly (0.30→0.38 at the left edge) for white text on light images.</td></tr>
+      <tr><td><b>Account buttons.</b> <code>.btn-border</code> is styled for dark sections (white border/text) and was
+      white-on-white inside the white <code>.mm-ride</code> card on /account. Scoped rules make it dark/legible there;
+      Request-cancellation keeps its red text and gets a red border with a light red hover tint.</td></tr>
+    </table>
+  </div>
+
+  <div class="modelcard">
     <div class="mh"><span>2026-11-25 · Booking-flow fix campaign, batch 1 (H1–H9 from the 3-audit sweep)</span><span class="tbl">frontend · api · notifications</span></div>
     <table>
       <tr><td><b>H1 identity.</b> Signing in mid-flow now <b>replaces</b> the booker identity: the store gained

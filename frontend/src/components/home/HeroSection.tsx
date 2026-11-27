@@ -11,13 +11,13 @@ const HERO_DIR = "/assets/imgs/page/homepage1/hero";
 const WIDTHS = [640, 768, 1024, 1366, 1672] as const;
 const SIZES = "100vw";
 
-// Dark-luxury hero carousel: SUV + Austin skyline, chauffeur at the door,
-// leather interior. Source is right-weighted with dark left negative space so
-// the headline + booking form stay readable; a left scrim reinforces it.
+// Bright daytime hero carousel: black S-Class in a light studio, chauffeur
+// beside a black SUV in sunlight, white-leather interior. Images are airy and
+// light, so the left scrim + text shadow carry headline legibility.
 const SLIDES = [
-  { name: "hero1", alt: "Black Cadillac Escalade with the Austin skyline at night" },
-  { name: "hero2", alt: "Chauffeur opening the door of a luxury sedan" },
-  { name: "hero3", alt: "Premium leather interior of a luxury vehicle" },
+  { name: "hero1", alt: "Black Mercedes-Benz S-Class sedan in a bright studio" },
+  { name: "hero2", alt: "Chauffeur standing beside a black luxury SUV in daylight" },
+  { name: "hero3", alt: "Bright white leather interior of a luxury vehicle" },
 ];
 
 const srcSet = (name: string, ext: string) =>

@@ -99,7 +99,8 @@ img {
   object-fit: cover;
   object-position: center;
   z-index: 1;
-  filter: brightness(1.08) contrast(1.02);
+  /* Daytime source photos are already bright — no brightness boost, or they wash out. */
+  filter: contrast(1.02);
 }
 /* Remove the template overlay only from the homepage hero. */
 .banner-home1 .box-cover-image::before {
@@ -117,8 +118,8 @@ img {
   pointer-events: none;
   background:
     linear-gradient(90deg,
-      rgba(0, 0, 0, 0.30) 0%,
-      rgba(0, 0, 0, 0.18) 36%,
+      rgba(0, 0, 0, 0.38) 0%,
+      rgba(0, 0, 0, 0.22) 36%,
       rgba(0, 0, 0, 0.04) 68%,
       rgba(0, 0, 0, 0) 100%),
     linear-gradient(0deg,
@@ -275,6 +276,14 @@ img {
 .mm-badge.cancelled { background: #f3d6d2; color: #8a2419; }
 .mm-badge.completed { background: #eef0f3; color: #555; }
 .mm-ride-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+/* .btn-border is styled for dark sections (white border + white text) — on the white
+   .mm-ride card that renders white-on-white. Make it dark/legible here; the
+   Request-cancellation button keeps its inline red text and gets a red border. */
+.mm-ride .btn-border { color: #0f1319; border-color: #0f1319; background: transparent; }
+.mm-ride .btn-border:hover { background: #0f1319; color: #fff; }
+.mm-ride .btn-border[style*="c0392b"] { border-color: #c0392b; }
+/* Its inline red color survives :hover, so tint the background instead of filling dark. */
+.mm-ride .btn-border[style*="c0392b"]:hover { background: rgba(192, 57, 43, 0.08); }
 @media (max-width: 820px){ .mm-acct { grid-template-columns: 1fr; } }
 
 /* ===================================================================== *
