@@ -255,8 +255,9 @@ class TestAdminIsSuperuserOnly:
             email="disp@example.com", password="StaffLocal!2026", is_staff=True,
         )
         client.login(username="disp@example.com", password="StaffLocal!2026")
-        # has_permission is False -> admin bounces to its login, never the index.
-        assert client.get("/admin/").status_code in (302, 403)
+        response = client.get("/admin/")
+        assert response.status_code == 302
+        assert client.get(response["Location"])["Location"] == "/dashboard/"
 
     def test_superuser_can_open_admin(self, client):
         User.objects.create_superuser(email="root@example.com", password="RootLocal!2026")

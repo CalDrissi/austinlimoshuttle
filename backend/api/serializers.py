@@ -336,6 +336,8 @@ class BookingAmendSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     pickup_at = serializers.DateTimeField(required=False)
+    pickup_address = serializers.CharField(max_length=255, required=False, allow_blank=False, label="Pickup address")
+    dropoff_address = serializers.CharField(max_length=255, required=False, allow_blank=False, label="Dropoff address")
 
     def validate_pickup_at(self, value):
         if value < timezone.now():

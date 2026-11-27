@@ -108,15 +108,15 @@ class TestCancelRequestCreation:
         response = client.post(cancel_url(booking))
         assert response.status_code == 201
         body = response.json()
-        assert body["status"] == "pending"
+        assert body["status"] == "approved"
         # paid_amount snapshotted from the succeeded payment; refund not yet set.
         assert body["paid_amount"] == "145.10"
-        assert body["refund_amount"] is None
+        assert body["refund_amount"] == "0.00"
 
         booking.refresh_from_db()
-        assert booking.status == Booking.Status.CONFIRMED  # untouched
+        assert booking.status == Booking.Status.CANCELLED
         req = BookingCancellationRequest.objects.get(booking=booking)
-        assert req.status == BookingCancellationRequest.Status.PENDING
+        assert req.status == BookingCancellationRequest.Status.APPROVED
         assert req.paid_amount == Decimal("145.10")
 
     def test_paid_amount_is_zero_without_a_successful_payment(self, client, vehicle):
@@ -198,19 +198,12 @@ class TestCancelRequestNotifies:
         response = client.post(cancel_url(booking))
         assert response.status_code == 201
 
-        # Two messages: the staff alert, then the customer's acknowledgement.
-        assert len(mail.outbox) == 2
-        recipients = set(mail.outbox[0].to)
-        assert "dispatch@austinlimoshuttle.com" in recipients
-        assert "manager@austinlimoshuttle.com" in recipients
-        assert "ops@austinlimoshuttle.com" in recipients
-        assert mail.outbox[1].to == [owner.email]
+        assert len(mail.outbox) == 1
+        assert mail.outbox[0].to == [owner.email]
         assert EmailLog.objects.filter(
-            kind=EmailLog.Kind.CANCELLATION_REQUESTED, succeeded=True,
+            kind=EmailLog.Kind.BOOKING_CANCELLED, succeeded=True,
         ).exists()
-        assert EmailLog.objects.filter(
-            kind=EmailLog.Kind.CANCELLATION_RECEIVED, succeeded=True,
-        ).exists()
+
 
 
 @pytest.mark.django_db
@@ -248,3 +241,23 @@ class TestBookingSurfacesRequest:
         body = response.json()
         assert body["pending_cancellation"] is None
         assert body["last_cancellation"]["status"] == review_status
+
+
+@pytest.mark.django_db
+def test_auto_refund_calls_gateway_before_cancellation(client, vehicle, monkeypatch):
+    settings = PricingSettings.load()
+    settings.auto_refund = True
+    settings.save()
+    owner = make_owner()
+    booking = make_booking(owner, vehicle)
+    client.login(username=owner.email, password=PASSWORD)
+    calls = []
+    def refund(payment, **kwargs):
+        payment.booking.refresh_from_db()
+        assert payment.booking.status == Booking.Status.CONFIRMED
+        calls.append(kwargs["amount"])
+    monkeypatch.setattr("api.views.payments_gateway.refund", refund)
+    response = client.post(cancel_url(booking))
+    assert response.status_code == 201
+    assert calls == [Decimal("145.10")]
+    assert response.json()["refund_amount"] == "145.10"

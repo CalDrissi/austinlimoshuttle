@@ -92,6 +92,8 @@ def admin_login_redirect(request):
     The ?next= is carried across but validated first: reflecting it unchecked
     would turn this into an open redirect, which is a phishing primitive.
     """
+    if request.user.is_authenticated and not request.user.is_superuser:
+        return redirect("dashboard:home")
     target = request.GET.get(REDIRECT_FIELD_NAME) or "/admin/"
     if not url_has_allowed_host_and_scheme(
         target, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
@@ -867,6 +869,17 @@ def booking_update(request, reference):
 
 
 @staff_required
+@require_POST
+def send_confirmation_email(request, reference):
+    booking = get_object_or_404(Booking, reference=reference)
+    if mailer.send_booking_confirmed_by_staff(booking):
+        messages.success(request, "Confirmation email sent.")
+    else:
+        messages.error(request, "Confirmation email could not be sent. Check the email log and customer address.")
+    return redirect("dashboard:booking_detail", reference=reference)
+
+
+@staff_required
 def charge_card(request):
     """
     Charge a customer's card on file off-session -- e.g. billing a trip
@@ -1053,7 +1066,7 @@ def amendment_detail(request, pk):
         if action == "approve":
             try:
                 amendment.approve(reviewed_by=request.user)
-            except QuoteError:
+            except (QuoteError, DistanceLookupError):
                 messages.error(
                     request,
                     "We couldn't re-price that change. Please review the booking "

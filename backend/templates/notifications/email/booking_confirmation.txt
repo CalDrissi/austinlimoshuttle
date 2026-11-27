@@ -1,6 +1,6 @@
-{% autoescape off %}Your booking is confirmed
+{% autoescape off %}We have received your booking
 
-Thank you{% if booking.customer.first_name %}, {{ booking.customer.first_name }}{% endif %} - we have you booked in.
+Thank you{% if booking.customer.first_name %}, {{ booking.customer.first_name }}{% endif %} - we have received your booking request.
 
 Reference : {{ booking.reference }}
 Pickup    : {{ booking.pickup_at|date:"l, F j, Y, g:i A" }}

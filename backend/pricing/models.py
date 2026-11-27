@@ -124,6 +124,7 @@ class PricingSettings(models.Model):
         help_text="Free cancellation up to this many hours before pickup. "
                   "Legacy fleet copy advertised 1 hour.",
     )
+    auto_refund = models.BooleanField(default=False, help_text="Automatically refund paid amounts when customers cancel online.")
     amendment_window_hours = models.PositiveSmallIntegerField(
         default=24,
         help_text="How many hours before pickup a customer may still change "

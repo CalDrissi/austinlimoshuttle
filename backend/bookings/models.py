@@ -515,7 +515,7 @@ class DriverTripEvent(models.Model):
 # request below.
 AMENDABLE_FIELDS = (
     "passenger_count", "luggage_count",
-    "pickup_sign", "notes", "phone", "pickup_at",
+    "pickup_sign", "notes", "phone", "pickup_at", "pickup_address", "dropoff_address",
 )
 
 # Human labels for the fields above, used in the staff/customer emails so the
@@ -527,6 +527,8 @@ AMENDMENT_FIELD_LABELS = {
     "notes": "Notes",
     "phone": "Contact phone",
     "pickup_at": "Pickup time",
+    "pickup_address": "Pickup address",
+    "dropoff_address": "Dropoff address",
 }
 
 
@@ -683,6 +685,18 @@ class BookingAmendmentRequest(models.Model):
                 setattr(booking, field, changes[field])
                 applied.append(field)
 
+        address_changed = any(field in changes for field in ("pickup_address", "dropoff_address"))
+        if address_changed:
+            from pricing.distance import lookup
+            journey = lookup(changes.get("pickup_address", booking.pickup_address),
+                             changes.get("dropoff_address", booking.dropoff_address))
+            for field in ("pickup_address", "dropoff_address"):
+                if field in changes:
+                    setattr(booking, field, changes[field])
+                    applied.append(field)
+            if booking.trip_type == Booking.TripType.TRANSFER:
+                booking.distance_miles = journey.distance_miles
+
         if new_pickup is not None:
             pickup_at = (
                 datetime.fromisoformat(new_pickup)
@@ -690,9 +704,10 @@ class BookingAmendmentRequest(models.Model):
             )
             booking.pickup_at = pickup_at
             applied.append("pickup_at")
+        if new_pickup is not None or address_changed:
             # Re-price through the booking's own entry point so an amended
             # intercity trip keeps its intercity card (see Booking.reprice).
-            recomputed = booking.reprice(pickup_at=pickup_at)
+            recomputed = booking.reprice(pickup_at=booking.pickup_at)
             booking.subtotal = recomputed.subtotal
             booking.surcharge_total = recomputed.surcharge_total
             booking.tax = recomputed.tax
@@ -863,7 +878,7 @@ class BookingCancellationRequest(models.Model):
         BookingStatusChange.objects.create(
             booking=booking, from_status=from_status,
             to_status=Booking.Status.CANCELLED, changed_by=reviewed_by,
-            note="Cancellation approved by staff" + refund_note,
+            note=("Cancellation approved by staff" if reviewed_by else "Cancellation approved automatically") + refund_note,
         )
 
         self.status = self.Status.APPROVED

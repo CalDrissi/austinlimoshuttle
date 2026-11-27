@@ -746,19 +746,7 @@ def my_booking_detail(request, reference):
     if request.method == "PATCH":
         action = request.data.get("action")
         if action == "cancel":
-            if not booking.is_cancellable:
-                raise ValidationError(
-                    {"detail": "This booking can no longer be cancelled online."}
-                )
-            BookingStatusChange.objects.create(
-                booking=booking, from_status=booking.status,
-                to_status=Booking.Status.CANCELLED,
-                changed_by=request.user, note="Cancelled by customer",
-            )
-            booking.status = Booking.Status.CANCELLED
-            booking.cancelled_at = timezone.now()
-            booking.save()
-            mailer.send_booking_cancelled(booking)
+            raise ValidationError({"detail": "Please use the cancellation request endpoint."})
 
         elif action == "amend":
             # Details within the office-set edit window. Changing the pickup time
@@ -932,19 +920,24 @@ def amend_request(request, reference):
     if not changes:
         raise ValidationError({"detail": "Nothing to change."})
 
-    # Price the proposed booking. Only a new pickup time moves the fare; every
-    # other field leaves it where it is.
     new_subtotal = booking.subtotal
     new_surcharge = booking.surcharge_total
     new_tax = booking.tax
     new_total = booking.total
-    if "pickup_at" in changes:
+    address_changed = any(field in changes for field in ("pickup_address", "dropoff_address"))
+    if address_changed or "pickup_at" in changes:
         try:
-            recomputed = booking.reprice(pickup_at=data["pickup_at"])
+            if address_changed:
+                from pricing.distance import lookup
+                journey = lookup(changes.get("pickup_address", booking.pickup_address),
+                                 changes.get("dropoff_address", booking.dropoff_address))
+                if booking.trip_type == Booking.TripType.TRANSFER:
+                    booking.distance_miles = journey.distance_miles
+            recomputed = booking.reprice(pickup_at=data.get("pickup_at"))
+        except DistanceLookupError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
         except QuoteError as exc:
-            raise ValidationError({
-                "detail": "We couldn't re-price that time. Please contact us."
-            }) from exc
+            raise ValidationError({"detail": "We couldn't re-price that change. Please contact us."}) from exc
         new_subtotal = recomputed.subtotal
         new_surcharge = recomputed.surcharge_total
         new_tax = recomputed.tax
@@ -973,16 +966,10 @@ def amend_request(request, reference):
 
 @extend_schema(
     tags=["bookings"],
-    summary="Request to cancel one of your bookings (staff must approve)",
-    description=(
-        "Owner-only. Unlike the direct `PATCH {action: cancel}`, this does **not** "
-        "cancel the booking: it files a pending cancellation request that staff "
-        "review. Approval cancels the booking and issues a staff-set refund; the "
-        "refund is **not** automatic.\n\n"
-        "Rejected (400) when the pickup is already inside the office-set "
-        "cancellation window, when the booking is cancelled/completed, or when a "
-        "cancellation request is already awaiting review."
-    ),
+    summary="Cancel an eligible booking",
+    description=("Owner-only. Eligible cancellations are approved immediately; "
+                 "a refund is issued when automatic refunds are enabled. "
+                 "Cancellations too close to pickup must go through the office."),
     parameters=[OpenApiParameter("reference", str, OpenApiParameter.PATH)],
     request=None,
     responses={
@@ -1001,59 +988,37 @@ def cancel_request(request, reference):
     is a 404 (never 403), matching `my_booking_detail`. The booking is left
     confirmed; staff decide whether to cancel it and how much to refund.
     """
-    booking = (
-        Booking.objects.filter(reference=reference, customer=request.user)
-        .prefetch_related("price_lines")
-        .first()
-    )
-    if booking is None:
-        return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    # Terminal bookings can never be cancelled again.
-    if booking.status in {Booking.Status.CANCELLED, Booking.Status.COMPLETED}:
-        raise ValidationError({
-            "detail": "This booking can no longer be cancelled online. "
-                      "Please contact us."
-        })
-
-    # Enforce the office-set cancellation window: inside it, cancellation must go
-    # through the office (the same copy the legacy fleet page advertised).
-    window_hours = PricingSettings.load().cancellation_window_hours
-    if timezone.now() >= booking.cancellation_deadline:
-        raise ValidationError({
-            "detail": (
-                f"This booking can no longer be cancelled online within "
-                f"{window_hours} hour{'' if window_hours == 1 else 's'} of pickup."
-            )
-        })
-
-    # One open cancellation request at a time -- otherwise staff see duplicates.
-    if booking.cancellation_requests.filter(
-        status=BookingCancellationRequest.Status.PENDING
-    ).exists():
-        raise ValidationError({
-            "detail": "A cancellation request for this booking is already "
-                      "awaiting review."
-        })
-
-    # Snapshot what was paid: the default and ceiling for the staff-set refund.
-    payment = booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
-    paid_amount = payment.amount if payment else Decimal("0.00")
-
-    cancellation = BookingCancellationRequest.objects.create(
-        booking=booking,
-        requested_by=request.user,
-        paid_amount=paid_amount,
-        currency=booking.currency,
-    )
-
-    mailer.send_cancellation_requested(cancellation)
-    mailer.send_cancellation_received(cancellation)
-
-    return Response(
-        BookingCancellationRequestSerializer(cancellation).data,
-        status=status.HTTP_201_CREATED,
-    )
+    with transaction.atomic():
+        booking = Booking.objects.select_for_update().filter(
+            reference=reference, customer=request.user,
+        ).first()
+        if booking is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        if booking.status in {Booking.Status.CANCELLED, Booking.Status.COMPLETED}:
+            raise ValidationError({"detail": "This booking can no longer be cancelled online. Please contact us."})
+        settings = PricingSettings.load()
+        if timezone.now() >= booking.cancellation_deadline:
+            hours = settings.cancellation_window_hours
+            raise ValidationError({"detail": f"This booking can no longer be cancelled online within {hours} hour{'s' if hours != 1 else ''} of pickup."})
+        if booking.cancellation_requests.filter(status=BookingCancellationRequest.Status.PENDING).exists():
+            raise ValidationError({"detail": "A cancellation request for this booking is already awaiting review."})
+        payment = booking.payments.filter(status=Payment.Status.SUCCEEDED).first()
+        paid_amount = payment.amount if payment else Decimal("0.00")
+        refund_amount = paid_amount if settings.auto_refund else Decimal("0.00")
+        if refund_amount:
+            try:
+                payments_gateway.refund(payment, amount=refund_amount, reason="Online cancellation")
+            except (payments_gateway.PaymentConfigurationError, payments_gateway.PaymentGatewayError) as exc:
+                raise ValidationError({"detail": str(exc)}) from exc
+        cancellation = BookingCancellationRequest.objects.create(
+            booking=booking, requested_by=request.user, paid_amount=paid_amount,
+            currency=booking.currency,
+        )
+        cancellation.approve(reviewed_by=None, refund_amount=refund_amount,
+                             refunded_payment=payment if refund_amount else None)
+    mailer.send_booking_cancelled(booking, refund_amount=refund_amount or None)
+    return Response(BookingCancellationRequestSerializer(cancellation).data,
+                    status=status.HTTP_201_CREATED)
 
 
 @extend_schema(
@@ -1114,7 +1079,7 @@ def staff_amendment_approve(request, pk):
 
     try:
         amendment.approve(reviewed_by=request.user)
-    except QuoteError as exc:
+    except (QuoteError, DistanceLookupError) as exc:
         raise ValidationError({
             "detail": "We couldn't re-price that change. Please review it manually."
         }) from exc

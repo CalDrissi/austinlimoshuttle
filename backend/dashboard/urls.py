@@ -38,6 +38,7 @@ urlpatterns = [
     path("bookings/<str:reference>/cash-collected/", views.booking_mark_cash_collected, name="booking_mark_cash_collected"),
     path("bookings/<str:reference>/", views.booking_detail, name="booking_detail"),
     path("bookings/<str:reference>/edit/", views.booking_edit, name="booking_edit"),
+    path("bookings/<str:reference>/send-confirmation/", views.send_confirmation_email, name="send_confirmation_email"),
     path("bookings/<str:reference>/update/", views.booking_update, name="booking_update"),
     path("bookings/<str:reference>/refund/", views.issue_refund, name="issue_refund"),
     path("charge/", views.charge_card, name="charge_card"),
