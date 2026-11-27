@@ -380,14 +380,21 @@ class TestBookingAuthorisation:
         booking = self._make_booking(owner, vehicle)
         client.login(username="canceller@example.com", password="ApiLocal!2026")
 
+        # The PATCH action was retired for the cancel-request endpoint, which
+        # approves eligible cancellations immediately.
         response = client.patch(
             reverse("api:my_booking_detail", args=[booking.reference]),
             {"action": "cancel"}, content_type="application/json",
         )
-        assert response.status_code == 200
+        assert response.status_code == 400
+
+        response = client.post(
+            reverse("api:cancel_request", args=[booking.reference]),
+        )
+        assert response.status_code == 201
         booking.refresh_from_db()
         assert booking.status == Booking.Status.CANCELLED
-        assert booking.status_changes.filter(changed_by=owner).exists()
+        assert booking.cancellation_requests.filter(requested_by=owner).exists()
 
     def test_cannot_cancel_a_past_booking(self, client, vehicle):
         owner = User.objects.create_user(email="late@example.com", password="ApiLocal!2026")
