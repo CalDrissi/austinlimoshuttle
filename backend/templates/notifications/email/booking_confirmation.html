@@ -1,9 +1,9 @@
 {% extends "notifications/email/_base.html" %}
 {% block body %}
-<h1 style="font-size:20px;margin:0 0 6px">Your booking is confirmed</h1>
+<h1 style="font-size:20px;margin:0 0 6px">We have received your booking</h1>
 <p style="margin:0 0 20px;color:#5b636d">
   Thank you{% if booking.customer.first_name %}, {{ booking.customer.first_name }}{% endif %} —
-  we have you booked in. The details are below and attached as a PDF.
+  we have received your booking request. The details are below and attached as a PDF.
 </p>
 
 {% include "notifications/email/_itinerary.html" %}

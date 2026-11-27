@@ -1484,3 +1484,18 @@ class TestTripEvents:
             assert not isinstance(processed, Exception), \
                 f"post_process failed for {name}: {processed!r}"
         assert hashed_name  # at least one file was hashed
+
+
+@pytest.mark.django_db
+class TestManualConfirmation:
+    def test_staff_button_sends_and_status_change_does_not(self, client, roles, booking, monkeypatch):
+        staff_in(DISPATCHER, roles)
+        client.login(username="dispatcher@example.com", password="DashLocal!2026")
+        sent = []
+        monkeypatch.setattr("dashboard.views.mailer.send_booking_confirmed_by_staff", lambda b: sent.append(b.pk) or True)
+        client.post(reverse("dashboard:booking_update", args=[booking.reference]), {"status": Booking.Status.PENDING})
+        client.post(reverse("dashboard:booking_update", args=[booking.reference]), {"status": Booking.Status.CONFIRMED})
+        assert sent == []
+        response = client.post(reverse("dashboard:send_confirmation_email", args=[booking.reference]))
+        assert response.status_code == 302
+        assert sent == [booking.pk]

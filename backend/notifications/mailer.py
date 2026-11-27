@@ -155,11 +155,24 @@ def send_booking_confirmation(booking) -> bool:
     return _send(
         kind=EmailLog.Kind.BOOKING_CONFIRMATION,
         to=[email],
-        subject=f"Your booking is confirmed — {booking.reference}",
+        subject=f"We have received your booking {booking.reference}",
         template="booking_confirmation",
         context={"booking": booking, "lines": booking.price_lines.all()},
         booking=booking,
         attach_pdf=True,
+    )
+
+
+
+def send_booking_confirmed_by_staff(booking) -> bool:
+    email = _customer_email(booking)
+    if not email:
+        return False
+    return _send(
+        kind=EmailLog.Kind.BOOKING_CONFIRMED_BY_STAFF, to=[email],
+        subject=f"Your booking is confirmed — {booking.reference}",
+        template="booking_confirmed_by_staff", context={"booking": booking},
+        booking=booking,
     )
 
 

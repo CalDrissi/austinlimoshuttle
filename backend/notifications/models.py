@@ -137,7 +137,8 @@ class EmailLog(models.Model):
     """
 
     class Kind(models.TextChoices):
-        BOOKING_CONFIRMATION = "booking_confirmation", "Booking confirmation"
+        BOOKING_CONFIRMATION = "booking_confirmation", "Booking received"
+        BOOKING_CONFIRMED_BY_STAFF = "booking_confirmed_by_staff", "Booking confirmed by staff"
         BOOKING_CANCELLED = "booking_cancelled", "Booking cancelled"
         DRIVER_ASSIGNED = "driver_assigned", "Driver assigned"
         DRIVER_JOB_ASSIGNED = "driver_job_assigned", "Driver job sheet"
